@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package stroom.datafeed.server;
+package stroom.pipeline.server.ext.source;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import stroom.feed.StroomStreamException;
+import stroom.task.server.GenericServerTask;
+import stroom.util.task.TaskScopeRunnable;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -27,6 +29,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Enumeration;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * <p>
@@ -34,16 +37,20 @@ import java.util.Enumeration;
  * </p>
  */
 @Component
-public class DataFeedServlet extends HttpServlet {
+public class HttpProcessor extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(DataFeedServlet.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(HttpProcessor.class);
+    private static final AtomicInteger concurrentRequestCount = new AtomicInteger(0);
 
-    private final Provider<RequestHandler> requestHandlerProvider;
+    private final HttpProcessorConfig httpProcessorConfig;
+    private final Provider<HttpSource> httpSourceProvider;
 
     @Inject
-    DataFeedServlet(final Provider<RequestHandler> requestHandlerProvider) {
-        this.requestHandlerProvider = requestHandlerProvider;
+    HttpProcessor(final HttpProcessorConfig httpProcessorConfig,
+                  final Provider<HttpSource> httpSourceProvider) {
+        this.httpProcessorConfig = httpProcessorConfig;
+        this.httpSourceProvider = httpSourceProvider;
     }
 
     /**
@@ -73,11 +80,23 @@ public class DataFeedServlet extends HttpServlet {
             LOGGER.trace(getRequestTrace(request));
         }
 
+        concurrentRequestCount.incrementAndGet();
         try {
-            final RequestHandler requestHandler = requestHandlerProvider.get();
-            requestHandler.handle(request, response);
+            new TaskScopeRunnable(GenericServerTask.create("Feed Servlet", null)) {
+                @Override
+                protected void exec() {
+                    try {
+                        final HttpSource httpSource = httpSourceProvider.get();
+                        httpSource.exec(httpProcessorConfig.getPipelineRef(), request, response);
+                    } catch (final Exception ex) {
+                        StroomStreamException.sendErrorResponse(response, ex);
+                    }
+                }
+            }.run();
         } catch (final Exception ex) {
             StroomStreamException.sendErrorResponse(response, ex);
+        } finally {
+            concurrentRequestCount.decrementAndGet();
         }
     }
 

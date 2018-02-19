@@ -66,7 +66,7 @@ public class MockFeedService extends MockDocumentEntityService<Feed, FindFeedCri
     }
 
     @Override
-    public String getDisplayClassification(final Feed feed) {
+    public String getDisplayClassification(final String feed) {
         return null;
     }
 }

@@ -215,11 +215,14 @@ public class PipelineStreamProcessor implements StreamProcessorTaskExecutor {
 
             // Load the feed.
             feed = feedService.load(stream.getFeed());
-            feedHolder.setFeed(feed);
+            feedHolder.setFeed(feed.getName());
 
             // Set the pipeline so it can be used by a filter if needed.
             pipelineEntity = pipelineService.load(streamProcessor.getPipeline());
             pipelineHolder.setPipeline(pipelineEntity);
+
+            // Hold the source so the pipeline filters can get them.
+            streamProcessorHolder.setStreamProcessor(streamProcessor, streamTask);
 
             // Create some processing info.
             final StringBuilder infoSb = new StringBuilder();
@@ -244,10 +247,6 @@ public class PipelineStreamProcessor implements StreamProcessorTaskExecutor {
             if (LOGGER.isInfoEnabled()) {
                 LOGGER.info(processingInfo);
             }
-
-            // Hold the source and feed so the pipeline filters can get them.
-            streamProcessorHolder.setStreamProcessor(streamProcessor, streamTask);
-            feedHolder.setFeed(feed);
 
             // Process the streams.
             final PipelineData pipelineData = pipelineDataCache.get(pipelineEntity);

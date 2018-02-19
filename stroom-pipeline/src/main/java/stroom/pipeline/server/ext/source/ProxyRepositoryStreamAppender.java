@@ -1,4 +1,4 @@
-package stroom.proxy.repo;
+package stroom.pipeline.server.ext.source;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +13,8 @@ import stroom.pipeline.shared.ElementIcons;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
 import stroom.pipeline.state.MetaDataHolder;
+import stroom.proxy.repo.ProxyRepositoryManager;
+import stroom.proxy.repo.StroomZipOutputStream;
 import stroom.util.shared.ModelStringUtil;
 import stroom.util.shared.Severity;
 import stroom.util.spring.StroomScope;

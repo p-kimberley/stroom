@@ -20,6 +20,7 @@ package stroom.refdata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Scope;
+import stroom.feed.server.FeedService;
 import stroom.feed.shared.Feed;
 import stroom.io.StreamCloser;
 import stroom.pipeline.server.EncodingSelection;
@@ -57,6 +58,8 @@ public class ContextDataLoadTaskHandler extends AbstractTaskHandler<ContextDataL
     private FeedHolder feedHolder;
     @Resource
     private ErrorReceiverProxy errorReceiverProxy;
+    @Resource(name = "cachedFeedService")
+    private FeedService feedService;
     @Resource(name = "cachedPipelineService")
     private PipelineService pipelineService;
     @Resource
@@ -73,7 +76,7 @@ public class ContextDataLoadTaskHandler extends AbstractTaskHandler<ContextDataL
 
         final InputStream inputStream = task.getInputStream();
         final Stream stream = task.getStream();
-        final Feed feed = task.getFeed();
+        final String feed = task.getFeed();
 
         if (inputStream != null) {
             final StreamCloser streamCloser = new StreamCloser();
@@ -85,7 +88,7 @@ public class ContextDataLoadTaskHandler extends AbstractTaskHandler<ContextDataL
                 if (LOGGER.isDebugEnabled()) {
                     final StringBuilder sb = new StringBuilder();
                     sb.append("(feed = ");
-                    sb.append(feed.getName());
+                    sb.append(feed);
                     if (stream != null) {
                         sb.append(", source id = ");
                         sb.append(stream.getId());
@@ -103,7 +106,8 @@ public class ContextDataLoadTaskHandler extends AbstractTaskHandler<ContextDataL
                 feedHolder.setFeed(feed);
 
                 // Get the appropriate encoding for the stream type.
-                final String encoding = EncodingSelection.select(feed, StreamType.CONTEXT);
+                final Feed feedEntity = feedService.loadByName(feed);
+                final String encoding = EncodingSelection.select(feedEntity, StreamType.CONTEXT);
                 mapStoreHolder.setMapStoreBuilder(mapStoreBuilder);
                 // Parse the stream.
                 pipeline.process(inputStream, encoding);

@@ -122,7 +122,7 @@ public class TestXMLHttpBlankTokenFix extends AbstractProcessIntegrationTest {
         final PipelineData pipelineData = pipelineDataCache.get(pipelineEntity);
         final Pipeline pipeline = pipelineFactory.create(pipelineData);
 
-        feedHolder.setFeed(new Feed());
+        feedHolder.setFeed("");
 
         // Set the input file to transform.
         final InputStream input = StroomPipelineTestFileUtil.getInputStream(INPUT);

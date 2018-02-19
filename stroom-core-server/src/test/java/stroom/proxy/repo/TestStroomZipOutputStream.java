@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.util.UUID;
 
 public class TestStroomZipOutputStream {
-    private final static int TEST_SIZE = 100;
+    private static final int TEST_SIZE = 100;
 
     @Test
     public void testBigFile() throws Exception {

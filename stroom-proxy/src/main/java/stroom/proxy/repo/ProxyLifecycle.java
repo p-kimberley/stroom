@@ -6,23 +6,19 @@ import javax.inject.Inject;
 
 public class ProxyLifecycle implements Managed {
     private final ProxyRepositoryManager proxyRepositoryManager;
-    private final ProxyRepositoryReader proxyRepositoryReader;
 
     @Inject
-    public ProxyLifecycle(final ProxyRepositoryManager proxyRepositoryManager, final ProxyRepositoryReader proxyRepositoryReader) {
+    public ProxyLifecycle(final ProxyRepositoryManager proxyRepositoryManager) {
         this.proxyRepositoryManager = proxyRepositoryManager;
-        this.proxyRepositoryReader = proxyRepositoryReader;
     }
 
     @Override
     public void start() throws Exception {
         proxyRepositoryManager.start();
-        proxyRepositoryReader.start();
     }
 
     @Override
     public void stop() throws Exception {
-        proxyRepositoryReader.stop();
         proxyRepositoryManager.stop();
     }
 }

@@ -101,7 +101,12 @@ public class FeedServiceImpl extends DocumentEntityServiceImpl<Feed, FindFeedCri
     }
 
     @Override
-    public String getDisplayClassification(final Feed feed) {
+    public String getDisplayClassification(final String feedName) {
+        Feed feed = null;
+        if (feedName != null) {
+            feed = loadByName(feedName);
+        }
+
         String classification = null;
 
         if (feed != null) {

@@ -46,20 +46,20 @@ import java.util.function.BiConsumer;
  * each 3 part as a dir separator.
  */
 public class StroomZipRepository {
-    final static String LOCK_EXTENSION = ".lock";
-    final static String ZIP_EXTENSION = ".zip";
-    private final static String ERROR_EXTENSION = ".err";
-    final static String BAD_EXTENSION = ".bad";
+    static final String LOCK_EXTENSION = ".lock";
+    static final String ZIP_EXTENSION = ".zip";
+    private static final String ERROR_EXTENSION = ".err";
+    static final String BAD_EXTENSION = ".bad";
 
-    private final static Logger LOGGER = LoggerFactory.getLogger(StroomZipRepository.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(StroomZipRepository.class);
 
     private static final String DEFAULT_REPOSITORY_FORMAT = "${pathId}/${id}";
     private static final String ID_VAR = "${id}";
 
     // 1 hour
-    private final static int DEFAULT_LOCK_AGE_MS = 1000 * 60 * 60;
+    private static final int DEFAULT_LOCK_AGE_MS = 1000 * 60 * 60;
     // Ten seconds
-    private final static int TEN_SECONDS = 1000 * 10;
+    private static final int TEN_SECONDS = 1000 * 10;
 
     private final AtomicLong fileCount = new AtomicLong(0);
     private final AtomicBoolean finish = new AtomicBoolean(false);

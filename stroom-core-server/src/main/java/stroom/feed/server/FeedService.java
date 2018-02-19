@@ -23,7 +23,7 @@ import stroom.feed.shared.Feed;
 import stroom.feed.shared.FindFeedCriteria;
 
 public interface FeedService extends DocumentEntityService<Feed>, FindService<Feed, FindFeedCriteria> {
-    String getDisplayClassification(final Feed feed);
+    String getDisplayClassification(final String feed);
 
     Feed loadByName(String name);
 }

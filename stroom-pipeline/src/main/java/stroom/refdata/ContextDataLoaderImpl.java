@@ -31,7 +31,7 @@ public class ContextDataLoaderImpl implements ContextDataLoader {
     private TaskManager taskManager;
 
     @Override
-    public MapStore load(final InputStream inputStream, final Stream stream, final Feed feed,
+    public MapStore load(final InputStream inputStream, final Stream stream, final String feed,
                          final DocRef contextPipeline) {
         return taskManager.exec(new ContextDataLoadTask(inputStream, stream, feed, contextPipeline));
     }

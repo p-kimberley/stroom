@@ -24,13 +24,13 @@ import stroom.util.spring.StroomScope;
 @Component
 @Scope(value = StroomScope.TASK)
 public class FeedHolder implements Holder {
-    private Feed feed;
+    private String feed;
 
-    public Feed getFeed() {
+    public String getFeed() {
         return feed;
     }
 
-    public void setFeed(final Feed feed) {
+    public void setFeed(final String feed) {
         this.feed = feed;
     }
 }

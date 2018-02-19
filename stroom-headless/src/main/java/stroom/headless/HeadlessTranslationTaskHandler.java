@@ -21,8 +21,8 @@ import org.springframework.context.annotation.Scope;
 import stroom.entity.shared.BaseResultList;
 import stroom.entity.shared.StringCriteria;
 import stroom.feed.MetaMap;
-import stroom.feed.server.FeedService;
 import stroom.feed.StroomHeaderArguments;
+import stroom.feed.server.FeedService;
 import stroom.feed.shared.Feed;
 import stroom.feed.shared.FindFeedCriteria;
 import stroom.pipeline.server.ErrorWriterProxy;
@@ -118,7 +118,7 @@ public class HeadlessTranslationTaskHandler extends AbstractTaskHandler<Headless
             // Get the feed.
             final String feedName = metaData.get(StroomHeaderArguments.FEED);
             final Feed feed = getFeed(feedName);
-            feedHolder.setFeed(feed);
+            feedHolder.setFeed(feedName);
 
             // Set the pipeline so it can be used by a filter if needed.
             final FindPipelineEntityCriteria findPipelineCriteria = new FindPipelineEntityCriteria(feedName);

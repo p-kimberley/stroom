@@ -406,7 +406,7 @@ public class IndexShardWriterCacheImpl implements IndexShardWriterCache {
 
                     return null;
                 });
-                completableFuture.thenApply(result -> closing.decrementAndGet());
+                completableFuture.thenAccept(result -> closing.decrementAndGet());
                 completableFuture.exceptionally(t -> {
                     LOGGER.error(t::getMessage, t);
                     closing.decrementAndGet();

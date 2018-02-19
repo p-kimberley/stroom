@@ -22,7 +22,6 @@ import net.sf.saxon.om.Sequence;
 import net.sf.saxon.value.StringValue;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
-import stroom.feed.shared.Feed;
 import stroom.pipeline.state.FeedHolder;
 import stroom.util.shared.Severity;
 import stroom.util.spring.StroomScope;
@@ -44,9 +43,9 @@ class FeedName extends StroomExtensionFunctionCall {
         String result = null;
 
         try {
-            final Feed feed = feedHolder.getFeed();
+            final String feed = feedHolder.getFeed();
             if (feed != null) {
-                result = feed.getName();
+                result = feed;
             }
         } catch (final Exception e) {
             log(context, Severity.ERROR, e.getMessage(), e);

@@ -93,7 +93,7 @@ public class F2XTestUtil {
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
         // Setup the feed.
-        feedHolder.setFeed(feed);
+        feedHolder.setFeed(feed.getName());
 
         // Persist the text converter.
         TextConverter textConverter = new TextConverter();

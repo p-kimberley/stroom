@@ -256,7 +256,7 @@ public abstract class AbstractFetchDataHandler<A extends FetchDataAction>
             resultList.add(markersList.get(i));
         }
 
-        final String classification = feedService.getDisplayClassification(feed);
+        final String classification = feedService.getDisplayClassification(feed.getName());
         final OffsetRange<Long> resultStreamsRange = new OffsetRange<>(streamsOffset, streamsLength);
         final RowCount<Long> streamsRowCount = new RowCount<>(streamsTotal, streamsTotalIsExact);
         final OffsetRange<Long> resultPageRange = new OffsetRange<>((long) pageOffset,
@@ -307,7 +307,7 @@ public abstract class AbstractFetchDataHandler<A extends FetchDataAction>
         }
 
         // Set the result.
-        final String classification = feedService.getDisplayClassification(feed);
+        final String classification = feedService.getDisplayClassification(feed.getName());
         final OffsetRange<Long> resultStreamsRange = new OffsetRange<>(streamsOffset, streamsLength);
         final RowCount<Long> streamsRowCount = new RowCount<>(streamsTotal, streamsTotalIsExact);
         final OffsetRange<Long> resultPageRange = new OffsetRange<>(pageOffset, pageLength);
@@ -433,7 +433,7 @@ public abstract class AbstractFetchDataHandler<A extends FetchDataAction>
             throw new EntityServiceException("Unable to load pipeline");
         }
 
-        feedHolder.setFeed(feed);
+        feedHolder.setFeed(feed.getName());
         pipelineHolder.setPipeline(loadedPipeline);
         // Get the stream providers.
         streamHolder.setStream(streamSource.getStream());

@@ -23,5 +23,5 @@ import stroom.streamstore.shared.Stream;
 import java.io.InputStream;
 
 public interface ContextDataLoader {
-    MapStore load(InputStream inputStream, Stream stream, Feed feed, DocRef contextPipeline);
+    MapStore load(InputStream inputStream, Stream stream, String feed, DocRef contextPipeline);
 }

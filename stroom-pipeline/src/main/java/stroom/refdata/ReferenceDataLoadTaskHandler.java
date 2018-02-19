@@ -118,7 +118,7 @@ public class ReferenceDataLoadTaskHandler extends AbstractTaskHandler<ReferenceD
                 try {
                     // Load the feed.
                     final Feed feed = feedService.load(stream.getFeed());
-                    feedHolder.setFeed(feed);
+                    feedHolder.setFeed(feed.getName());
 
                     // Set the pipeline so it can be used by a filter if needed.
                     final PipelineEntity pipelineEntity = pipelineService

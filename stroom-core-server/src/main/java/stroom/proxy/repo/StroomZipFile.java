@@ -4,6 +4,9 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import stroom.streamstore.server.fs.serializable.RASegmentInputStream;
+import stroom.streamstore.server.fs.serializable.StreamSourceInputStream;
+import stroom.streamstore.server.fs.serializable.StreamSourceInputStreamProvider;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -13,11 +16,11 @@ import java.nio.file.Path;
 import java.util.Enumeration;
 
 public class StroomZipFile implements Closeable {
-    private final static String SINGLE_ENTRY_ZIP_BASE_NAME = "001";
+    private static final String SINGLE_ENTRY_ZIP_BASE_NAME = "001";
 
-    public final static StroomZipEntry SINGLE_DATA_ENTRY = new StroomZipEntry(null, SINGLE_ENTRY_ZIP_BASE_NAME,
+    public static final StroomZipEntry SINGLE_DATA_ENTRY = new StroomZipEntry(null, SINGLE_ENTRY_ZIP_BASE_NAME,
             StroomZipFileType.Data);
-    public final static StroomZipEntry SINGLE_META_ENTRY = new StroomZipEntry(null, SINGLE_ENTRY_ZIP_BASE_NAME,
+    public static final StroomZipEntry SINGLE_META_ENTRY = new StroomZipEntry(null, SINGLE_ENTRY_ZIP_BASE_NAME,
             StroomZipFileType.Meta);
 
     private static Logger LOGGER = LoggerFactory.getLogger(StroomZipFile.class);
@@ -87,6 +90,14 @@ public class StroomZipFile implements Closeable {
 
     }
 
+    public StreamSourceInputStreamProvider getStreamProvider(long streamNo, String baseName, StroomZipFileType fileType) throws IOException {
+        final ZipArchiveEntry entry = getEntry(baseName, fileType);
+        if (entry != null) {
+            return new BasicInputStreamProvider(streamNo, getZipFile().getInputStream(entry), entry.getSize());
+        }
+        return null;
+    }
+
     public InputStream getInputStream(String baseName, StroomZipFileType fileType) throws IOException {
         final ZipArchiveEntry entry = getEntry(baseName, fileType);
         if (entry != null) {
@@ -123,5 +134,35 @@ public class StroomZipFile implements Closeable {
     void delete() throws IOException {
         close();
         Files.delete(file);
+    }
+
+    private static class BasicInputStreamProvider implements StreamSourceInputStreamProvider {
+        private final long streamCount;
+        private final StreamSourceInputStream inputStream;
+
+        BasicInputStreamProvider(final long streamCount, final InputStream inputStream, final long size) {
+            this.streamCount = streamCount;
+            this.inputStream = new StreamSourceInputStream(inputStream, size);
+        }
+
+        @Override
+        public long getStreamCount() {
+            return streamCount;
+        }
+
+        @Override
+        public StreamSourceInputStream getStream(final long streamNo) {
+            return inputStream;
+        }
+
+        @Override
+        public RASegmentInputStream getSegmentInputStream(final long streamNo) {
+            return null;
+        }
+
+        @Override
+        public void close() throws IOException {
+            inputStream.close();
+        }
     }
 }

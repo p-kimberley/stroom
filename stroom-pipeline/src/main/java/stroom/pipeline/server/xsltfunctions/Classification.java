@@ -37,7 +37,7 @@ class Classification extends StroomExtensionFunctionCall {
     private final FeedHolder feedHolder;
     private final FeedService feedService;
 
-    private Feed feed;
+    private String feed;
     private String classification;
 
     @Inject

@@ -58,7 +58,7 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipOutputStream;
 
 public class TestProxyAggregationTask extends AbstractCoreIntegrationTest {
-    private final static long DEFAULT_MAX_STREAM_SIZE = ModelStringUtil.parseIECByteSizeString("10G");
+    private static final long DEFAULT_MAX_STREAM_SIZE = ModelStringUtil.parseIECByteSizeString("10G");
 
     @Resource
     private StreamStore streamStore;
@@ -76,9 +76,6 @@ public class TestProxyAggregationTask extends AbstractCoreIntegrationTest {
     private void aggregate(final String proxyDir,
                            final int maxAggregation,
                            final long maxStreamSize) {
-        final ProxyFileProcessorImpl proxyFileProcessor = new ProxyFileProcessorImpl(streamStore, feedService, metaDataStatistic, maxAggregation, maxStreamSize);
-        final ProxyAggregationExecutor proxyAggregationExecutor = new ProxyAggregationExecutor(proxyFileProcessor, taskMonitor, executorProvider, proxyDir, 10, maxAggregation, 10000, maxStreamSize);
-        proxyAggregationExecutor.exec(new DummyTask());
     }
 
     private void aggregate(final String proxyDir,

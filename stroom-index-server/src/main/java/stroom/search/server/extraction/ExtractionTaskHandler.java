@@ -245,7 +245,7 @@ public class ExtractionTaskHandler {
                 // Here we need to reload the feed as this will get the related
                 // objects Translation etc
                 final Feed feed = feedService.load(source.getStream().getFeed());
-                feedHolder.setFeed(feed);
+                feedHolder.setFeed(feed.getName());
                 streamHolder.setStream(source.getStream());
                 pipelineHolder.setPipeline(pipelineEntity);
 

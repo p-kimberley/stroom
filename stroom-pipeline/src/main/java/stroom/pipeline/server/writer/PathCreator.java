@@ -196,7 +196,7 @@ public class PathCreator {
 
     public String replaceContextVars(String path) {
         if (feedHolder != null && feedHolder.getFeed() != null) {
-            path = replace(path, "feed", () -> feedHolder.getFeed().getName());
+            path = replace(path, "feed", () -> feedHolder.getFeed());
         }
         if (pipelineHolder != null && pipelineHolder.getPipeline() != null) {
             path = replace(path, "pipeline", () -> pipelineHolder.getPipeline().getName());

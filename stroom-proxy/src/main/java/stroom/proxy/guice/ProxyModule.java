@@ -9,7 +9,6 @@ import stroom.datafeed.server.RequestHandler;
 import stroom.dictionary.server.DictionaryStore;
 import stroom.dictionary.server.DictionaryStoreImpl;
 import stroom.docstore.server.Persistence;
-import stroom.docstore.server.Store;
 import stroom.docstore.server.fs.FSPersistence;
 import stroom.proxy.handler.ForwardStreamConfig;
 import stroom.proxy.handler.ForwardStreamHandlerFactory;
@@ -19,7 +18,6 @@ import stroom.proxy.handler.ProxyRequestHandler;
 import stroom.proxy.handler.StreamHandlerFactory;
 import stroom.proxy.repo.ProxyRepositoryConfig;
 import stroom.proxy.repo.ProxyRepositoryManager;
-import stroom.proxy.repo.ProxyRepositoryReader;
 import stroom.proxy.repo.ProxyRepositoryReaderConfig;
 import stroom.ruleset.server.MetaMapFilterFactoryImpl;
 import stroom.ruleset.server.RuleSetService;
@@ -50,7 +48,6 @@ public class ProxyModule extends AbstractModule {
         bind(Monitor.class).to(MonitorImpl.class);
         bind(StreamHandlerFactory.class).to(ForwardStreamHandlerFactory.class);
         bind(ProxyRepositoryManager.class).asEagerSingleton();
-        bind(ProxyRepositoryReader.class).asEagerSingleton();
 
         bind(MetaMapFilterFactory.class).to(MetaMapFilterFactoryImpl.class);
         bind(RuleSetService.class).to(RuleSetServiceImpl.class).in(Singleton.class);
@@ -58,7 +55,8 @@ public class ProxyModule extends AbstractModule {
         bind(SecurityContext.class).to(NoSecurityContext.class);
     }
 
-    @Provides @Singleton
+    @Provides
+    @Singleton
     Persistence providePersistence() {
         return new FSPersistence(Paths.get("/Users/stroomdev66/tmp/proxy-conf"));
     }

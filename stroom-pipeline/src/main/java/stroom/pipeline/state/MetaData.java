@@ -34,6 +34,11 @@ public class MetaData {
         this.metaMap.putAll(metaMap);
     }
 
+    public void set(final MetaMap metaMap) {
+        this.metaMap.clear();
+        this.metaMap.putAll(metaMap);
+    }
+
     public MetaMap getMetaMap() {
         return metaMap;
     }

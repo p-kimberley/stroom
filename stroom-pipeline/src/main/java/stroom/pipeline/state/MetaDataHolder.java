@@ -107,6 +107,10 @@ public class MetaDataHolder extends AbstractHolder<MetaDataHolder> implements Ho
         return metaData;
     }
 
+    public void setMetaData(final MetaMap metaData) {
+        this.metaData = metaData;
+    }
+
     private String getFeed() {
         return parentData.computeIfAbsent(FEED, k -> {
             final Stream stream = streamHolder.getStream();

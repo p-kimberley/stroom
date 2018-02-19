@@ -120,7 +120,7 @@ public class TestXMLWithErrorsInTransform extends AbstractProcessIntegrationTest
         final PipelineData pipelineData = pipelineDataCache.get(pipelineEntity);
         final Pipeline pipeline = pipelineFactory.create(pipelineData);
 
-        feedHolder.setFeed(new Feed());
+        feedHolder.setFeed("");
 
         // Set the input.
         final InputStream input = StroomPipelineTestFileUtil.getInputStream(INPUT);

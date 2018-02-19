@@ -76,4 +76,10 @@ public class StreamHolder implements Holder {
     public void setStreamNo(final long streamNo) {
         this.streamNo = streamNo;
     }
+
+    public void clear() {
+        streamProviders.clear();
+        streamNo = 0;
+        stream = null;
+    }
 }

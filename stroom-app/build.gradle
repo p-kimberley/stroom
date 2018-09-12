@@ -155,7 +155,7 @@ task copyFilesForDockerBuild() {
 //    dependsOn tasks.getByPath(':stroom-kafka:stroom-kafka-client-impl_0_10_0_1:shadowJar')
 //    dependsOn tasks.getByPath(':stroom-elastic:stroom-elastic-client-impl_5_6_4:shadowJar')
     doFirst {
-        new File(stroomPluginsDir).mkdirs()
+//        new File(stroomPluginsDir).mkdirs()
 
         // Copy the stroom app fat jar
         copy {

@@ -22,9 +22,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import stroom.feed.MetaMap;
 import stroom.feed.StroomHeaderArguments;
 import stroom.jobsystem.server.JobTrackedSchedule;
 import stroom.proxy.repo.StroomZipFile;
+import stroom.proxy.repo.StroomZipFileType;
 import stroom.proxy.repo.StroomZipRepository;
 import stroom.streamtask.server.FileWalker.FileFilter;
 import stroom.streamtask.server.FileWalker.FileProcessor;
@@ -35,6 +37,8 @@ import stroom.util.config.PropertyUtil;
 import stroom.util.date.DateUtil;
 import stroom.util.io.CloseableUtil;
 import stroom.util.io.FileUtil;
+import stroom.util.logging.LambdaLogger;
+import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogExecutionTime;
 import stroom.util.shared.ModelStringUtil;
 import stroom.util.shared.Task;
@@ -44,17 +48,24 @@ import stroom.util.spring.StroomSimpleCronSchedule;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -66,7 +77,7 @@ import java.util.stream.Collectors;
 @Component
 @Scope(value = StroomScope.PROTOTYPE)
 public class ProxyAggregationExecutor {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ProxyAggregationExecutor.class);
+    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ProxyAggregationExecutor.class);
 
     private static final int DEFAULT_MAX_AGGREGATION = 10000;
     private static final long DEFAULT_MAX_STREAM_SIZE = ModelStringUtil.parseIECByteSizeString("10G");
@@ -83,7 +94,14 @@ public class ProxyAggregationExecutor {
     private final long maxUncompressedFileSize;
 
     private final StroomZipRepository stroomZipRepository;
-    
+
+
+
+
+    private final Set<String> currentlyProcessingFeedNames = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final AtomicBoolean skippedFeeds = new AtomicBoolean();
+
+
     @Inject
     public ProxyAggregationExecutor(final TaskContext taskContext,
                                     final ExecutorProvider executorProvider,
@@ -130,7 +148,7 @@ public class ProxyAggregationExecutor {
         if (!taskContext.isTerminated()) {
             try {
                 final LogExecutionTime logExecutionTime = new LogExecutionTime();
-                LOGGER.info("exec() - started");
+                LOGGER.info(() -> "Started proxy aggregation");
 
                 taskContext.info("Aggregate started {}, maxFilesPerAggregate {}, maxConcurrentMappedFiles {}, maxUncompressedFileSize {}",
                         DateUtil.createNormalDateTimeString(System.currentTimeMillis()),
@@ -140,9 +158,9 @@ public class ProxyAggregationExecutor {
 
                 process(stroomZipRepository);
 
-                LOGGER.info("exec() - completed in {}", logExecutionTime);
+                LOGGER.info(() -> LambdaLogger.buildMessage("Completed proxy aggregation in {}", logExecutionTime));
             } catch (final Exception e) {
-                LOGGER.error(e.getMessage(), e);
+                LOGGER.error(e::getMessage, e);
             }
         }
     }
@@ -154,42 +172,189 @@ public class ProxyAggregationExecutor {
      */
     private void process(final StroomZipRepository stroomZipRepository) {
         try {
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("process() - Scanning " + stroomZipRepository.getRootDir());
+            LOGGER.debug(() -> LambdaLogger.buildMessage("Processing {}", stroomZipRepository.getRootDir()));
+
+            final long startTime = System.currentTimeMillis();
+            final ErrorReceiver errorReceiver = (path, message) -> addErrorMessage(path, message, true);
+
+            final ThreadPool threadPool = new ThreadPoolImpl("Proxy Aggregation", 5, 0, threadCount);
+            final Executor executor = executorProvider.getExecutor(threadPool);
+
+            skippedFeeds.set(Boolean.TRUE);
+            while (skippedFeeds.get() && !taskContext.isTerminated()) {
+                // Reset
+                skippedFeeds.set(Boolean.FALSE);
+                currentlyProcessingFeedNames.clear();
+
+                // Process
+                final CompletableFuture[] futures = new CompletableFuture[threadCount];
+                for (int i = 0; i < threadCount; i++) {
+                    final CompletableFuture future = CompletableFuture.runAsync(() -> processRepository(startTime, errorReceiver), executor);
+                    futures[i] = future;
+                }
+
+                // Wait for all to complete.
+                CompletableFuture.allOf(futures).join();
             }
 
-            // Scan all of the zip files in the repository so that we can map zip files to feeds.
-            final ErrorReceiver errorReceiver = (path, message) -> addErrorMessage(path, message, true);
-            final ZipInfoConsumer zipInfoConsumer = new ZipInfoConsumer(
-                    stroomZipRepository,
-                    maxFilesPerAggregate,
-                    maxConcurrentMappedFiles,
-                    maxUncompressedFileSize,
-                    errorReceiver,
-                    filePackProcessorProvider,
-                    executorProvider,
-                    threadCount);
-            final ZipInfoExtractor zipInfoExtractor = new ZipInfoExtractor(errorReceiver);
-            final FileProcessorImpl fileProcessor = new FileProcessorImpl(
-                    zipInfoExtractor,
-                    zipInfoConsumer,
-                    taskContext,
-                    executorProvider,
-                    threadCount);
-            final FileWalker fileWalker = new FileWalker();
-            fileWalker.walk(stroomZipRepository.getRootDir(), ZIP_FILTER, fileProcessor, taskContext);
 
-            // Wait for the file processor to complete.
-            fileProcessor.await();
 
-            // Complete processing remaining file packs.
-            zipInfoConsumer.complete();
 
-            LOGGER.debug("Completed");
-        } catch (final Exception e) {
-            LOGGER.error(e.getMessage(), e);
+
+
+
+
+
+
+
+
+
+
+
+
+
+//            // Scan all of the zip files in the repository so that we can map zip files to feeds.
+//            final ErrorReceiver errorReceiver = (path, message) -> addErrorMessage(path, message, true);
+//            final ZipInfoConsumer zipInfoConsumer = new ZipInfoConsumer(
+//                    stroomZipRepository,
+//                    maxFilesPerAggregate,
+//                    maxConcurrentMappedFiles,
+//                    maxUncompressedFileSize,
+//                    errorReceiver,
+//                    filePackProcessorProvider,
+//                    executorProvider,
+//                    threadCount);
+//            final ZipInfoExtractor zipInfoExtractor = new ZipInfoExtractor(errorReceiver);
+//            final FileProcessorImpl fileProcessor = new FileProcessorImpl(
+//                    zipInfoExtractor,
+//                    zipInfoConsumer,
+//                    taskContext,
+//                    executorProvider,
+//                    threadCount);
+//            final FileWalker fileWalker = new FileWalker();
+//            fileWalker.walk(stroomZipRepository.getRootDir(), ZIP_FILTER, fileProcessor, taskContext);
+//
+//            // Wait for the file processor to complete.
+//            fileProcessor.await();
+//
+//            // Complete processing remaining file packs.
+//            zipInfoConsumer.complete();
+
+            LOGGER.debug(() -> "Completed");
+        } catch (final RuntimeException e) {
+            LOGGER.error(e::getMessage, e);
         }
     }
+
+    private void processRepository(final long startTime, final ErrorReceiver errorReceiver) {
+        final AtomicReference<String> selectedFeedNameReference = new AtomicReference<>();
+
+        final FileFilter fileFilter = (file, attrs) ->
+                file.toString().endsWith(StroomZipRepository.ZIP_EXTENSION) &&
+                        attrs.lastModifiedTime().toMillis() < startTime;
+
+        final FileProcessor fileProcessor = (file, attrs) -> {
+            LOGGER.debug(() -> "Inspecting '" + FileUtil.getCanonicalPath(file) + "'");
+
+
+//            long totalUncompressedSize = 0;
+
+            try (final StroomZipFile stroomZipFile = new StroomZipFile(file)) {
+                final Set<String> baseNameSet = stroomZipFile.getStroomZipNameSet().getBaseNameSet();
+                if (baseNameSet.isEmpty()) {
+                    errorReceiver.onError(file, "Unable to find any entry?");
+                } else {
+                    // Extract meta data
+                    MetaMap metaMap = null;
+                    final Iterator<String> iter = baseNameSet.iterator();
+                    while (iter.hasNext() && metaMap == null) {
+                        final String sourceName = iter.next();
+
+                        try {
+                            final InputStream metaStream = stroomZipFile.getInputStream(sourceName, StroomZipFileType.Meta);
+                            if (metaStream == null) {
+                                errorReceiver.onError(file, "Unable to find meta");
+                            } else {
+                                metaMap = new MetaMap();
+                                metaMap.read(metaStream, false);
+                            }
+                        } catch (final RuntimeException e) {
+                            errorReceiver.onError(file, e.getMessage());
+                            LOGGER.error(e::getMessage, e);
+                        }
+//
+//                        totalUncompressedSize += getRawEntrySize(stroomZipFile, sourceName, StroomZipFileType.Meta);
+//                        totalUncompressedSize += getRawEntrySize(stroomZipFile, sourceName, StroomZipFileType.Context);
+//                        totalUncompressedSize += getRawEntrySize(stroomZipFile, sourceName, StroomZipFileType.Data);
+                    }
+
+
+                    if (metaMap != null) {
+                        // Get the feed.
+                        final String feedName = metaMap.get(StroomHeaderArguments.FEED);
+
+                        if (feedName == null) {
+                            errorReceiver.onError(file, "Unable to find feed name");
+
+                        } else {
+                            // See if this is a feed we should be processing with this processor.
+                            if (selectedFeedNameReference.get() == null) {
+                                // See if we can add this feed name to the set of currently processed feed names.
+                                // If we can't then it is being processed by another processor.
+                                if (currentlyProcessingFeedNames.add(feedName)) {
+                                    selectedFeedNameReference.compareAndSet(null, feedName);
+                                }
+                            }
+
+                            final String selectedFeedName = selectedFeedNameReference.get();
+                            if (selectedFeedName != null && selectedFeedName.equals(feedName)) {
+                                // Process this zip file.
+
+
+
+
+
+                            } else {
+                                // If no other processor is processing this feed then we will need to run the processing again.
+                                if (!currentlyProcessingFeedNames.contains(feedName)) {
+                                    skippedFeeds.set(Boolean.TRUE);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (final IOException | RuntimeException e) {
+                // Unable to open file ... must be bad.
+                errorReceiver.onError(file, e.getMessage());
+                LOGGER.error(e::getMessage, e);
+            }
+        };
+
+        // Walk over all of the files in the repository processing ones that match the file filter.
+        new FileWalker().walk(
+                stroomZipRepository.getRootDir(),
+                fileFilter,
+                fileProcessor,
+                taskContext);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private void addErrorMessage(final Path path, final String msg, final boolean bad) {
         StroomZipFile stroomZipFile = null;

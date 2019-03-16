@@ -1,10 +1,10 @@
 package stroom.streamtask.server;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.task.server.TaskContext;
 import stroom.util.io.AbstractFileVisitor;
 import stroom.util.io.FileUtil;
+import stroom.util.logging.LambdaLogger;
+import stroom.util.logging.LambdaLoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -15,7 +15,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.EnumSet;
 
 class FileWalker {
-    private final Logger LOGGER = LoggerFactory.getLogger(FileWalker.class);
+    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(FileWalker.class);
 
     void walk(final Path dir, final FileFilter fileFilter, final FileProcessor fileProcessor, final TaskContext taskContext) {
         taskContext.setName("Walk Repository - " + FileUtil.getCanonicalPath(dir));
@@ -37,7 +37,7 @@ class FileWalker {
                 }
             });
         } catch (final IOException | RuntimeException e) {
-            LOGGER.error(e.getMessage(), e);
+            LOGGER.error(e::getMessage, e);
         }
     }
 

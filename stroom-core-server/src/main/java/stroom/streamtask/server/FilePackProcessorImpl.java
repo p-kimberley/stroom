@@ -61,6 +61,8 @@ public final class FilePackProcessorImpl implements FilePackProcessor {
     private final StreamStore streamStore;
     private final FeedService feedService;
     private final MetaDataStatistic metaDataStatistic;
+    private final int maxAggregation;
+    private final long maxStreamSize;
     private final boolean aggregate = true;
     private final ProxyFileHandler proxyFileHandler = new ProxyFileHandler();
     private final TaskContext taskContext;
@@ -69,6 +71,8 @@ public final class FilePackProcessorImpl implements FilePackProcessor {
     public FilePackProcessorImpl(final StreamStore streamStore,
                                  @Named("cachedFeedService") final FeedService feedService,
                                  final MetaDataStatistic metaDataStatistic,
+                                 final int maxAggregation,
+                                 final long maxStreamSize,
                                  final TaskContext taskContext) {
         this.streamStore = streamStore;
         this.feedService = feedService;
@@ -77,22 +81,18 @@ public final class FilePackProcessorImpl implements FilePackProcessor {
     }
 
     @Override
-    public void process(final StroomZipRepository stroomZipRepository, final FilePack filePack) {
-        final String feedName = filePack.getFeed();
-        final Feed feed = feedService.loadByName(feedName);
-
-        taskContext.setName("Processing pack - " + filePack.getFeed());
-
+    public void processFeedFiles(final StroomZipRepository stroomZipRepository, final String feedName, final List<Path> fileList) {
         final LogExecutionTime logExecutionTime = new LogExecutionTime();
-        LOGGER.info("processFeedFiles() - Started {} ({} Files)", feedName, filePack.getFiles().size());
+        LOGGER.info("processFeedFiles() - Started {} ({} Files)", feedName, fileList.size());
 
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("processFeedFiles() - " + feedName + " " + fileList);
+        }
+
+        final Feed feed = feedService.loadByName(feedName);
         if (feed == null) {
             LOGGER.error("processFeedFiles() - " + feedName + " Failed to find feed");
             return;
-        }
-
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("processFeedFiles() - " + feedName + " " + filePack.getFiles());
         }
 
         // We don't want to aggregate reference feeds.
@@ -102,19 +102,33 @@ public final class FilePackProcessorImpl implements FilePackProcessor {
         List<Path> deleteFileList = new ArrayList<>();
 
         long sequence = 1;
-        long count = 0;
+        long maxAggregation = this.maxAggregation;
+        if (oneByOne) {
+            maxAggregation = 1;
+        }
+
+        Long nextBatchBreak = this.maxStreamSize;
 
         final StreamProgressMonitor streamProgressMonitor = new StreamProgressMonitor("ProxyAggregationTask");
 
-        for (final Path file : filePack.getFiles()) {
-            count++;
-            taskContext.info("File " + count + " of " + filePack.getFiles().size());
-
+        for (final Path file : fileList) {
             if (taskContext.isTerminated()) {
                 break;
             }
             try {
-                if (sequence > 1 && oneByOne) {
+                if (sequence > maxAggregation
+                        || (streamProgressMonitor.getTotalBytes() > nextBatchBreak)) {
+                    LOGGER.info("processFeedFiles() - Breaking Batch {} as limit is ({} > {}) or ({} > {})",
+                            feedName,
+                            sequence,
+                            maxAggregation,
+                            streamProgressMonitor.getTotalBytes(),
+                            nextBatchBreak
+                    );
+
+                    // Recalculate the next batch break
+                    nextBatchBreak = streamProgressMonitor.getTotalBytes() + maxStreamSize;
+
                     // Close off this unit
                     handlers = closeStreamHandlers(handlers);
 
@@ -130,7 +144,7 @@ public final class FilePackProcessorImpl implements FilePackProcessor {
                 sequence = feedFileProcessorHelper.processFeedFile(handlers, stroomZipRepository, file, streamProgressMonitor, sequence);
                 deleteFileList.add(file);
 
-            } catch (final Throwable t) {
+            } catch (final IOException | RuntimeException e) {
                 handlers = closeDeleteStreamHandlers(handlers);
             }
         }

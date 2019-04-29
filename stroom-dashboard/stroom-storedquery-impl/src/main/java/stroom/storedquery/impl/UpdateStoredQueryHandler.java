@@ -19,7 +19,6 @@ package stroom.storedquery.impl;
 import stroom.dashboard.shared.StoredQuery;
 import stroom.dashboard.shared.UpdateStoredQueryAction;
 import stroom.event.logging.api.DocumentEventLog;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
@@ -27,36 +26,31 @@ import javax.inject.Inject;
 class UpdateStoredQueryHandler extends AbstractTaskHandler<UpdateStoredQueryAction, StoredQuery> {
     private final StoredQueryServiceImpl storedQueryService;
     private final DocumentEventLog entityEventLog;
-    private final Security security;
 
     @Inject
     UpdateStoredQueryHandler(final StoredQueryServiceImpl storedQueryService,
-                             final DocumentEventLog entityEventLog,
-                             final Security security) {
+                             final DocumentEventLog entityEventLog) {
         this.storedQueryService = storedQueryService;
         this.entityEventLog = entityEventLog;
-        this.security = security;
     }
 
     @Override
     public StoredQuery exec(final UpdateStoredQueryAction action) {
         final StoredQuery storedQuery = action.getStoredQuery();
-        return security.secureResult(() -> {
-            StoredQuery result;
-            StoredQuery before = null;
+        StoredQuery result;
+        StoredQuery before = null;
 
-            try {
-                // Get the before version.
-                before = storedQueryService.fetch(storedQuery.getId());
-                result = storedQueryService.update(storedQuery);
-                entityEventLog.update(before, result, null);
-            } catch (final RuntimeException e) {
-                // Get the before version.
-                entityEventLog.update(before, storedQuery, e);
-                throw e;
-            }
+        try {
+            // Get the before version.
+            before = storedQueryService.fetch(storedQuery.getId());
+            result = storedQueryService.update(storedQuery);
+            entityEventLog.update(before, result, null);
+        } catch (final RuntimeException e) {
+            // Get the before version.
+            entityEventLog.update(before, storedQuery, e);
+            throw e;
+        }
 
-            return result;
-        });
+        return result;
     }
 }

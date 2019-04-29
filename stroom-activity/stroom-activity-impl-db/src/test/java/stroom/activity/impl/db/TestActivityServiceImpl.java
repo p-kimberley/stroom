@@ -50,11 +50,12 @@ class TestActivityServiceImpl {
     void before() {
         Mockito.when(securityContext.getUserId()).thenReturn("testUser");
         Mockito.when(securityContext.isLoggedIn()).thenReturn(true);
+        Mockito.when(security.getUserId()).thenReturn("testUser");
 
         final ConnectionProvider connectionProvider = new ActivityDbModule().getConnectionProvider(ActivityConfig::new);
 
         final ActivityDao activityDao = new ActivityDaoImpl(connectionProvider);
-        activityService = new ActivityServiceImpl(securityContext, activityDao);
+        activityService = new ActivityServiceImpl(security, activityDao);
     }
 
     @Test

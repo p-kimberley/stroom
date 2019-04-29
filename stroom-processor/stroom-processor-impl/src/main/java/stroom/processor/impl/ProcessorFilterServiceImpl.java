@@ -16,7 +16,6 @@
 
 package stroom.processor.impl;
 
-import stroom.util.AuditUtil;
 import stroom.docref.DocRef;
 import stroom.processor.api.ProcessorFilterService;
 import stroom.processor.api.ProcessorService;
@@ -27,6 +26,7 @@ import stroom.processor.shared.QueryData;
 import stroom.security.api.Security;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.PermissionNames;
+import stroom.util.AuditUtil;
 import stroom.util.shared.BaseResultList;
 
 import javax.inject.Inject;
@@ -197,49 +197,6 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService {
 //
 //
 //
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 //    @Override

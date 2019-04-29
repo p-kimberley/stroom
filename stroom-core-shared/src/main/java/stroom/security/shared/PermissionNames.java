@@ -16,6 +16,8 @@
 
 package stroom.security.shared;
 
+import java.util.Set;
+
 /**
  * Provide string constants for the permissions.
  */
@@ -68,6 +70,8 @@ public final class PermissionNames {
             IMPORT_CONFIGURATION,
             EXPORT_CONFIGURATION
     };
+
+    public static final Set<String> ALL_PERMISSIONS = Set.of(PermissionNames.PERMISSIONS);
 
     private PermissionNames() {
         // Constants

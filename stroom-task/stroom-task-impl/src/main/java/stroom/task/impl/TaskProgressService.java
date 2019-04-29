@@ -16,21 +16,21 @@
 
 package stroom.task.impl;
 
-import stroom.docref.SharedObject;
-import stroom.util.shared.BaseResultList;
-import stroom.util.shared.PageRequest;
-import stroom.util.shared.ResultList;
-import stroom.task.api.AbstractTaskHandler;
 import stroom.cluster.task.api.ClusterCallEntry;
 import stroom.cluster.task.api.ClusterDispatchAsyncHelper;
 import stroom.cluster.task.api.DefaultClusterResultCollector;
 import stroom.cluster.task.api.TargetType;
-import stroom.task.shared.Action;
+import stroom.security.api.Security;
+import stroom.security.shared.PermissionNames;
+import stroom.security.shared.UserToken;
 import stroom.task.shared.FindTaskProgressCriteria;
-import stroom.task.shared.Task;
 import stroom.task.shared.TaskId;
 import stroom.task.shared.TaskProgress;
+import stroom.util.shared.BaseResultList;
 import stroom.util.shared.Expander;
+import stroom.util.shared.PageRequest;
+import stroom.util.shared.ResultList;
+import stroom.util.shared.Sort.Direction;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
@@ -42,16 +42,38 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-abstract class FindTaskProgressHandlerBase<T extends Task<R>, R extends SharedObject>
-        extends AbstractTaskHandler<T, R> {
+class TaskProgressService {
     private final ClusterDispatchAsyncHelper dispatchHelper;
+    private final Security security;
 
     @Inject
-    FindTaskProgressHandlerBase(final ClusterDispatchAsyncHelper dispatchHelper) {
+    TaskProgressService(final ClusterDispatchAsyncHelper dispatchHelper,
+                        final Security security) {
         this.dispatchHelper = dispatchHelper;
+        this.security = security;
     }
 
-    BaseResultList<TaskProgress> doExec(final Action<?> action, final FindTaskProgressCriteria criteria) {
+    BaseResultList<TaskProgress> findTaskProgress(final UserToken userToken,
+                                                  final String taskName,
+                                                  final FindTaskProgressCriteria criteria) {
+        return security.secureResult(PermissionNames.MANAGE_TASKS_PERMISSION, () -> find(userToken, taskName, criteria));
+    }
+
+    BaseResultList<TaskProgress> findUserTaskProgress(final UserToken userToken,
+                                                      final String taskName,
+                                                      final String sessionId) {
+        return security.secureResult(() -> {
+            final FindTaskProgressCriteria criteria = new FindTaskProgressCriteria();
+            criteria.setSort(FindTaskProgressCriteria.FIELD_AGE, Direction.DESCENDING, false);
+            criteria.setSessionId(sessionId);
+
+            return find(userToken, taskName, criteria);
+        });
+    }
+
+    private BaseResultList<TaskProgress> find(final UserToken userToken,
+                                              final String taskName,
+                                              final FindTaskProgressCriteria criteria) {
         // Validate criteria.
         criteria.validateSortField();
 
@@ -61,7 +83,7 @@ abstract class FindTaskProgressHandlerBase<T extends Task<R>, R extends SharedOb
             criteria.setPageRequest(new PageRequest());
 
             final FindTaskProgressClusterTask clusterTask = new FindTaskProgressClusterTask(
-                    action.getUserToken(), action.getTaskName(), criteria);
+                    userToken, taskName, criteria);
             final DefaultClusterResultCollector<ResultList<TaskProgress>> collector = dispatchHelper
                     .execAsync(clusterTask, TargetType.ACTIVE);
 
@@ -81,6 +103,7 @@ abstract class FindTaskProgressHandlerBase<T extends Task<R>, R extends SharedOb
             criteria.setPageRequest(originalPageRequest);
         }
     }
+
 
     List<TaskProgress> createList(final Map<TaskId, TaskProgress> taskProgressMap, final FindTaskProgressCriteria criteria) {
         final Map<TaskId, TaskProgress> completeIdMap = new HashMap<>(taskProgressMap);

@@ -70,11 +70,6 @@ public class MockExplorerNodeService implements ExplorerNodeService {
         return Collections.emptyList();
     }
 
-    @Override
-    public void deleteAllNodes() {
-
-    }
-
     private ExplorerNode createTestNode() {
         return new ExplorerNode("test", "test", "test", "test");
     }

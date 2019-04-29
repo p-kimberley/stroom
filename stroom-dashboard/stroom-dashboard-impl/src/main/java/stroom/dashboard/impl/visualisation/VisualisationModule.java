@@ -18,15 +18,20 @@ package stroom.dashboard.impl.visualisation;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.multibindings.Multibinder;
+import stroom.dashboard.shared.FetchVisualisationAction;
 import stroom.docstore.api.DocumentActionHandlerBinder;
 import stroom.explorer.api.ExplorerActionHandler;
 import stroom.importexport.api.ImportExportActionHandler;
+import stroom.task.api.TaskHandlerBinder;
 import stroom.visualisation.shared.VisualisationDoc;
 
 public class VisualisationModule extends AbstractModule {
     @Override
     protected void configure() {
         bind(VisualisationStore.class).to(VisualisationStoreImpl.class);
+
+        TaskHandlerBinder.create(binder())
+                .bind(FetchVisualisationAction.class, FetchVisualisationHandler.class);
 
         final Multibinder<ExplorerActionHandler> explorerActionHandlerBinder = Multibinder.newSetBinder(binder(), ExplorerActionHandler.class);
         explorerActionHandlerBinder.addBinding().to(VisualisationStoreImpl.class);

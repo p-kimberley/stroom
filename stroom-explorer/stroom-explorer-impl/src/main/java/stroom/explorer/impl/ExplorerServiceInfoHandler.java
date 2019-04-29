@@ -1,31 +1,29 @@
 package stroom.explorer.impl;
 
+import stroom.docref.DocRefInfo;
 import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.ExplorerServiceInfoAction;
 import stroom.explorer.shared.SharedDocRefInfo;
-import stroom.docref.DocRefInfo;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
 
-
 class ExplorerServiceInfoHandler extends AbstractTaskHandler<ExplorerServiceInfoAction, SharedDocRefInfo> {
-
-    private final ExplorerService explorerService;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    ExplorerServiceInfoHandler(final ExplorerService explorerService,
-                               final Security security) {
+    ExplorerServiceInfoHandler(final ExplorerServiceImpl explorerService,
+                               final ExplorerEventLog explorerEventLog) {
         this.explorerService = explorerService;
-        this.security = security;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public SharedDocRefInfo exec(final ExplorerServiceInfoAction task) {
-        return security.secureResult(() -> {
+        try {
             final DocRefInfo docRefInfo = explorerService.info(task.getDocRef());
+            explorerEventLog.info(task.getDocRef(), null);
 
             return new SharedDocRefInfo.Builder()
                     .type(docRefInfo.getDocRef().getType())
@@ -37,6 +35,10 @@ class ExplorerServiceInfoHandler extends AbstractTaskHandler<ExplorerServiceInfo
                     .updateTime(docRefInfo.getUpdateTime())
                     .updateUser(docRefInfo.getUpdateUser())
                     .build();
-        });
+
+        } catch (final RuntimeException e) {
+            explorerEventLog.info(task.getDocRef(), e);
+            throw e;
+        }
     }
 }

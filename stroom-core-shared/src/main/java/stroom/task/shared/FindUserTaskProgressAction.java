@@ -16,9 +16,9 @@
 
 package stroom.task.shared;
 
-import stroom.util.shared.BaseResultList;
+import stroom.util.shared.ResultList;
 
-public class FindUserTaskProgressAction extends Action<BaseResultList<TaskProgress>> {
+public class FindUserTaskProgressAction extends Action<ResultList<TaskProgress>> {
     private static final long serialVersionUID = 6824397982129712337L;
 
     @Override

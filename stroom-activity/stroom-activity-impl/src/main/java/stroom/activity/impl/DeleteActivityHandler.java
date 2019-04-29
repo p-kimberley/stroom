@@ -16,11 +16,10 @@
 
 package stroom.activity.impl;
 
-import stroom.activity.shared.Activity;
 import stroom.activity.api.ActivityService;
+import stroom.activity.shared.Activity;
 import stroom.activity.shared.DeleteActivityAction;
 import stroom.event.logging.api.DocumentEventLog;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 import stroom.util.shared.VoidResult;
 
@@ -29,30 +28,25 @@ import javax.inject.Inject;
 public class DeleteActivityHandler extends AbstractTaskHandler<DeleteActivityAction, VoidResult> {
     private final ActivityService activityService;
     private final DocumentEventLog entityEventLog;
-    private final Security security;
 
     @Inject
     DeleteActivityHandler(final ActivityService activityService,
-                          final DocumentEventLog entityEventLog,
-                          final Security security) {
+                          final DocumentEventLog entityEventLog) {
         this.activityService = activityService;
         this.entityEventLog = entityEventLog;
-        this.security = security;
     }
 
     @Override
     public VoidResult exec(final DeleteActivityAction action) {
         final Activity activity = action.getActivity();
-        return security.secureResult(() -> {
-            try {
-                activityService.delete(activity.getId());
-                entityEventLog.delete(activity, null);
-            } catch (final RuntimeException e) {
-                entityEventLog.delete(activity, e);
-                throw e;
-            }
+        try {
+            activityService.delete(activity.getId());
+            entityEventLog.delete(activity, null);
+        } catch (final RuntimeException e) {
+            entityEventLog.delete(activity, e);
+            throw e;
+        }
 
-            return VoidResult.INSTANCE;
-        });
+        return VoidResult.INSTANCE;
     }
 }

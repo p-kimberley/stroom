@@ -27,11 +27,11 @@ import javax.inject.Inject;
 
 class FetchUserAppPermissionsHandler
         extends AbstractTaskHandler<FetchUserAppPermissionsAction, UserAppPermissions> {
-    private final UserAppPermissionsCache userAppPermissionsCache;
+    private final AppPermissionsCache userAppPermissionsCache;
     private final Security security;
 
     @Inject
-    FetchUserAppPermissionsHandler(final UserAppPermissionsCache userAppPermissionsCache,
+    FetchUserAppPermissionsHandler(final AppPermissionsCache userAppPermissionsCache,
                                    final Security security) {
         this.userAppPermissionsCache = userAppPermissionsCache;
         this.security = security;

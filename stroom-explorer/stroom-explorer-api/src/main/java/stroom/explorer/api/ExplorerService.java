@@ -18,33 +18,33 @@
 package stroom.explorer.api;
 
 import stroom.docref.DocRef;
+import stroom.docref.DocRefInfo;
 import stroom.explorer.shared.BulkActionResult;
 import stroom.explorer.shared.DocumentType;
 import stroom.explorer.shared.FetchExplorerNodeResult;
 import stroom.explorer.shared.FindExplorerNodeCriteria;
 import stroom.explorer.shared.PermissionInheritance;
-import stroom.docref.DocRefInfo;
 
 import java.util.List;
 
 public interface ExplorerService {
-    FetchExplorerNodeResult getData(FindExplorerNodeCriteria criteria);
-
+//    FetchExplorerNodeResult getData(FindExplorerNodeCriteria criteria);
+//
     DocRef create(String docType, String docName, DocRef destinationFolderRef, PermissionInheritance permissionInheritance);
-
-    BulkActionResult copy(List<DocRef> docRefs, DocRef destinationFolderRef, PermissionInheritance permissionInheritance);
-
-    BulkActionResult move(List<DocRef> docRefs, DocRef destinationFolderRef, PermissionInheritance permissionInheritance);
-
-    DocRef rename(DocRef docRef, String docName);
-
-    BulkActionResult delete(List<DocRef> docRefs);
-
-    DocRefInfo info(DocRef docRef);
-
+//
+//    BulkActionResult copy(List<DocRef> docRefs, DocRef destinationFolderRef, PermissionInheritance permissionInheritance);
+//
+//    BulkActionResult move(List<DocRef> docRefs, DocRef destinationFolderRef, PermissionInheritance permissionInheritance);
+//
+//    DocRef rename(DocRef docRef, String docName);
+//
+//    BulkActionResult delete(List<DocRef> docRefs);
+//
+//    DocRefInfo info(DocRef docRef);
+//
     void rebuildTree();
-
+//
     List<DocumentType> getNonSystemTypes();
-
-    List<DocumentType> getVisibleTypes();
+//
+//    List<DocumentType> getVisibleTypes();
 }

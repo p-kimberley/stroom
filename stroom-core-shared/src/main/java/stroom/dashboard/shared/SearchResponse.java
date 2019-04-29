@@ -56,6 +56,12 @@ public class SearchResponse implements SharedObject {
     @XmlElement
     private boolean complete;
 
+    /**
+     * Is this a new search.
+     */
+    @XmlElement
+    private boolean newSearch;
+
     @XmlElement
     private Map<String, String> results;
 
@@ -85,6 +91,14 @@ public class SearchResponse implements SharedObject {
 
     public void setComplete(final boolean complete) {
         this.complete = complete;
+    }
+
+    public boolean isNewSearch() {
+        return newSearch;
+    }
+
+    public void setNewSearch(final boolean newSearch) {
+        this.newSearch = newSearch;
     }
 
     @Override

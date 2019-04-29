@@ -12,26 +12,27 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package stroom.dashboard.impl;
+package stroom.dashboard.impl.visualisation;
 
-import stroom.dashboard.shared.SearchBusPollAction;
-import stroom.dashboard.shared.SearchBusPollResult;
+import stroom.dashboard.shared.FetchVisualisationAction;
 import stroom.task.api.AbstractTaskHandler;
+import stroom.visualisation.shared.VisualisationDoc;
 
 import javax.inject.Inject;
 
-class SearchBusPollActionHandler extends AbstractTaskHandler<SearchBusPollAction, SearchBusPollResult> {
-    private final SearchService searchService;
+class FetchVisualisationHandler extends AbstractTaskHandler<FetchVisualisationAction, VisualisationDoc> {
+    private final VisualisationService visualisationService;
 
     @Inject
-    SearchBusPollActionHandler(final SearchService searchService) {
-        this.searchService = searchService;
+    FetchVisualisationHandler(final VisualisationService visualisationService) {
+        this.visualisationService = visualisationService;
     }
 
     @Override
-    public SearchBusPollResult exec(final SearchBusPollAction action) {
-        return new SearchBusPollResult(searchService.poll(action.getUserToken(), action.getApplicationInstanceId(), action.getSearchActionMap()));
+    public VisualisationDoc exec(final FetchVisualisationAction action) {
+        return visualisationService.fetch(action.getVisualisation());
     }
 }

@@ -22,14 +22,13 @@ import stroom.dashboard.shared.DashboardDoc;
 import stroom.dashboard.shared.DownloadQueryAction;
 import stroom.dashboard.shared.DownloadSearchResultsAction;
 import stroom.dashboard.shared.FetchTimeZonesAction;
-import stroom.dashboard.shared.FetchVisualisationAction;
 import stroom.dashboard.shared.SearchBusPollAction;
 import stroom.dashboard.shared.ValidateExpressionAction;
+import stroom.docstore.api.DocumentActionHandlerBinder;
 import stroom.explorer.api.ExplorerActionHandler;
 import stroom.importexport.api.ImportExportActionHandler;
 import stroom.task.api.TaskHandlerBinder;
 import stroom.util.guice.GuiceUtil;
-import stroom.docstore.api.DocumentActionHandlerBinder;
 import stroom.util.shared.Clearable;
 
 public class DashboardModule extends AbstractModule {
@@ -43,7 +42,6 @@ public class DashboardModule extends AbstractModule {
                 .bind(DownloadQueryAction.class, DownloadQueryActionHandler.class)
                 .bind(DownloadSearchResultsAction.class, DownloadSearchResultsHandler.class)
                 .bind(FetchTimeZonesAction.class, FetchTimeZonesHandler.class)
-                .bind(FetchVisualisationAction.class, FetchVisualisationHandler.class)
                 .bind(SearchBusPollAction.class, SearchBusPollActionHandler.class)
                 .bind(ValidateExpressionAction.class, ValidateExpressionHandler.class);
 

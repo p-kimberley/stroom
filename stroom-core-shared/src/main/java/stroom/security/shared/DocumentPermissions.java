@@ -19,42 +19,95 @@ package stroom.security.shared;
 import stroom.docref.SharedObject;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class DocumentPermissions implements SharedObject {
     private static final long serialVersionUID = 5230917643321418827L;
 
-    private String docRefUuid;
-    private Map<String, Set<String>> userPermissions;
+    private String docUuid;
+    private Map<String, Set<String>> permissions = new HashMap<>();
 
     public DocumentPermissions() {
         // Default constructor necessary for GWT serialisation.
     }
 
-    public DocumentPermissions(final String docRefUuid,
-                               final Map<String, Set<String>> userPermissions) {
-        this.docRefUuid = docRefUuid;
-        this.userPermissions = userPermissions;
+    public DocumentPermissions(final String docUuid, final Map<String, Set<String>> permissions) {
+        this.docUuid = docUuid;
+        this.permissions = permissions;
     }
 
-    public String getDocRefUuid() {
-        return docRefUuid;
+    public String getDocUuid() {
+        return docUuid;
     }
 
-    public void setDocRefUuid(String docRefUuid) {
-        this.docRefUuid = docRefUuid;
+    public void setDocUuid(String docUuid) {
+        this.docUuid = docUuid;
     }
 
-    public Map<String, Set<String>> getUserPermissions() {
-        return userPermissions;
+    public Map<String, Set<String>> getPermissions() {
+        return permissions;
+    }
+
+    public void setPermissions(Map<String, Set<String>> permissions) {
+        this.permissions = permissions;
     }
 
     public Set<String> getPermissionsForUser(final String userUuid) {
-        final Set<String> permissions = userPermissions.get(userUuid);
-        if (permissions != null) {
-            return permissions;
+        return permissions.getOrDefault(userUuid, Collections.emptySet());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DocumentPermissions that = (DocumentPermissions) o;
+        return Objects.equals(docUuid, that.docUuid) &&
+                Objects.equals(permissions, that.permissions);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(docUuid, permissions);
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("DocumentPermissions{");
+        sb.append("docUuid='").append(docUuid).append('\'');
+        sb.append(", permissions='").append(permissions).append('\'');
+        sb.append('}');
+        return sb.toString();
+    }
+
+    public static class Builder {
+        private final DocumentPermissions instance;
+        private final Map<String, Set<String>> permissions = new HashMap<>();
+
+        public Builder(final DocumentPermissions instance) {
+            this.instance = instance;
         }
-        return Collections.emptySet();
+
+        public Builder() {
+            this(new DocumentPermissions());
+        }
+
+        public Builder docUuid(final String value) {
+            instance.setDocUuid(value);
+            return this;
+        }
+
+        public Builder permission(final String userUuid, final String permission) {
+            permissions.computeIfAbsent(userUuid, k -> new HashSet<>()).add(permission);
+            return this;
+        }
+
+        public DocumentPermissions build() {
+            instance.setPermissions(permissions);
+            return instance;
+        }
     }
 }

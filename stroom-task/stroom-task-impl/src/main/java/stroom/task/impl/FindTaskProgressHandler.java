@@ -16,29 +16,23 @@
 
 package stroom.task.impl;
 
-import stroom.util.shared.ResultList;
-import stroom.security.api.Security;
-import stroom.security.shared.PermissionNames;
-import stroom.cluster.task.api.ClusterDispatchAsyncHelper;
+import stroom.task.api.AbstractTaskHandler;
 import stroom.task.shared.FindTaskProgressAction;
 import stroom.task.shared.TaskProgress;
+import stroom.util.shared.ResultList;
 
 import javax.inject.Inject;
 
-
-class FindTaskProgressHandler
-        extends FindTaskProgressHandlerBase<FindTaskProgressAction, ResultList<TaskProgress>> {
-    private final Security security;
+class FindTaskProgressHandler extends AbstractTaskHandler<FindTaskProgressAction, ResultList<TaskProgress>> {
+    private final TaskProgressService taskProgressService;
 
     @Inject
-    FindTaskProgressHandler(final ClusterDispatchAsyncHelper dispatchHelper,
-                            final Security security) {
-        super(dispatchHelper);
-        this.security = security;
+    FindTaskProgressHandler(final TaskProgressService taskProgressService) {
+        this.taskProgressService = taskProgressService;
     }
 
     @Override
     public ResultList<TaskProgress> exec(final FindTaskProgressAction action) {
-        return security.secureResult(PermissionNames.MANAGE_TASKS_PERMISSION, () -> doExec(action, action.getCriteria()));
+        return taskProgressService.findTaskProgress(action.getUserToken(), action.getTaskName(), action.getCriteria());
     }
 }

@@ -37,18 +37,18 @@ class TestAppPermissionServiceImpl {
     private static final Logger LOGGER = LoggerFactory.getLogger(TestAppPermissionServiceImpl.class);
 
     private static UserService userService;
-    private static UserAppPermissionService userAppPermissionService;
+    private static AppPermissionService appPermissionService;
     private static UserGroupsCache userGroupsCache;
-    private static UserAppPermissionsCache userAppPermissionsCache;
+    private static AppPermissionsCache userAppPermissionsCache;
 
     @BeforeAll
     static void beforeAll() {
         final Injector injector = Guice.createInjector(new TestModule());
 
         userService = injector.getInstance(UserService.class);
-        userAppPermissionService = injector.getInstance(UserAppPermissionService.class);
+        appPermissionService = injector.getInstance(AppPermissionService.class);
         userGroupsCache = injector.getInstance(UserGroupsCache.class);
-        userAppPermissionsCache = injector.getInstance(UserAppPermissionsCache.class);
+        userAppPermissionsCache = injector.getInstance(AppPermissionsCache.class);
     }
 
     @Test
@@ -90,7 +90,7 @@ class TestAppPermissionServiceImpl {
     private void addPermissions(final User user, final String... permissions) {
         for (final String permission : permissions) {
             try {
-                userAppPermissionService.addPermission(user.getUuid(), permission);
+                appPermissionService.addPermission(user.getUuid(), permission);
             } catch (final Exception e) {
                 LOGGER.info(e.getMessage());
             }
@@ -99,13 +99,12 @@ class TestAppPermissionServiceImpl {
 
     private void removePermissions(final User user, final String... permissions) {
         for (final String permission : permissions) {
-            userAppPermissionService.removePermission(user.getUuid(), permission);
+            appPermissionService.removePermission(user.getUuid(), permission);
         }
     }
 
     private void checkPermissions(final User user, final String... permissions) {
-        final UserAppPermissions userAppPermissions = userAppPermissionService
-                .getPermissionsForUser(user);
+        final UserAppPermissions userAppPermissions = userAppPermissionsCache.get(user);
         final Set<String> permissionSet = userAppPermissions.getUserPermissons();
         assertThat(permissionSet.size()).isEqualTo(permissions.length);
         for (final String permission : permissions) {
@@ -122,7 +121,7 @@ class TestAppPermissionServiceImpl {
 
         final Set<String> combinedPermissions = new HashSet<>();
         for (final User userRef : allUsers) {
-            final UserAppPermissions userAppPermissions = userAppPermissionService.getPermissionsForUser(userRef);
+            final UserAppPermissions userAppPermissions =userAppPermissionsCache.get(userRef);
             final Set<String> userPermissions = userAppPermissions.getUserPermissons();
             combinedPermissions.addAll(userPermissions);
         }

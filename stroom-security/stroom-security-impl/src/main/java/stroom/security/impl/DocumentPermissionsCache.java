@@ -41,10 +41,10 @@ class DocumentPermissionsCache implements EntityEvent.Handler, Clearable {
     @Inject
     @SuppressWarnings("unchecked")
     DocumentPermissionsCache(final CacheManager cacheManager,
-                             final DocumentPermissionService documentPermissionService) {
+                             final DocumentPermissionDao documentPermissionDao) {
 
         final CacheLoader<String, DocumentPermissions> cacheLoader =
-                CacheLoader.from(documentPermissionService::getPermissionsForDocument);
+                CacheLoader.from(documentPermissionDao::getPermissionsForDocument);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
                 .expireAfterAccess(30, TimeUnit.MINUTES);
@@ -67,6 +67,6 @@ class DocumentPermissionsCache implements EntityEvent.Handler, Clearable {
 
     @Override
     public void onChange(final EntityEvent event) {
-        cache.invalidate(event.getDocRef());
+        cache.invalidate(event.getDocRef().getUuid());
     }
 }

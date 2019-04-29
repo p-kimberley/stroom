@@ -17,45 +17,22 @@
 package stroom.cache.impl;
 
 import stroom.cache.shared.CacheClearAction;
-import stroom.cache.shared.FindCacheInfoCriteria;
-import stroom.security.api.Security;
-import stroom.security.shared.PermissionNames;
 import stroom.task.api.AbstractTaskHandler;
-import stroom.cluster.task.api.ClusterDispatchAsyncHelper;
-import stroom.cluster.task.api.TargetType;
 import stroom.util.shared.VoidResult;
 
 import javax.inject.Inject;
 
-
 class CacheClearHandler extends AbstractTaskHandler<CacheClearAction, VoidResult> {
-    private final ClusterDispatchAsyncHelper dispatchHelper;
-    private final Security security;
+    private final CacheClearService cacheClearService;
 
     @Inject
-    CacheClearHandler(final ClusterDispatchAsyncHelper dispatchHelper,
-                      final Security security) {
-        this.dispatchHelper = dispatchHelper;
-        this.security = security;
+    CacheClearHandler(final CacheClearService cacheClearService) {
+        this.cacheClearService = cacheClearService;
     }
 
     @Override
     public VoidResult exec(final CacheClearAction action) {
-        return security.secureResult(PermissionNames.MANAGE_CACHE_PERMISSION, () -> {
-            final FindCacheInfoCriteria criteria = new FindCacheInfoCriteria();
-            criteria.getName().setString(action.getCacheName());
-
-            final CacheClearClusterTask clusterTask = new CacheClearClusterTask(
-                    action.getUserToken(),
-                    action.getTaskName(),
-                    criteria);
-
-            if (action.getNodeName() != null) {
-                dispatchHelper.execAsync(clusterTask, action.getNodeName());
-            } else {
-                dispatchHelper.execAsync(clusterTask, TargetType.ACTIVE);
-            }
-            return new VoidResult();
-        });
+        cacheClearService.clear(action.getCacheName(), action.getNodeName());
+        return new VoidResult();
     }
 }

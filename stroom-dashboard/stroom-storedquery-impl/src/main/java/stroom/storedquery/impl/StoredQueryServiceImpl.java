@@ -31,11 +31,15 @@ public class StoredQueryServiceImpl implements StoredQueryService {
     }
 
     StoredQuery update(@Nonnull final StoredQuery storedQuery) {
+        // Fetch first to ensure the user is allowed to update this query,
+        fetch(storedQuery.getId());
         AuditUtil.stamp(securityContext.getUserId(), storedQuery);
         return security.secureResult(() -> dao.update(storedQuery));
     }
 
     boolean delete(int id) {
+        // Fetch first to ensure the user is allowed to delete this query,
+        fetch(id);
         return security.secureResult(() -> dao.delete(id));
     }
 

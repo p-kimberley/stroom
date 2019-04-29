@@ -16,59 +16,40 @@
 
 package stroom.explorer.impl;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.docref.DocRef;
-import stroom.explorer.api.ExplorerNodeService;
-import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.FetchDocRefsAction;
 import stroom.explorer.shared.SharedDocRef;
-import stroom.security.api.Security;
-import stroom.security.api.SecurityContext;
-import stroom.security.shared.DocumentPermissionNames;
 import stroom.task.api.AbstractTaskHandler;
 import stroom.util.shared.SharedSet;
 
 import javax.inject.Inject;
-
+import java.util.Set;
 
 class FetchDocRefsHandler
         extends AbstractTaskHandler<FetchDocRefsAction, SharedSet<SharedDocRef>> {
-    private final Logger LOGGER = LoggerFactory.getLogger(FetchDocRefsHandler.class);
-    private final ExplorerNodeService explorerNodeService;
-    private final SecurityContext securityContext;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    FetchDocRefsHandler(final ExplorerNodeService explorerNodeService,
-                        final SecurityContext securityContext,
-                        final Security security) {
-        this.explorerNodeService = explorerNodeService;
-        this.securityContext = securityContext;
-        this.security = security;
+    FetchDocRefsHandler(final ExplorerServiceImpl explorerService,
+                        final ExplorerEventLog explorerEventLog) {
+        this.explorerService = explorerService;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public SharedSet<SharedDocRef> exec(final FetchDocRefsAction action) {
-        return security.secureResult(() -> {
-            final SharedSet<SharedDocRef> result = new SharedSet<>();
-            if (action.getDocRefs() != null) {
-                for (final DocRef docRef : action.getDocRefs()) {
-                    try {
-                        // Only return entries the user has permission to see.
-                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(), DocumentPermissionNames.USE)) {
-                            explorerNodeService.getNode(docRef)
-                                    .map(ExplorerNode::getDocRef)
-                                    .map(SharedDocRef::create)
-                                    .ifPresent(result::add);
-                        }
-                    } catch (final RuntimeException e) {
-                        LOGGER.debug(e.getMessage(), e);
-                    }
-                }
-            }
+        SharedSet<SharedDocRef> result = new SharedSet<>();
 
-            return result;
-        });
+        try {
+            final Set<DocRef> docRefs = explorerService.fetchDocRefs(action.getDocRefs());
+            docRefs.stream().map(SharedDocRef::create).forEach(result::add);
+            explorerEventLog.fetchDocRefs(action.getDocRefs(), null);
+        } catch (final RuntimeException e) {
+            explorerEventLog.fetchDocRefs(action.getDocRefs(), e);
+            throw e;
+        }
+
+        return result;
     }
 }

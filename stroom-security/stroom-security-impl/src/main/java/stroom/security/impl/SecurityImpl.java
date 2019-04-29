@@ -2,9 +2,9 @@ package stroom.security.impl;
 
 import stroom.security.api.Security;
 import stroom.security.api.SecurityContext;
+import stroom.security.api.UserTokenUtil;
 import stroom.security.shared.PermissionException;
 import stroom.security.shared.UserToken;
-import stroom.security.api.UserTokenUtil;
 
 import javax.inject.Inject;
 import java.util.function.Supplier;
@@ -17,6 +17,16 @@ public class SecurityImpl implements Security {
     @Inject
     public SecurityImpl(final SecurityContext securityContext) {
         this.securityContext = securityContext;
+    }
+
+    /**
+     * Convenience method to get the current user id.
+     *
+     * @return The id of the user associated with this security context.
+     */
+    @Override
+    public String getUserId() {
+        return securityContext.getUserId();
     }
 
     /**

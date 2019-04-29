@@ -21,25 +21,26 @@ import stroom.docref.DocRef;
 import stroom.docref.SharedObject;
 
 import java.util.List;
+import java.util.Map;
 
 public class BulkActionResult implements SharedObject {
     private List<DocRef> docRefs;
-    private String message;
+    private Map<DocRef, String> messages;
 
     public BulkActionResult() {
         // Default constructor necessary for GWT serialisation.
     }
 
-    public BulkActionResult(final List<DocRef> docRefs, final String message) {
+    public BulkActionResult(final List<DocRef> docRefs, final Map<DocRef, String> messages) {
         this.docRefs = docRefs;
-        this.message = message;
+        this.messages = messages;
     }
 
     public List<DocRef> getDocRefs() {
         return docRefs;
     }
 
-    public String getMessage() {
-        return message;
+    public Map<DocRef, String> getMessages() {
+        return messages;
     }
 }

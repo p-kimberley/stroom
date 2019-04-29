@@ -19,28 +19,32 @@ package stroom.security.impl;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import stroom.util.shared.Clearable;
-import stroom.security.shared.UserAppPermissions;
-import stroom.security.shared.User;
 import stroom.cache.api.CacheManager;
 import stroom.cache.api.CacheUtil;
+import stroom.security.shared.PermissionNames;
+import stroom.security.shared.User;
+import stroom.security.shared.UserAppPermissions;
+import stroom.util.shared.Clearable;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Singleton
 // TODO watch for changes somehow, it used to use the generic entity event handler stuff
-public class UserAppPermissionsCache implements Clearable {
+public class AppPermissionsCache implements Clearable {
     private static final int MAX_CACHE_ENTRIES = 1000;
 
+    private final AppPermissionDao appPermissionDao;
     private final LoadingCache<User, UserAppPermissions> cache;
 
     @Inject
     @SuppressWarnings("unchecked")
-    UserAppPermissionsCache(final CacheManager cacheManager,
-                            final UserAppPermissionService userAppPermissionService) {
-        final CacheLoader<User, UserAppPermissions> cacheLoader = CacheLoader.from(userAppPermissionService::getPermissionsForUser);
+    AppPermissionsCache(final CacheManager cacheManager,
+                        final AppPermissionDao appPermissionDao) {
+        this.appPermissionDao = appPermissionDao;
+        final CacheLoader<User, UserAppPermissions> cacheLoader = CacheLoader.from(this::getPermissionsForUser);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
                 .expireAfterAccess(30, TimeUnit.MINUTES);
@@ -59,5 +63,12 @@ public class UserAppPermissionsCache implements Clearable {
     @Override
     public void clear() {
         CacheUtil.clear(cache);
+    }
+
+    private UserAppPermissions getPermissionsForUser(User userRef) {
+        final Set<String> permissionNames = appPermissionDao.getPermissionsForUser(userRef.getUuid());
+        final Set<String> allNames = PermissionNames.ALL_PERMISSIONS;
+
+        return new UserAppPermissions(userRef, allNames, permissionNames);
     }
 }

@@ -1,6 +1,7 @@
 package stroom.security.mock;
 
 import stroom.security.api.Security;
+import stroom.security.shared.User;
 import stroom.security.shared.UserToken;
 
 import java.util.function.Supplier;
@@ -9,6 +10,10 @@ import java.util.function.Supplier;
  * All methods proceed with no intervention from a security perspective
  */
 public class AllowAllMockSecurity implements Security {
+    @Override
+    public String getUserId() {
+        return User.ADMIN_USER_NAME;
+    }
 
     @Override
     public <T> T asUserResult(final UserToken userToken, final Supplier<T> supplier) {
@@ -63,7 +68,6 @@ public class AllowAllMockSecurity implements Security {
     @Override
     public void insecure(final Runnable runnable) {
         runnable.run();
-
     }
 
     @Override

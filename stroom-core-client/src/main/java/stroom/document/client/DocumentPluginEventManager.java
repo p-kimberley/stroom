@@ -248,8 +248,9 @@ public class DocumentPluginEventManager extends Plugin {
                 // Hide the copy document presenter.
                 HidePopupEvent.fire(DocumentPluginEventManager.this, event.getPresenter());
 
-                if (result.getMessage().length() > 0) {
-                    AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to copy some items", result.getMessage(), null);
+                if (result.getMessages().size() > 0) {
+                    final String details = String.join("\n", result.getMessages().values());
+                    AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to copy some items", details, null);
                 }
 
                 if (result.getDocRefs().size() > 0) {
@@ -264,8 +265,9 @@ public class DocumentPluginEventManager extends Plugin {
                 // Hide the move document presenter.
                 HidePopupEvent.fire(DocumentPluginEventManager.this, event.getPresenter());
 
-                if (result.getMessage().length() > 0) {
-                    AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to move some items", result.getMessage(), null);
+                if (result.getMessages().size() > 0) {
+                    final String details = String.join("\n", result.getMessages().values());
+                    AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to move some items", details, null);
                 }
 
                 if (result.getDocRefs().size() > 0) {
@@ -372,8 +374,9 @@ public class DocumentPluginEventManager extends Plugin {
                 ConfirmEvent.fire(DocumentPluginEventManager.this, "Are you sure you want to delete these items?", ok -> {
                     if (ok) {
                         delete(docRefs).onSuccess(result -> {
-                            if (result.getMessage().length() > 0) {
-                                AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to delete some items", result.getMessage(), null);
+                            if (result.getMessages().size() > 0) {
+                                final String details = String.join("\n", result.getMessages().values());
+                                AlertEvent.fireInfo(DocumentPluginEventManager.this, "Unable to delete some items", details, null);
                             }
 
                             // Refresh the explorer tree so the documents are marked as deleted.

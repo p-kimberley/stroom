@@ -71,5 +71,4 @@ public class ChangeDocumentPermissionsAction extends Action<VoidResult> {
             return displayValue;
         }
     }
-
 }

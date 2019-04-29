@@ -29,44 +29,43 @@ import stroom.docref.DocRefInfo;
 import java.util.List;
 
 class MockExplorerService implements ExplorerService {
-    @Override
-    public FetchExplorerNodeResult getData(final FindExplorerNodeCriteria criteria) {
-        return null;
-    }
+//    @Override
+//    public FetchExplorerNodeResult getData(final FindExplorerNodeCriteria criteria) {
+//        return null;
+//    }
 
     @Override
     public DocRef create(final String docType, final String docName, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
         return null;
     }
 
-    @Override
-    public BulkActionResult copy(final List<DocRef> docRefs, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
-        return null;
-    }
-
-    @Override
-    public BulkActionResult move(final List<DocRef> docRefs, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
-        return null;
-    }
-
-    @Override
-    public DocRef rename(final DocRef docRef, final String docName) {
-        return null;
-    }
-
-    @Override
-    public BulkActionResult delete(final List<DocRef> docRefs) {
-        return null;
-    }
-
-    @Override
-    public DocRefInfo info(final DocRef docRef) {
-        return null;
-    }
+//    @Override
+//    public BulkActionResult copy(final List<DocRef> docRefs, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
+//        return null;
+//    }
+//
+//    @Override
+//    public BulkActionResult move(final List<DocRef> docRefs, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
+//        return null;
+//    }
+//
+//    @Override
+//    public DocRef rename(final DocRef docRef, final String docName) {
+//        return null;
+//    }
+//
+//    @Override
+//    public BulkActionResult delete(final List<DocRef> docRefs) {
+//        return null;
+//    }
+//
+//    @Override
+//    public DocRefInfo info(final DocRef docRef) {
+//        return null;
+//    }
 
     @Override
     public void rebuildTree() {
-
     }
 
     @Override
@@ -74,8 +73,8 @@ class MockExplorerService implements ExplorerService {
         return null;
     }
 
-    @Override
-    public List<DocumentType> getVisibleTypes() {
-        return null;
-    }
+//    @Override
+//    public List<DocumentType> getVisibleTypes() {
+//        return null;
+//    }
 }

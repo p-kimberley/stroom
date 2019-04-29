@@ -1,15 +1,13 @@
 package stroom.security.impl;
 
-import stroom.docref.DocRef;
-import stroom.security.shared.DocumentPermissionJooq;
+import stroom.security.shared.DocumentPermissions;
 
 import java.util.Set;
 
 public interface DocumentPermissionDao {
-
     Set<String> getPermissionsForDocumentForUser(String docRefUuid, String userUuid);
 
-    DocumentPermissionJooq getPermissionsForDocument(String docRefUuid);
+    DocumentPermissions getPermissionsForDocument(String docRefUuid);
 
     void addPermission(String docRefUuid, String userUuid, String permission);
 

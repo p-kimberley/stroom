@@ -288,7 +288,7 @@ public class FsVolumeService implements EntityEvent.Handler, Clearable, Flushabl
 
     @Override
     public void flush() {
-        refresh();
+        security.secure(PermissionNames.MANAGE_VOLUMES_PERMISSION, this::refresh);
     }
 
     void updateStatus() {

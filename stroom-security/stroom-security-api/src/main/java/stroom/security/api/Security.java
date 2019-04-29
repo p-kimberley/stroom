@@ -5,6 +5,13 @@ import stroom.security.shared.UserToken;
 import java.util.function.Supplier;
 
 public interface Security {
+    /**
+     * Convenience method to get the current user id.
+     *
+     * @return The id of the user associated with this security context.
+     */
+    String getUserId();
+
     <T> T asUserResult(UserToken userToken, Supplier<T> supplier);
 
     void asUser(UserToken userToken, Runnable runnable);

@@ -16,10 +16,12 @@
 
 package stroom.importexport.impl;
 
-import stroom.util.shared.DocRefs;
 import stroom.importexport.shared.ImportState;
 import stroom.importexport.shared.ImportState.ImportMode;
+import stroom.security.api.Security;
+import stroom.security.shared.PermissionNames;
 import stroom.util.io.FileUtil;
+import stroom.util.shared.DocRefs;
 import stroom.util.shared.Message;
 import stroom.util.shared.SharedList;
 import stroom.util.zip.ZipUtil;
@@ -37,10 +39,13 @@ import java.util.List;
  */
 public class ImportExportServiceImpl implements ImportExportService {
     private final ImportExportSerializer importExportSerializer;
+    private final Security security;
 
     @Inject
-    public ImportExportServiceImpl(final ImportExportSerializer importExportSerializer) {
+    public ImportExportServiceImpl(final ImportExportSerializer importExportSerializer,
+                                   final Security security) {
         this.importExportSerializer = importExportSerializer;
+        this.security = security;
     }
 
     @Override
@@ -66,20 +71,22 @@ public class ImportExportServiceImpl implements ImportExportService {
 
     private void doImport(final Path zipFile, final List<ImportState> confirmList,
                           final ImportMode importMode) {
-        final Path explodeDir = ZipUtil.workingZipDir(zipFile);
+        security.secure(PermissionNames.IMPORT_CONFIGURATION, () -> {
+            final Path explodeDir = ZipUtil.workingZipDir(zipFile);
 
-        try {
-            Files.createDirectories(explodeDir);
+            try {
+                Files.createDirectories(explodeDir);
 
-            // Unzip the zip file.
-            ZipUtil.unzip(zipFile, explodeDir);
+                // Unzip the zip file.
+                ZipUtil.unzip(zipFile, explodeDir);
 
-            importExportSerializer.read(explodeDir, confirmList, importMode);
-        } catch (final IOException | RuntimeException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        } finally {
-            FileUtil.deleteDir(explodeDir);
-        }
+                importExportSerializer.read(explodeDir, confirmList, importMode);
+            } catch (final IOException | RuntimeException e) {
+                throw new RuntimeException(e.getMessage(), e);
+            } finally {
+                FileUtil.deleteDir(explodeDir);
+            }
+        });
     }
 
     /**
@@ -88,21 +95,23 @@ public class ImportExportServiceImpl implements ImportExportService {
     @Override
     public void exportConfig(final DocRefs docRefs, final Path zipFile,
                              final List<Message> messageList) {
-        final Path explodeDir = ZipUtil.workingZipDir(zipFile);
+        security.secure(PermissionNames.EXPORT_CONFIGURATION, () -> {
+            final Path explodeDir = ZipUtil.workingZipDir(zipFile);
 
-        try {
-            Files.createDirectories(explodeDir);
+            try {
+                Files.createDirectories(explodeDir);
 
-            // Serialize the config in a human readable tree structure.
-            importExportSerializer.write(explodeDir, docRefs, false, messageList);
+                // Serialize the config in a human readable tree structure.
+                importExportSerializer.write(explodeDir, docRefs, false, messageList);
 
-            // Now zip the dir.
-            ZipUtil.zip(zipFile, explodeDir);
+                // Now zip the dir.
+                ZipUtil.zip(zipFile, explodeDir);
 
-        } catch (final IOException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        } finally {
-            FileUtil.deleteDir(explodeDir);
-        }
+            } catch (final IOException e) {
+                throw new RuntimeException(e.getMessage(), e);
+            } finally {
+                FileUtil.deleteDir(explodeDir);
+            }
+        });
     }
 }

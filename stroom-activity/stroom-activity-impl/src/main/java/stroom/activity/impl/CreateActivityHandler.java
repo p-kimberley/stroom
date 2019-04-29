@@ -16,11 +16,10 @@
 
 package stroom.activity.impl;
 
-import stroom.activity.shared.Activity;
 import stroom.activity.api.ActivityService;
+import stroom.activity.shared.Activity;
 import stroom.activity.shared.CreateActivityAction;
 import stroom.event.logging.api.DocumentEventLog;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
@@ -28,31 +27,26 @@ import javax.inject.Inject;
 public class CreateActivityHandler extends AbstractTaskHandler<CreateActivityAction, Activity> {
     private final ActivityService activityService;
     private final DocumentEventLog entityEventLog;
-    private final Security security;
 
     @Inject
     CreateActivityHandler(final ActivityService activityService,
-                          final DocumentEventLog entityEventLog,
-                          final Security security) {
+                          final DocumentEventLog entityEventLog) {
         this.activityService = activityService;
         this.entityEventLog = entityEventLog;
-        this.security = security;
     }
 
     @Override
     public Activity exec(final CreateActivityAction action) {
-        return security.secureResult(() -> {
-            Activity result;
+        Activity result;
 
-            try {
-                result = activityService.create();
-                entityEventLog.create(result, null);
-            } catch (final RuntimeException e) {
-                entityEventLog.create(new Activity(), e);
-                throw e;
-            }
+        try {
+            result = activityService.create();
+            entityEventLog.create(result, null);
+        } catch (final RuntimeException e) {
+            entityEventLog.create(new Activity(), e);
+            throw e;
+        }
 
-            return result;
-        });
+        return result;
     }
 }

@@ -17,83 +17,39 @@
 
 package stroom.explorer.impl;
 
-import stroom.docref.DocRef;
-import stroom.explorer.api.ExplorerService;
-import stroom.explorer.shared.DocumentType;
-import stroom.explorer.shared.DocumentTypes;
-import stroom.explorer.shared.ExplorerConstants;
 import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.ExplorerPermissions;
 import stroom.explorer.shared.FetchExplorerPermissionsAction;
-import stroom.security.api.Security;
-import stroom.security.api.SecurityContext;
-import stroom.security.shared.DocumentPermissionNames;
 import stroom.task.api.AbstractTaskHandler;
 import stroom.util.shared.SharedMap;
 
 import javax.inject.Inject;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 
 class FetchExplorerPermissionsHandler
         extends AbstractTaskHandler<FetchExplorerPermissionsAction, SharedMap<ExplorerNode, ExplorerPermissions>> {
-    private final ExplorerService explorerService;
-    private final SecurityContext securityContext;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    FetchExplorerPermissionsHandler(final ExplorerService explorerService,
-                                    final SecurityContext securityContext,
-                                    final Security security) {
+    FetchExplorerPermissionsHandler(final ExplorerServiceImpl explorerService,
+                                    final ExplorerEventLog explorerEventLog) {
         this.explorerService = explorerService;
-        this.securityContext = securityContext;
-        this.security = security;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public SharedMap<ExplorerNode, ExplorerPermissions> exec(final FetchExplorerPermissionsAction action) {
-        return security.secureResult(() -> {
-            final List<ExplorerNode> explorerNodeList = action.getExplorerNodeList();
-            final Map<ExplorerNode, ExplorerPermissions> resultMap = new HashMap<>();
+        Map<ExplorerNode, ExplorerPermissions> resultMap;
+        try {
+            resultMap = explorerService.fetchPermissions(action.getExplorerNodeList());
+            explorerEventLog.fetchPermissions(action.getExplorerNodeList(), null);
+        } catch (final RuntimeException e) {
+            explorerEventLog.fetchPermissions(action.getExplorerNodeList(), e);
+            throw e;
+        }
 
-            for (final ExplorerNode explorerNode : explorerNodeList) {
-                final Set<DocumentType> createPermissions = new HashSet<>();
-                final Set<String> documentPermissions = new HashSet<>();
-                DocRef docRef = explorerNode.getDocRef();
-
-                if (docRef != null) {
-                    for (final String permissionName : DocumentPermissionNames.DOCUMENT_PERMISSIONS) {
-                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(),
-                                permissionName)) {
-                            documentPermissions.add(permissionName);
-                        }
-                    }
-                }
-
-                // If no entity reference has been passed then assume root folder.
-                if (docRef == null) {
-                    docRef = ExplorerConstants.ROOT_DOC_REF;
-                }
-
-                // Add special permissions for folders to control creation of sub items.
-                if (DocumentTypes.isFolder(docRef.getType())) {
-                    for (final DocumentType documentType : explorerService.getNonSystemTypes()) {
-                        final String permissionName = DocumentPermissionNames.getDocumentCreatePermission(documentType.getType());
-                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(),
-                                permissionName)) {
-                            createPermissions.add(documentType);
-                        }
-                    }
-                }
-
-                resultMap.put(explorerNode, new ExplorerPermissions(createPermissions, documentPermissions, securityContext.isAdmin()));
-            }
-
-            return new SharedMap<>(resultMap);
-        });
+        return new SharedMap<>(resultMap);
     }
 }

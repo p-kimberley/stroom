@@ -27,14 +27,14 @@ import com.gwtplatform.mvp.client.annotations.ProxyEvent;
 import com.gwtplatform.mvp.client.proxy.Proxy;
 import stroom.alert.client.event.ConfirmEvent;
 import stroom.dispatch.client.ClientDispatchAsync;
-import stroom.util.shared.BaseResultList;
 import stroom.task.client.event.OpenTaskManagerEvent;
 import stroom.task.client.event.OpenTaskManagerHandler;
 import stroom.task.shared.FindTaskCriteria;
 import stroom.task.shared.FindUserTaskProgressAction;
+import stroom.task.shared.TaskId;
 import stroom.task.shared.TaskProgress;
 import stroom.task.shared.TerminateTaskProgressAction;
-import stroom.task.shared.TaskId;
+import stroom.util.shared.ResultList;
 import stroom.widget.popup.client.event.HidePopupEvent;
 import stroom.widget.popup.client.event.ShowPopupEvent;
 import stroom.widget.popup.client.presenter.DefaultPopupUiHandlers;
@@ -117,7 +117,7 @@ public class TaskManagerPresenter
         }
     }
 
-    private void refresh(final BaseResultList<TaskProgress> result) {
+    private void refresh(final ResultList<TaskProgress> result) {
         if (visible) {
             final Set<TaskPresenter> tasksToRemove = new HashSet<>(taskPresenterMap.values());
 

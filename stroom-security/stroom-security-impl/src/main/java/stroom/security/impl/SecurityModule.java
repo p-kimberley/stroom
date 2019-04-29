@@ -44,10 +44,7 @@ public class SecurityModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        bind(DocumentPermissionService.class).to(DocumentPermissionServiceImpl.class);
         bind(AuthenticationService.class).to(AuthenticationServiceImpl.class);
-        bind(AuthorisationService.class).to(AuthorisationServiceImpl.class);
-        bind(UserAppPermissionService.class).to(UserAppPermissionServiceImpl.class);
         bind(UserService.class).to(UserServiceImpl.class);
 
         FilterBinder.create(binder())
@@ -57,7 +54,7 @@ public class SecurityModule extends AbstractModule {
         // Provide object info to the logging service.
         GuiceUtil.buildMultiBinder(binder(), Clearable.class)
                 .addBinding(DocumentPermissionsCache.class)
-                .addBinding(UserAppPermissionsCache.class)
+                .addBinding(AppPermissionsCache.class)
                 .addBinding(UserGroupsCache.class)
                 .addBinding(UserCache.class);
 
@@ -85,7 +82,7 @@ public class SecurityModule extends AbstractModule {
 
         GuiceUtil.buildMultiBinder(binder(), RestResource.class)
                 .addBinding(UserResourceImpl.class)
-                .addBinding(UserAppPermissionResourceImpl.class)
+                .addBinding(AppPermissionResourceImpl.class)
                 .addBinding(DocumentPermissionResourceImpl.class);
     }
 }

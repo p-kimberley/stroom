@@ -8,7 +8,7 @@ import stroom.docref.DocRef;
 import stroom.security.impl.DocumentPermissionDao;
 import stroom.security.impl.TestModule;
 import stroom.security.impl.UserDao;
-import stroom.security.shared.DocumentPermissionJooq;
+import stroom.security.shared.DocumentPermissions;
 import stroom.security.shared.User;
 import stroom.util.AuditUtil;
 
@@ -76,16 +76,16 @@ class DocPermissionDaoImplTest {
         });
 
         // Get the permissions for all users to this document
-        final DocumentPermissionJooq permissionsFound1 = documentPermissionDao.getPermissionsForDocument(docRef1.getUuid());
+        final DocumentPermissions permissionsFound1 = documentPermissionDao.getPermissionsForDocument(docRef1.getUuid());
         assertThat(permissionsFound1.getDocUuid()).isEqualTo(docRef1.getUuid());
 
-        final Set<String> permissionsFound1_user1 = permissionsFound1.getPermissionForUser(user1.getUuid());
+        final Set<String> permissionsFound1_user1 = permissionsFound1.getPermissionsForUser(user1.getUuid());
         assertThat(permissionsFound1_user1).isEqualTo(Set.of(PERMISSION_READ, PERMISSION_USE));
 
-        final Set<String> permissionsFound1_user2 = permissionsFound1.getPermissionForUser(user2.getUuid());
+        final Set<String> permissionsFound1_user2 = permissionsFound1.getPermissionsForUser(user2.getUuid());
         assertThat(permissionsFound1_user2).isEqualTo(Set.of(PERMISSION_USE));
 
-        final Set<String> permissionsFound1_user3 = permissionsFound1.getPermissionForUser(user3.getUuid());
+        final Set<String> permissionsFound1_user3 = permissionsFound1.getPermissionsForUser(user3.getUuid());
         assertThat(permissionsFound1_user3).isEqualTo(Set.of(PERMISSION_USE, PERMISSION_UPDATE));
 
         // Check permissions per user per document
@@ -97,16 +97,16 @@ class DocPermissionDaoImplTest {
         documentPermissionDao.removePermission(docRef1.getUuid(), user3.getUuid(), PERMISSION_UPDATE);
 
         // Get the permissions for all users to this document again
-        final DocumentPermissionJooq permissionsFound2 = documentPermissionDao.getPermissionsForDocument(docRef1.getUuid());
+        final DocumentPermissions permissionsFound2 = documentPermissionDao.getPermissionsForDocument(docRef1.getUuid());
         assertThat(permissionsFound2.getDocUuid()).isEqualTo(docRef1.getUuid());
 
-        final Set<String> permissionsFound2_user1 = permissionsFound2.getPermissionForUser(user1.getUuid());
+        final Set<String> permissionsFound2_user1 = permissionsFound2.getPermissionsForUser(user1.getUuid());
         assertThat(permissionsFound2_user1).isEqualTo(Set.of(PERMISSION_USE));
 
-        final Set<String> permissionsFound2_user2 = permissionsFound2.getPermissionForUser(user2.getUuid());
+        final Set<String> permissionsFound2_user2 = permissionsFound2.getPermissionsForUser(user2.getUuid());
         assertThat(permissionsFound2_user2).isEqualTo(Set.of(PERMISSION_USE));
 
-        final Set<String> permissionsFound2_user3 = permissionsFound2.getPermissionForUser(user3.getUuid());
+        final Set<String> permissionsFound2_user3 = permissionsFound2.getPermissionsForUser(user3.getUuid());
         assertThat(permissionsFound2_user3).isEqualTo(Set.of(PERMISSION_USE));
 
         // Check permissions per user per document

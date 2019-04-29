@@ -29,21 +29,21 @@ import javax.inject.Inject;
 
 class ChangeUserHandler extends AbstractTaskHandler<ChangeUserAction, VoidResult> {
     private final UserService userService;
-    private final UserAppPermissionService userAppPermissionService;
+    private final AppPermissionService appPermissionService;
     private final AuthorisationEventLog authorisationEventLog;
     private final UserGroupsCache userGroupsCache;
-    private final UserAppPermissionsCache userAppPermissionsCache;
+    private final AppPermissionsCache userAppPermissionsCache;
     private final Security security;
 
     @Inject
     ChangeUserHandler(final UserService userService,
-                      final UserAppPermissionService userAppPermissionService,
+                      final AppPermissionService appPermissionService,
                       final AuthorisationEventLog authorisationEventLog,
                       final UserGroupsCache userGroupsCache,
-                      final UserAppPermissionsCache userAppPermissionsCache,
+                      final AppPermissionsCache userAppPermissionsCache,
                       final Security security) {
         this.userService = userService;
-        this.userAppPermissionService = userAppPermissionService;
+        this.appPermissionService = appPermissionService;
         this.authorisationEventLog = authorisationEventLog;
         this.userGroupsCache = userGroupsCache;
         this.userAppPermissionsCache = userAppPermissionsCache;
@@ -141,7 +141,7 @@ class ChangeUserHandler extends AbstractTaskHandler<ChangeUserAction, VoidResult
 
     private void addPermission(User userRef, String permission) {
         try {
-            userAppPermissionService.addPermission(userRef.getUuid(), permission);
+            appPermissionService.addPermission(userRef.getUuid(), permission);
             authorisationEventLog.addUserToGroup(userRef.getName(), permission, true, null);
         } catch (final RuntimeException e) {
             authorisationEventLog.addUserToGroup(userRef.getName(), permission, false, e.getMessage());
@@ -150,7 +150,7 @@ class ChangeUserHandler extends AbstractTaskHandler<ChangeUserAction, VoidResult
 
     private void removePermission(User userRef, String permission) {
         try {
-            userAppPermissionService.removePermission(userRef.getUuid(), permission);
+            appPermissionService.removePermission(userRef.getUuid(), permission);
             authorisationEventLog.removeUserFromGroup(userRef.getName(), permission, true, null);
         } catch (final RuntimeException e) {
             authorisationEventLog.removeUserFromGroup(userRef.getName(), permission, false, e.getMessage());

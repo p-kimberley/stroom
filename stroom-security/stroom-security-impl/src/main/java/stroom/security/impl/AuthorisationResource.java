@@ -5,13 +5,11 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import stroom.security.api.SecurityContext;
 import stroom.security.shared.User;
 import stroom.util.RestResource;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -27,12 +25,12 @@ import javax.ws.rs.core.Response;
 public class AuthorisationResource implements RestResource {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthorisationResource.class);
 
-    private final SecurityContext securityContext;
+    private final DocumentPermissionService documentPermissionService;
     private final UserService userService;
 
     @Inject
-    public AuthorisationResource(final SecurityContext securityContext, UserService userService) {
-        this.securityContext = securityContext;
+    public AuthorisationResource(final DocumentPermissionService documentPermissionService, UserService userService) {
+        this.documentPermissionService = documentPermissionService;
         this.userService = userService;
     }
 
@@ -49,7 +47,7 @@ public class AuthorisationResource implements RestResource {
             response = Response.class)
     public Response isAuthorised(@ApiParam("AuthorisationRequest") final AuthorisationRequest authorisationRequest) {
 
-        boolean result = securityContext.hasDocumentPermission(
+        boolean result = documentPermissionService.hasDocumentPermission(
                 authorisationRequest.getDocRef().getType(),
                 authorisationRequest.getDocRef().getUuid(),
                 authorisationRequest.getPermission());

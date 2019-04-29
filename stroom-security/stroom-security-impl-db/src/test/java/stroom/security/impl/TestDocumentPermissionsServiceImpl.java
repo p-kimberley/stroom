@@ -66,8 +66,7 @@ class TestDocumentPermissionsServiceImpl {
         final String p1 = permissions[1];
         final String p2 = permissions[2];
 
-        final DocumentPermissions documentPermissions = documentPermissionService
-                .getPermissionsForDocument(docRef.getUuid());
+        final DocumentPermissions documentPermissions = documentPermissionService.getPermissionsForDocument(docRef.getUuid());
 
         addPermissions(docRef.getUuid(), userGroup1, c1, p1);
         addPermissions(docRef.getUuid(), userGroup2, c1, p2);

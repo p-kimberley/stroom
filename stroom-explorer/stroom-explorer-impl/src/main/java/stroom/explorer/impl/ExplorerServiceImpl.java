@@ -17,27 +17,33 @@
 
 package stroom.explorer.impl;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import stroom.docref.DocRef;
-import stroom.util.shared.PermissionException;
+import stroom.docref.DocRefInfo;
 import stroom.explorer.api.ExplorerActionHandler;
 import stroom.explorer.api.ExplorerNodeService;
 import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.BulkActionResult;
 import stroom.explorer.shared.DocumentType;
+import stroom.explorer.shared.DocumentTypes;
 import stroom.explorer.shared.ExplorerConstants;
 import stroom.explorer.shared.ExplorerNode;
+import stroom.explorer.shared.ExplorerPermissions;
 import stroom.explorer.shared.ExplorerTreeFilter;
 import stroom.explorer.shared.FetchExplorerNodeResult;
 import stroom.explorer.shared.FindExplorerNodeCriteria;
 import stroom.explorer.shared.HasNodeState;
 import stroom.explorer.shared.PermissionInheritance;
-import stroom.docref.DocRefInfo;
+import stroom.security.api.Security;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermissionNames;
+import stroom.util.shared.PermissionException;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -51,60 +57,200 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 class ExplorerServiceImpl implements ExplorerService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ExplorerServiceImpl.class);
+
     private final ExplorerNodeService explorerNodeService;
     private final ExplorerTreeModel explorerTreeModel;
     private final ExplorerActionHandlers explorerActionHandlers;
     private final SecurityContext securityContext;
-    private final ExplorerEventLog explorerEventLog;
+    private final Security security;
+//    private final ExplorerEventLog explorerEventLog;
 
     @Inject
     ExplorerServiceImpl(final ExplorerNodeService explorerNodeService,
                         final ExplorerTreeModel explorerTreeModel,
                         final ExplorerActionHandlers explorerActionHandlers,
                         final SecurityContext securityContext,
-                        final ExplorerEventLog explorerEventLog) {
+                        final Security security) {
         this.explorerNodeService = explorerNodeService;
         this.explorerTreeModel = explorerTreeModel;
         this.explorerActionHandlers = explorerActionHandlers;
         this.securityContext = securityContext;
-        this.explorerEventLog = explorerEventLog;
+        this.security = security;
+//        this.explorerEventLog = explorerEventLog;
     }
 
-    @Override
-    public FetchExplorerNodeResult getData(final FindExplorerNodeCriteria criteria) {
-        final ExplorerTreeFilter filter = criteria.getFilter();
-        final FetchExplorerNodeResult result = new FetchExplorerNodeResult();
+    FetchExplorerNodeResult getData(final FindExplorerNodeCriteria criteria) {
+        return security.secureResult(() -> {
+            final ExplorerTreeFilter filter = criteria.getFilter();
+            final FetchExplorerNodeResult result = new FetchExplorerNodeResult();
 
-        // Get the master tree model.
-        final TreeModel masterTreeModel = explorerTreeModel.getModel();
+            // Get the master tree model.
+            final TreeModel masterTreeModel = explorerTreeModel.getModel();
 
-        // See if we need to open any more folders to see nodes we want to ensure are visible.
-        final Set<ExplorerNode> forcedOpenItems = getForcedOpenItems(masterTreeModel, criteria);
+            // See if we need to open any more folders to see nodes we want to ensure are visible.
+            final Set<ExplorerNode> forcedOpenItems = getForcedOpenItems(masterTreeModel, criteria);
 
-        final Set<ExplorerNode> allOpenItems = new HashSet<>();
-        allOpenItems.addAll(criteria.getOpenItems());
-        allOpenItems.addAll(forcedOpenItems);
+            final Set<ExplorerNode> allOpenItems = new HashSet<>();
+            allOpenItems.addAll(criteria.getOpenItems());
+            allOpenItems.addAll(forcedOpenItems);
 
-        final TreeModel filteredModel = new TreeModelImpl();
-        addDescendants(null, masterTreeModel, filteredModel, filter, false, allOpenItems, 0);
+            final TreeModel filteredModel = new TreeModelImpl();
+            addDescendants(null, masterTreeModel, filteredModel, filter, false, allOpenItems, 0);
 
-        // If the name filter has changed then we want to temporarily expand all nodes.
-        if (filter.isNameFilterChange()) {
-            final Set<ExplorerNode> temporaryOpenItems;
+            // If the name filter has changed then we want to temporarily expand all nodes.
+            if (filter.isNameFilterChange()) {
+                final Set<ExplorerNode> temporaryOpenItems;
 
-            if (filter.getNameFilter() == null) {
-                temporaryOpenItems = new HashSet<>();
+                if (filter.getNameFilter() == null) {
+                    temporaryOpenItems = new HashSet<>();
+                } else {
+                    temporaryOpenItems = new HashSet<>(filteredModel.getChildMap().keySet());
+                }
+
+                addRoots(filteredModel, criteria.getOpenItems(), forcedOpenItems, temporaryOpenItems, result);
+                result.setTemporaryOpenedItems(temporaryOpenItems);
             } else {
-                temporaryOpenItems = new HashSet<>(filteredModel.getChildMap().keySet());
+                addRoots(filteredModel, criteria.getOpenItems(), forcedOpenItems, criteria.getTemporaryOpenedItems(), result);
             }
 
-            addRoots(filteredModel, criteria.getOpenItems(), forcedOpenItems, temporaryOpenItems, result);
-            result.setTemporaryOpenedItems(temporaryOpenItems);
-        } else {
-            addRoots(filteredModel, criteria.getOpenItems(), forcedOpenItems, criteria.getTemporaryOpenedItems(), result);
+            return result;
+        });
+    }
+
+    TreeModel getTree() {
+        return security.secureResult(() -> {
+            // For now, just do this every time the whole tree is fetched
+            explorerTreeModel.rebuild();
+
+            final TreeModel treeModel = explorerTreeModel.getModel();
+            final TreeModel filteredModel = new TreeModelImpl();
+
+            final ExplorerTreeFilter filter = new ExplorerTreeFilter(
+                    null,
+                    null,
+                    Collections.singleton(DocumentPermissionNames.READ),
+                    null,
+                    true);
+
+            filterDescendants(null, treeModel, filteredModel, 0, filter);
+            return filteredModel;
+        });
+    }
+
+    TreeModel search(String searchTerm) {
+        return security.secureResult(() -> {
+            // For now, just do this every time the whole tree is fetched
+            explorerTreeModel.rebuild();
+
+            final TreeModel treeModel = explorerTreeModel.getModel();
+            final TreeModel filteredModel = new TreeModelImpl();
+
+            final ExplorerTreeFilter filter = new ExplorerTreeFilter(
+                    null,
+                    null,
+                    Collections.singleton(DocumentPermissionNames.READ),
+                    searchTerm,
+                    true);
+
+            filterDescendants(null, treeModel, filteredModel, 0, filter);
+
+            // Flatten this tree out
+            return filteredModel;
+        });
+    }
+
+    private boolean filterDescendants(final ExplorerNode parent,
+                                      final TreeModel treeModelIn,
+                                      final TreeModel treeModelOut,
+                                      final int currentDepth,
+                                      final ExplorerTreeFilter filter) {
+        int added = 0;
+
+        final List<ExplorerNode> children = treeModelIn.getChildMap().get(parent);
+        if (children != null) {
+
+            for (final ExplorerNode child : children) {
+                // Recurse right down to find out if a descendant is being added and therefore if we need to include this as an ancestor.
+                final boolean hasChildren = filterDescendants(child, treeModelIn, treeModelOut, currentDepth + 1, filter);
+                if (hasChildren) {
+                    treeModelOut.add(parent, child);
+                    added++;
+
+                } else if (checkType(child, filter.getIncludedTypes())
+                        && checkTags(child, filter.getTags())
+                        && (checkName(child, filter.getNameFilter()))
+                        && checkSecurity(child, filter.getRequiredPermissions())) {
+                    treeModelOut.add(parent, child);
+                    added++;
+                }
+            }
         }
 
-        return result;
+        return (added > 0);
+    }
+
+    Map<ExplorerNode, ExplorerPermissions> fetchPermissions(final List<ExplorerNode> explorerNodeList) {
+        return security.secureResult(() -> {
+            final Map<ExplorerNode, ExplorerPermissions> resultMap = new HashMap<>();
+
+            for (final ExplorerNode explorerNode : explorerNodeList) {
+                final Set<DocumentType> createPermissions = new HashSet<>();
+                final Set<String> documentPermissions = new HashSet<>();
+                DocRef docRef = explorerNode.getDocRef();
+
+                if (docRef != null) {
+                    for (final String permissionName : DocumentPermissionNames.DOCUMENT_PERMISSIONS) {
+                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(),
+                                permissionName)) {
+                            documentPermissions.add(permissionName);
+                        }
+                    }
+                }
+
+                // If no entity reference has been passed then assume root folder.
+                if (docRef == null) {
+                    docRef = ExplorerConstants.ROOT_DOC_REF;
+                }
+
+                // Add special permissions for folders to control creation of sub items.
+                if (DocumentTypes.isFolder(docRef.getType())) {
+                    for (final DocumentType documentType : getNonSystemTypes()) {
+                        final String permissionName = DocumentPermissionNames.getDocumentCreatePermission(documentType.getType());
+                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(),
+                                permissionName)) {
+                            createPermissions.add(documentType);
+                        }
+                    }
+                }
+
+                resultMap.put(explorerNode, new ExplorerPermissions(createPermissions, documentPermissions, securityContext.isAdmin()));
+            }
+
+            return resultMap;
+        });
+    }
+
+    Set<DocRef> fetchDocRefs(final Set<DocRef> docRefs) {
+        return security.secureResult(() -> {
+            final Set<DocRef> result = new HashSet<>();
+            if (docRefs != null) {
+                for (final DocRef docRef : docRefs) {
+                    try {
+                        // Only return entries the user has permission to see.
+                        if (securityContext.hasDocumentPermission(docRef.getType(), docRef.getUuid(), DocumentPermissionNames.USE)) {
+                            explorerNodeService.getNode(docRef)
+                                    .map(ExplorerNode::getDocRef)
+                                    .ifPresent(result::add);
+                        }
+                    } catch (final RuntimeException e) {
+                        LOGGER.debug(e.getMessage(), e);
+                    }
+                }
+            }
+
+            return result;
+        });
     }
 
     private Set<ExplorerNode> getForcedOpenItems(final TreeModel masterTreeModel,
@@ -152,14 +298,14 @@ class ExplorerServiceImpl implements ExplorerService {
                                    final TreeModel treeModelOut,
                                    final ExplorerTreeFilter filter,
                                    final boolean ignoreNameFilter,
-                                   final Set<ExplorerNode> allOpenItemns,
+                                   final Set<ExplorerNode> allOpenItems,
                                    final int currentDepth) {
         int added = 0;
 
         final List<ExplorerNode> children = treeModelIn.getChildMap().get(parent);
         if (children != null) {
             // Add all children if the name filter has changed or the parent item is open.
-            final boolean addAllChildren = (filter.isNameFilterChange() && filter.getNameFilter() != null) || allOpenItemns.contains(parent);
+            final boolean addAllChildren = (filter.isNameFilterChange() && filter.getNameFilter() != null) || allOpenItems.contains(parent);
 
             // We need to add add least one item to the tree to be able to determine if the parent is a leaf node.
             final Iterator<ExplorerNode> iterator = children.iterator();
@@ -170,7 +316,7 @@ class ExplorerServiceImpl implements ExplorerService {
                 final boolean ignoreChildNameFilter = checkName(child, filter.getNameFilter());
 
                 // Recurse right down to find out if a descendant is being added and therefore if we need to include this as an ancestor.
-                final boolean hasChildren = addDescendants(child, treeModelIn, treeModelOut, filter, ignoreChildNameFilter, allOpenItemns, currentDepth + 1);
+                final boolean hasChildren = addDescendants(child, treeModelIn, treeModelOut, filter, ignoreChildNameFilter, allOpenItems, currentDepth + 1);
                 if (hasChildren) {
                     treeModelOut.add(parent, child);
                     added++;
@@ -204,11 +350,11 @@ class ExplorerServiceImpl implements ExplorerService {
         return true;
     }
 
-    static boolean checkType(final ExplorerNode explorerNode, final Set<String> types) {
+    private boolean checkType(final ExplorerNode explorerNode, final Set<String> types) {
         return types == null || types.contains(explorerNode.getType());
     }
 
-    static boolean checkTags(final ExplorerNode explorerNode, final Set<String> tags) {
+    private boolean checkTags(final ExplorerNode explorerNode, final Set<String> tags) {
         if (tags == null) {
             return true;
         } else if (explorerNode.getTags() != null && explorerNode.getTags().length() > 0 && tags.size() > 0) {
@@ -222,7 +368,7 @@ class ExplorerServiceImpl implements ExplorerService {
         return false;
     }
 
-    static boolean checkName(final ExplorerNode explorerNode, final String nameFilter) {
+    private boolean checkName(final ExplorerNode explorerNode, final String nameFilter) {
         return nameFilter == null || explorerNode.getDisplayValue().toLowerCase().contains(nameFilter.toLowerCase());
     }
 
@@ -276,75 +422,70 @@ class ExplorerServiceImpl implements ExplorerService {
 
     @Override
     public DocRef create(final String type, final String name, final DocRef destinationFolderRef, final PermissionInheritance permissionInheritance) {
-        final DocRef folderRef = Optional.ofNullable(destinationFolderRef)
-                .orElse(explorerNodeService.getRoot()
-                        .map(ExplorerNode::getDocRef)
-                        .orElse(null)
-                );
+        return security.secureResult(() -> {
+            final DocRef folderRef = Optional.ofNullable(destinationFolderRef)
+                    .orElse(explorerNodeService.getRoot()
+                            .map(ExplorerNode::getDocRef)
+                            .orElse(null)
+                    );
 
-        final ExplorerActionHandler handler = explorerActionHandlers.getHandler(type);
+            final ExplorerActionHandler handler = explorerActionHandlers.getHandler(type);
 
-        DocRef result;
-
-        // Create the document.
-        try {
             // Check that the user is allowed to create an item of this type in the destination folder.
             checkCreatePermission(getUUID(folderRef), type);
+
             // Create an item of the specified type in the destination folder.
-            result = handler.createDocument(name);
-            explorerEventLog.create(type, name, result.getUuid(), folderRef, permissionInheritance, null);
-        } catch (final RuntimeException e) {
-            explorerEventLog.create(type, name, null, folderRef, permissionInheritance, e);
-            throw e;
-        }
+            final DocRef result = handler.createDocument(name);
 
-        // Create the explorer node.
-        explorerNodeService.createNode(result, folderRef, permissionInheritance);
+            // Create the explorer node.
+            explorerNodeService.createNode(result, folderRef, permissionInheritance);
 
-        // Make sure the tree model is rebuilt.
-        rebuildTree();
+            // Make sure the tree model is rebuilt.
+            rebuildTree();
 
-        return result;
+            return result;
+        });
     }
 
-    @Override
-    public BulkActionResult copy(final List<DocRef> docRefs,
-                                 final DocRef potentialDestinationFolderRef,
-                                 final PermissionInheritance permissionInheritance) {
-        final DocRef destinationFolderRef = Optional.ofNullable(potentialDestinationFolderRef)
-                .orElse(explorerNodeService.getRoot()
-                        .map(ExplorerNode::getDocRef)
-                        .orElseThrow(() -> new RuntimeException("Cannot copy into null destination")));
+    BulkActionResult copy(final List<DocRef> docRefs,
+                          final DocRef potentialDestinationFolderRef,
+                          final PermissionInheritance permissionInheritance) {
+        return security.secureResult(() -> {
+            final DocRef destinationFolderRef = Optional.ofNullable(potentialDestinationFolderRef)
+                    .orElse(explorerNodeService.getRoot()
+                            .map(ExplorerNode::getDocRef)
+                            .orElseThrow(() -> new RuntimeException("Cannot copy into null destination")));
 
-        final List<DocRef> resultDocRefs = new ArrayList<>();
-        final StringBuilder resultMessage = new StringBuilder();
+            final List<DocRef> resultDocRefs = new ArrayList<>();
+            final Map<DocRef, String> resultMessages = new HashMap<>();
 
-        final Map<DocRef, List<ExplorerNode>> childNodesByParent = new HashMap<>();
-        recurseGetNodes(docRefs.stream(), childNodesByParent::put);
+            final Map<DocRef, List<ExplorerNode>> childNodesByParent = new HashMap<>();
+            recurseGetNodes(docRefs.stream(), childNodesByParent::put);
 
-        // TODO : @66 Change the way this works so that copy allows the underlying service to create it's own UUIDs and then subsequently remap references in all copied items (see gh-899)
-        // Create the UUID's of the copies up front
-        final Map<String, String> copiesByOriginalUuid = childNodesByParent.keySet().stream()
-                .collect(Collectors.toMap(DocRef::getUuid, (d) -> UUID.randomUUID().toString()));
+            // TODO : @66 Change the way this works so that copy allows the underlying service to create it's own UUIDs and then subsequently remap references in all copied items (see gh-899)
+            // Create the UUID's of the copies up front
+            final Map<String, String> copiesByOriginalUuid = childNodesByParent.keySet().stream()
+                    .collect(Collectors.toMap(DocRef::getUuid, (d) -> UUID.randomUUID().toString()));
 
-        docRefs.forEach(sourceDocRef ->
-                explorerNodeService.getParent(sourceDocRef)
-                        .map(ExplorerNode::getDocRef)
-                        .ifPresent(sourceParent -> recurseCopy(sourceParent,
-                                sourceDocRef,
-                                destinationFolderRef,
-                                permissionInheritance,
-                                resultDocRefs,
-                                resultMessage,
-                                copiesByOriginalUuid,
-                                childNodesByParent)
-                        )
-        );
+            docRefs.forEach(sourceDocRef ->
+                    explorerNodeService.getParent(sourceDocRef)
+                            .map(ExplorerNode::getDocRef)
+                            .ifPresent(sourceParent -> recurseCopy(sourceParent,
+                                    sourceDocRef,
+                                    destinationFolderRef,
+                                    permissionInheritance,
+                                    resultDocRefs,
+                                    resultMessages,
+                                    copiesByOriginalUuid,
+                                    childNodesByParent)
+                            )
+            );
 
-        // Make sure the tree model is rebuilt.
-        rebuildTree();
+            // Make sure the tree model is rebuilt.
+            rebuildTree();
 
-        return new BulkActionResult(resultDocRefs, resultMessage.toString());
+            return new BulkActionResult(resultDocRefs, resultMessages);
+        });
     }
 
     /**
@@ -385,7 +526,7 @@ class ExplorerServiceImpl implements ExplorerService {
                              final DocRef destinationFolderRef,
                              final PermissionInheritance permissionInheritance,
                              final List<DocRef> resultDocRefs,
-                             final StringBuilder resultMessage,
+                             final Map<DocRef, String> resultMessages,
                              final Map<String, String> copiesByOriginalUuid,
                              final Map<DocRef, List<ExplorerNode>> childNodesByParent) {
         final String destinationUuid = copiesByOriginalUuid.get(sourceDocRef.getUuid());
@@ -400,7 +541,7 @@ class ExplorerServiceImpl implements ExplorerService {
             DocRef destinationDocRef = handler.copyDocument(sourceDocRef.getUuid(),
                     destinationUuid,
                     copiesByOriginalUuid);
-            explorerEventLog.copy(sourceDocRef, destinationFolderRef, permissionInheritance, null);
+//            explorerEventLog.copy(sourceDocRef, destinationFolderRef, permissionInheritance, null);
 
             // Create the explorer node
             if (destinationDocRef != null) {
@@ -423,18 +564,15 @@ class ExplorerServiceImpl implements ExplorerService {
                                     finalDestination,
                                     permissionInheritance,
                                     resultDocRefs,
-                                    resultMessage,
+                                    resultMessages,
                                     copiesByOriginalUuid,
                                     childNodesByParent
                             )
                     );
         } catch (final RuntimeException e) {
-            explorerEventLog.copy(sourceDocRef, destinationFolderRef, permissionInheritance, e);
-            resultMessage.append("Unable to copy '");
-            resultMessage.append(sourceDocRef.getName());
-            resultMessage.append("' ");
-            resultMessage.append(e.getMessage());
-            resultMessage.append("\n");
+//            explorerEventLog.copy(sourceDocRef, destinationFolderRef, permissionInheritance, e);
+            final String message = "Unable to copy '" + sourceDocRef.getName() + "' " + e.getMessage();
+            resultMessages.put(sourceDocRef, message);
         }
     }
 
@@ -459,76 +597,67 @@ class ExplorerServiceImpl implements ExplorerService {
         return copyName;
     }
 
-    @Override
-    public BulkActionResult move(final List<DocRef> docRefs,
-                                 final DocRef destinationFolderRef,
-                                 final PermissionInheritance permissionInheritance) {
-        final DocRef folderRef = Optional.ofNullable(destinationFolderRef)
-                .orElse(explorerNodeService.getRoot()
-                        .map(ExplorerNode::getDocRef)
-                        .orElse(null));
+    BulkActionResult move(final List<DocRef> docRefs,
+                          final DocRef destinationFolderRef,
+                          final PermissionInheritance permissionInheritance) {
+        return security.secureResult(() -> {
+            final DocRef folderRef = Optional.ofNullable(destinationFolderRef)
+                    .orElse(explorerNodeService.getRoot()
+                            .map(ExplorerNode::getDocRef)
+                            .orElse(null));
 
-        final List<DocRef> resultDocRefs = new ArrayList<>();
-        final StringBuilder resultMessage = new StringBuilder();
+            final List<DocRef> resultDocRefs = new ArrayList<>();
+            final Map<DocRef, String> resultMessages = new HashMap<>();
 
-        for (final DocRef docRef : docRefs) {
-            final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
+            for (final DocRef docRef : docRefs) {
+                final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
 
-            DocRef result = null;
+                DocRef result = null;
 
-            try {
-                // Check that the user is allowed to create an item of this type in the destination folder.
-                checkCreatePermission(getUUID(folderRef), docRef.getType());
-                // Move the item.
-                result = handler.moveDocument(docRef.getUuid());
-                explorerEventLog.move(docRef, folderRef, permissionInheritance, null);
-                resultDocRefs.add(result);
+                try {
+                    // Check that the user is allowed to create an item of this type in the destination folder.
+                    checkCreatePermission(getUUID(folderRef), docRef.getType());
+                    // Move the item.
+                    result = handler.moveDocument(docRef.getUuid());
+//                    explorerEventLog.move(docRef, folderRef, permissionInheritance, null);
+                    resultDocRefs.add(result);
 
-            } catch (final RuntimeException e) {
-                explorerEventLog.move(docRef, folderRef, permissionInheritance, e);
-                resultMessage.append("Unable to move '");
-                resultMessage.append(docRef.getName());
-                resultMessage.append("' ");
-                resultMessage.append(e.getMessage());
-                resultMessage.append("\n");
+                } catch (final RuntimeException e) {
+//                    explorerEventLog.move(docRef, folderRef, permissionInheritance, e);
+                    final String message = "Unable to move '" + docRef.getName() + "' " + e.getMessage();
+                    resultMessages.put(docRef, message);
+                }
+
+                // Create the explorer node
+                if (result != null) {
+                    explorerNodeService.moveNode(result, folderRef, permissionInheritance);
+                }
             }
 
-            // Create the explorer node
-            if (result != null) {
-                explorerNodeService.moveNode(result, folderRef, permissionInheritance);
-            }
-        }
+            // Make sure the tree model is rebuilt.
+            rebuildTree();
 
-        // Make sure the tree model is rebuilt.
-        rebuildTree();
-
-        return new BulkActionResult(resultDocRefs, resultMessage.toString());
+            return new BulkActionResult(resultDocRefs, resultMessages);
+        });
     }
 
-    @Override
-    public DocRef rename(final DocRef docRef, final String docName) {
-        final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
+    DocRef rename(final DocRef docRef, final String docName) {
+        return security.secureResult(() -> {
+            final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
 
-        final DocRef result = rename(handler, docRef, docName);
+            final DocRef result = rename(handler, docRef, docName);
 
-        // Make sure the tree model is rebuilt.
-        rebuildTree();
+            // Make sure the tree model is rebuilt.
+            rebuildTree();
 
-        return result;
+            return result;
+        });
     }
 
     private DocRef rename(final ExplorerActionHandler handler,
                           final DocRef docRef,
                           final String docName) {
-        DocRef result;
-
-        try {
-            result = handler.renameDocument(docRef.getUuid(), docName);
-            explorerEventLog.rename(docRef, docName, null);
-        } catch (final RuntimeException e) {
-            explorerEventLog.rename(docRef, docName, e);
-            throw e;
-        }
+        final DocRef result = handler.renameDocument(docRef.getUuid(), docName);
 
         // Rename the explorer node.
         explorerNodeService.renameNode(result);
@@ -536,26 +665,27 @@ class ExplorerServiceImpl implements ExplorerService {
         return result;
     }
 
-    @Override
-    public BulkActionResult delete(final List<DocRef> docRefs) {
-        final List<DocRef> resultDocRefs = new ArrayList<>();
-        final StringBuilder resultMessage = new StringBuilder();
+    BulkActionResult delete(final List<DocRef> docRefs) {
+        return security.secureResult(() -> {
+            final List<DocRef> resultDocRefs = new ArrayList<>();
+            final Map<DocRef, String> resultMessages = new HashMap<>();
 
-        final HashSet<DocRef> deleted = new HashSet<>();
-        docRefs.forEach(docRef -> {
-            // Check this document hasn't already been deleted.
-            if (!deleted.contains(docRef)) {
-                recursiveDelete(docRefs, deleted, resultDocRefs, resultMessage);
-            }
+            final HashSet<DocRef> deleted = new HashSet<>();
+            docRefs.forEach(docRef -> {
+                // Check this document hasn't already been deleted.
+                if (!deleted.contains(docRef)) {
+                    recursiveDelete(docRefs, deleted, resultDocRefs, resultMessages);
+                }
+            });
+
+            // Make sure the tree model is rebuilt.
+            rebuildTree();
+
+            return new BulkActionResult(resultDocRefs, resultMessages);
         });
-
-        // Make sure the tree model is rebuilt.
-        rebuildTree();
-
-        return new BulkActionResult(resultDocRefs, resultMessage.toString());
     }
 
-    private void recursiveDelete(final List<DocRef> docRefs, final HashSet<DocRef> deleted, final List<DocRef> resultDocRefs, final StringBuilder resultMessage) {
+    private void recursiveDelete(final List<DocRef> docRefs, final HashSet<DocRef> deleted, final List<DocRef> resultDocRefs, final Map<DocRef, String> resultMessages) {
         docRefs.forEach(docRef -> {
             // Check this document hasn't already been deleted.
             if (!deleted.contains(docRef)) {
@@ -564,22 +694,21 @@ class ExplorerServiceImpl implements ExplorerService {
                 if (children != null && children.size() > 0) {
                     // Recursive delete.
                     final List<DocRef> childDocRefs = children.stream().map(ExplorerNode::getDocRef).collect(Collectors.toList());
-                    recursiveDelete(childDocRefs, deleted, resultDocRefs, resultMessage);
+                    recursiveDelete(childDocRefs, deleted, resultDocRefs, resultMessages);
                 }
 
                 // Check to see if we still have children.
                 children = explorerNodeService.getChildren(docRef);
                 if (children != null && children.size() > 0) {
                     final String message = "Unable to delete '" + docRef.getName() + "' because the folder is not empty";
-                    resultMessage.append(message);
-                    resultMessage.append("\n");
-                    explorerEventLog.delete(docRef, new RuntimeException(message));
+                    resultMessages.put(docRef, message);
+//                    explorerEventLog.delete(docRef, new RuntimeException(message));
 
                 } else {
                     final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
                     try {
                         handler.deleteDocument(docRef.getUuid());
-                        explorerEventLog.delete(docRef, null);
+//                        explorerEventLog.delete(docRef, null);
                         deleted.add(docRef);
                         resultDocRefs.add(docRef);
 
@@ -587,23 +716,20 @@ class ExplorerServiceImpl implements ExplorerService {
                         explorerNodeService.deleteNode(docRef);
 
                     } catch (final Exception e) {
-                        explorerEventLog.delete(docRef, e);
-                        resultMessage.append("Unable to delete '");
-                        resultMessage.append(docRef.getName());
-                        resultMessage.append("' ");
-                        resultMessage.append(e.getMessage());
-                        resultMessage.append("\n");
+//                        explorerEventLog.delete(docRef, e);
+                        final String message = "Unable to delete '" + docRef.getName() + "' " + e.getMessage();
+                        resultMessages.put(docRef, message);
                     }
                 }
             }
         });
     }
 
-    @Override
-    public DocRefInfo info(final DocRef docRef) {
-        final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
-
-        return handler.info(docRef.getUuid());
+    DocRefInfo info(final DocRef docRef) {
+        return security.secureResult(() -> {
+            final ExplorerActionHandler handler = explorerActionHandlers.getHandler(docRef.getType());
+            return handler.info(docRef.getUuid());
+        });
     }
 
     @Override
@@ -616,19 +742,20 @@ class ExplorerServiceImpl implements ExplorerService {
         return explorerActionHandlers.getNonSystemTypes();
     }
 
-    @Override
-    public List<DocumentType> getVisibleTypes() {
-        // Get the master tree model.
-        final TreeModel masterTreeModel = explorerTreeModel.getModel();
+    List<DocumentType> getVisibleTypes() {
+        return security.secureResult(() -> {
+            // Get the master tree model.
+            final TreeModel masterTreeModel = explorerTreeModel.getModel();
 
-        // Filter the model by user permissions.
-        final Set<String> requiredPermissions = new HashSet<>();
-        requiredPermissions.add(DocumentPermissionNames.READ);
+            // Filter the model by user permissions.
+            final Set<String> requiredPermissions = new HashSet<>();
+            requiredPermissions.add(DocumentPermissionNames.READ);
 
-        final Set<String> visibleTypes = new HashSet<>();
-        addTypes(null, masterTreeModel, visibleTypes, requiredPermissions);
+            final Set<String> visibleTypes = new HashSet<>();
+            addTypes(null, masterTreeModel, visibleTypes, requiredPermissions);
 
-        return getDocumentTypes(visibleTypes);
+            return getDocumentTypes(visibleTypes);
+        });
     }
 
     private boolean addTypes(final ExplorerNode parent,
@@ -656,9 +783,9 @@ class ExplorerServiceImpl implements ExplorerService {
     }
 
     private List<DocumentType> getDocumentTypes(final Collection<String> visibleTypes) {
-        return getNonSystemTypes().stream()
+        return security.secureResult(() -> getNonSystemTypes().stream()
                 .filter(type -> visibleTypes.contains(type.getType()))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
     }
 
     private String getUUID(final DocRef docRef) {

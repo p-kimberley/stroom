@@ -18,12 +18,12 @@ package stroom.task.impl;
 
 
 import org.junit.jupiter.api.Test;
-import stroom.util.shared.Sort.Direction;
 import stroom.node.shared.Node;
 import stroom.task.shared.FindTaskProgressCriteria;
 import stroom.task.shared.TaskId;
 import stroom.task.shared.TaskIdImpl;
 import stroom.task.shared.TaskProgress;
+import stroom.util.shared.Sort.Direction;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,10 +32,10 @@ import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class TestFindTaskProgressHandler {
+class TestTaskProgressService {
     @Test
     void testSortByAge() {
-        final FindTaskProgressHandler findTaskProgressHandler = new FindTaskProgressHandler(null, null);
+        final TaskProgressService findTaskProgressHandler = new TaskProgressService(null, null);
         final FindTaskProgressCriteria criteria = new FindTaskProgressCriteria();
 
         final Map<TaskId, TaskProgress> totalMap = createMap(criteria);

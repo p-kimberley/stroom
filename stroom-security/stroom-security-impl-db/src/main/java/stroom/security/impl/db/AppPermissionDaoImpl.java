@@ -31,39 +31,39 @@ public class AppPermissionDaoImpl implements AppPermissionDao {
                         .fetchSet(APP_PERMISSION.PERMISSION));
     }
 
-    @Override
-    public Set<String> getPermissionsForUserName(String userName) {
-        Set<String> permissions = new HashSet<>();
-        // Get all permissions for this user
-        permissions.addAll(JooqUtil.contextResult(connectionProvider, context ->
-                context.select()
-                        .from(APP_PERMISSION)
-                        .join(STROOM_USER)
-                        .on(STROOM_USER.UUID.eq(APP_PERMISSION.USER_UUID))
-                        .where(STROOM_USER.NAME.eq(userName))
-                        .fetchSet(APP_PERMISSION.PERMISSION)));
-
-
-        // Get all permissions for this user's groups
-        StroomUser userUser = STROOM_USER.as("userUser");
-        StroomUser groupUser = STROOM_USER.as("groupUser");
-        permissions.addAll(JooqUtil.contextResult(connectionProvider, context ->
-                context.select()
-                        .from(APP_PERMISSION)
-                        // app_permission -> group user
-                        .join(groupUser)
-                        .on(APP_PERMISSION.USER_UUID.eq(groupUser.UUID))
-                        // group user -> stroom user group
-                        .join(STROOM_USER_GROUP)
-                        .on(groupUser.UUID.eq(STROOM_USER_GROUP.GROUP_UUID))
-                        // stroom user group -> user
-                        .join(userUser)
-                        .on(userUser.UUID.eq(STROOM_USER_GROUP.USER_UUID))
-                        .where(userUser.NAME.eq(userName))
-                        .fetchSet(APP_PERMISSION.PERMISSION)));
-
-        return permissions;
-    }
+//    @Override
+//    public Set<String> getPermissionsForUserName(String userName) {
+//        Set<String> permissions = new HashSet<>();
+//        // Get all permissions for this user
+//        permissions.addAll(JooqUtil.contextResult(connectionProvider, context ->
+//                context.select()
+//                        .from(APP_PERMISSION)
+//                        .join(STROOM_USER)
+//                        .on(STROOM_USER.UUID.eq(APP_PERMISSION.USER_UUID))
+//                        .where(STROOM_USER.NAME.eq(userName))
+//                        .fetchSet(APP_PERMISSION.PERMISSION)));
+//
+//
+//        // Get all permissions for this user's groups
+//        StroomUser userUser = STROOM_USER.as("userUser");
+//        StroomUser groupUser = STROOM_USER.as("groupUser");
+//        permissions.addAll(JooqUtil.contextResult(connectionProvider, context ->
+//                context.select()
+//                        .from(APP_PERMISSION)
+//                        // app_permission -> group user
+//                        .join(groupUser)
+//                        .on(APP_PERMISSION.USER_UUID.eq(groupUser.UUID))
+//                        // group user -> stroom user group
+//                        .join(STROOM_USER_GROUP)
+//                        .on(groupUser.UUID.eq(STROOM_USER_GROUP.GROUP_UUID))
+//                        // stroom user group -> user
+//                        .join(userUser)
+//                        .on(userUser.UUID.eq(STROOM_USER_GROUP.USER_UUID))
+//                        .where(userUser.NAME.eq(userName))
+//                        .fetchSet(APP_PERMISSION.PERMISSION)));
+//
+//        return permissions;
+//    }
 
     @Override
     public void addPermission(final String userUuid, final String permission) {

@@ -4,7 +4,7 @@ import org.jooq.Record;
 import stroom.db.util.JooqUtil;
 import stroom.security.impl.DocumentPermissionDao;
 import stroom.security.impl.db.jooq.tables.records.DocPermissionRecord;
-import stroom.security.shared.DocumentPermissionJooq;
+import stroom.security.shared.DocumentPermissions;
 
 import javax.inject.Inject;
 import java.util.Set;
@@ -33,9 +33,8 @@ public class DocumentPermissionDaoImpl implements DocumentPermissionDao {
     }
 
     @Override
-    public DocumentPermissionJooq getPermissionsForDocument(final String docRefUuid) {
-
-        final DocumentPermissionJooq.Builder permissions = new DocumentPermissionJooq.Builder()
+    public DocumentPermissions getPermissionsForDocument(final String docRefUuid) {
+        final DocumentPermissions.Builder permissions = new DocumentPermissions.Builder()
                 //.docType(document.getType())
                 .docUuid(docRefUuid);
 

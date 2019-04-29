@@ -17,7 +17,7 @@ import javax.ws.rs.core.Response;
         description = "Stroom Application Permissions API")
 @Path("/appPermissions/v1")
 @Produces(MediaType.APPLICATION_JSON)
-public interface UserAppPermissionResource extends RestResource {
+public interface AppPermissionResource extends RestResource {
 
     @GET
     @Path("/{userUuid}")

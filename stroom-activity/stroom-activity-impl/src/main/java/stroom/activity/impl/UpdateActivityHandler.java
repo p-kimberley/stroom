@@ -16,11 +16,10 @@
 
 package stroom.activity.impl;
 
-import stroom.activity.shared.Activity;
 import stroom.activity.api.ActivityService;
+import stroom.activity.shared.Activity;
 import stroom.activity.shared.UpdateActivityAction;
 import stroom.event.logging.api.DocumentEventLog;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
@@ -28,36 +27,31 @@ import javax.inject.Inject;
 public class UpdateActivityHandler extends AbstractTaskHandler<UpdateActivityAction, Activity> {
     private final ActivityService activityService;
     private final DocumentEventLog entityEventLog;
-    private final Security security;
 
     @Inject
     UpdateActivityHandler(final ActivityService activityService,
-                          final DocumentEventLog entityEventLog,
-                          final Security security) {
+                          final DocumentEventLog entityEventLog) {
         this.activityService = activityService;
         this.entityEventLog = entityEventLog;
-        this.security = security;
     }
 
     @Override
     public Activity exec(final UpdateActivityAction action) {
         final Activity activity = action.getActivity();
-        return security.secureResult(() -> {
-            Activity result;
-            Activity before = null;
+        Activity result;
+        Activity before = null;
 
-            try {
-                // Get the before version.
-                before = activityService.fetch(activity.getId());
-                result = activityService.update(activity);
-                entityEventLog.update(before, result, null);
-            } catch (final RuntimeException e) {
-                // Get the before version.
-                entityEventLog.update(before, activity, e);
-                throw e;
-            }
+        try {
+            // Get the before version.
+            before = activityService.fetch(activity.getId());
+            result = activityService.update(activity);
+            entityEventLog.update(before, result, null);
+        } catch (final RuntimeException e) {
+            // Get the before version.
+            entityEventLog.update(before, activity, e);
+            throw e;
+        }
 
-            return result;
-        });
+        return result;
     }
 }

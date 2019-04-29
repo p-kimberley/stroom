@@ -146,6 +146,6 @@ class JobNodeService {
     }
 
     Optional<JobNode> fetch(final int id) {
-        return jobNodeDao.fetch(id);
+        return security.secureResult(() -> jobNodeDao.fetch(id));
     }
 }

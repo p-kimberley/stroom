@@ -60,7 +60,4 @@ public interface ExplorerNodeService {
     List<ExplorerNode> getChildren(final DocRef folderRef);
 
     List<ExplorerNode> getNodesByName(ExplorerNode parent, String name);
-
-    // Used during testing.
-    void deleteAllNodes();
 }

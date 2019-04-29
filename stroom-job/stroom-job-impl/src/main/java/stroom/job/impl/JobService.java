@@ -101,7 +101,7 @@ class JobService {
     }
 
     Optional<Job> fetch(final int id) {
-        return jobDao.fetch(id).map(this::decorate);
+        return security.secureResult(PermissionNames.MANAGE_JOBS_PERMISSION, () -> jobDao.fetch(id).map(this::decorate));
     }
 
     private Job decorate(final Job job) {

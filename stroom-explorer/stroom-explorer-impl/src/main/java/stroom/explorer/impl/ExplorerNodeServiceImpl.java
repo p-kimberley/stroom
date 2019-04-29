@@ -271,11 +271,11 @@ class ExplorerNodeServiceImpl implements ExplorerNodeService {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public void deleteAllNodes() {
-        explorerTreeDao.removeAll();
-        addNode(null, ExplorerConstants.ROOT_DOC_REF);
-    }
+//    @Override
+//    public void deleteAllNodes() {
+//        explorerTreeDao.removeAll();
+//        addNode(null, ExplorerConstants.ROOT_DOC_REF);
+//    }
 
     private void addNode(final DocRef parentFolderRef, final DocRef docRef) {
         final ExplorerTreeNode folderNode = getNodeForDocRef(parentFolderRef).orElse(null);

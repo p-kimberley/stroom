@@ -16,32 +16,22 @@
 
 package stroom.dashboard.impl;
 
-import stroom.dashboard.expression.v1.Expression;
-import stroom.dashboard.expression.v1.ExpressionParser;
-import stroom.dashboard.expression.v1.FieldIndexMap;
-import stroom.dashboard.expression.v1.FunctionFactory;
-import stroom.dashboard.expression.v1.ParamFactory;
 import stroom.dashboard.shared.ValidateExpressionAction;
 import stroom.dashboard.shared.ValidateExpressionResult;
 import stroom.task.api.AbstractTaskHandler;
 
-import java.text.ParseException;
-
+import javax.inject.Inject;
 
 class ValidateExpressionHandler extends AbstractTaskHandler<ValidateExpressionAction, ValidateExpressionResult> {
+    private final SearchService searchService;
+
+    @Inject
+    ValidateExpressionHandler(final SearchService searchService) {
+        this.searchService = searchService;
+    }
+
     @Override
     public ValidateExpressionResult exec(final ValidateExpressionAction action) {
-        try {
-            final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
-            final ExpressionParser expressionParser = new ExpressionParser(new FunctionFactory(), new ParamFactory());
-            final Expression expression = expressionParser.parse(fieldIndexMap, action.getExpression());
-            String correctedExpression = "";
-            if (expression != null) {
-                correctedExpression = expression.toString();
-            }
-            return new ValidateExpressionResult(true, correctedExpression);
-        } catch (final ParseException e) {
-            return new ValidateExpressionResult(false, e.getMessage());
-        }
+        return searchService.validateExpression(action.getExpression());
     }
 }

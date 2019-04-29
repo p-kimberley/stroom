@@ -17,10 +17,10 @@
 
 package stroom.explorer.impl;
 
+import stroom.docref.DocRef;
 import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.ExplorerServiceRenameAction;
 import stroom.explorer.shared.SharedDocRef;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
@@ -28,18 +28,27 @@ import javax.inject.Inject;
 
 class ExplorerServiceRenameHandler
         extends AbstractTaskHandler<ExplorerServiceRenameAction, SharedDocRef> {
-    private final ExplorerService explorerService;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    ExplorerServiceRenameHandler(final ExplorerService explorerService,
-                                 final Security security) {
+    ExplorerServiceRenameHandler(final ExplorerServiceImpl explorerService,
+                                 final ExplorerEventLog explorerEventLog) {
         this.explorerService = explorerService;
-        this.security = security;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public SharedDocRef exec(final ExplorerServiceRenameAction action) {
-        return security.secureResult(() -> SharedDocRef.create(explorerService.rename(action.getDocRef(), action.getDocName())));
+        DocRef docRef;
+        try {
+            docRef = explorerService.rename(action.getDocRef(), action.getDocName());
+            explorerEventLog.rename(action.getDocRef(), action.getDocName(), null);
+        } catch (final RuntimeException e) {
+            explorerEventLog.rename(action.getDocRef(), action.getDocName(), e);
+            throw e;
+        }
+
+        return SharedDocRef.create(docRef);
     }
 }

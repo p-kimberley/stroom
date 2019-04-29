@@ -104,22 +104,26 @@ class UserServiceImpl implements UserService {
 
     @Override
     public List<User> find(final FindUserCriteria criteria) {
-        return userDao.find(criteria.getName().getString(), criteria.getGroup());
+        return security.secureResult(PermissionNames.MANAGE_USERS_PERMISSION, () ->
+                userDao.find(criteria.getName().getString(), criteria.getGroup()));
     }
 
     @Override
     public List<User> findUsersInGroup(final String groupUuid) {
-        return userDao.findUsersInGroup(groupUuid);
+        return security.secureResult(PermissionNames.MANAGE_USERS_PERMISSION, () ->
+                userDao.findUsersInGroup(groupUuid));
     }
 
     @Override
     public List<User> findGroupsForUser(final String userUuid) {
-        return userDao.findGroupsForUser(userUuid);
+        return security.secureResult(PermissionNames.MANAGE_USERS_PERMISSION, () ->
+                userDao.findGroupsForUser(userUuid));
     }
 
     @Override
     public List<User> findGroupsForUserName(final String userName) {
-        return userDao.findGroupsForUserName(userName);
+        return security.secureResult(PermissionNames.MANAGE_USERS_PERMISSION, () ->
+                userDao.findGroupsForUserName(userName));
     }
 
     @Override

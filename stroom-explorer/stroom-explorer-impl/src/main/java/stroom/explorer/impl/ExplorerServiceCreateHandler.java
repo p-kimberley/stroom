@@ -17,28 +17,36 @@
 
 package stroom.explorer.impl;
 
+import stroom.docref.DocRef;
 import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.ExplorerServiceCreateAction;
 import stroom.explorer.shared.SharedDocRef;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
 
-
 class ExplorerServiceCreateHandler extends AbstractTaskHandler<ExplorerServiceCreateAction, SharedDocRef> {
-    private final ExplorerService explorerService;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    ExplorerServiceCreateHandler(final ExplorerService explorerService,
-                                 final Security security) {
+    ExplorerServiceCreateHandler(final ExplorerServiceImpl explorerService,
+                                 final ExplorerEventLog explorerEventLog) {
         this.explorerService = explorerService;
-        this.security = security;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public SharedDocRef exec(final ExplorerServiceCreateAction action) {
-        return security.secureResult(() -> SharedDocRef.create(explorerService.create(action.getDocType(), action.getDocName(), action.getDestinationFolderRef(), action.getPermissionInheritance())));
+        DocRef docRef;
+        try {
+            docRef = explorerService.create(action.getDocType(), action.getDocName(), action.getDestinationFolderRef(), action.getPermissionInheritance());
+            explorerEventLog.create(docRef.getType(), docRef.getName(), docRef.getUuid(), action.getDestinationFolderRef(), action.getPermissionInheritance(), null);
+        } catch (final RuntimeException e) {
+            explorerEventLog.create(action.getDocType(), action.getDocName(), null, action.getDestinationFolderRef(), action.getPermissionInheritance(), e);
+            throw e;
+        }
+
+        return SharedDocRef.create(docRef);
     }
 }

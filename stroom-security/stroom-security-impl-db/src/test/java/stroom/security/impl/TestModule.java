@@ -20,8 +20,6 @@ public class TestModule extends AbstractModule {
         install(new SecurityDbModule());
 
         bind(UserService.class).to(UserServiceImpl.class);
-        bind(UserAppPermissionService.class).to(UserAppPermissionServiceImpl.class);
-        bind(DocumentPermissionService.class).to(DocumentPermissionServiceImpl.class);
 
         bind(Security.class).to(SecurityImpl.class);
         final SecurityContext securityContext = mock(SecurityContext.class);

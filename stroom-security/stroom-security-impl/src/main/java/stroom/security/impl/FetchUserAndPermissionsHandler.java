@@ -16,53 +16,22 @@
 
 package stroom.security.impl;
 
-import stroom.security.api.Security;
-import stroom.security.api.SecurityContext;
-import stroom.security.impl.exception.AuthenticationException;
 import stroom.security.shared.FetchUserAndPermissionsAction;
 import stroom.security.shared.UserAndPermissions;
-import stroom.security.shared.User;
-import stroom.security.api.UserTokenUtil;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
 
-
 class FetchUserAndPermissionsHandler extends AbstractTaskHandler<FetchUserAndPermissionsAction, UserAndPermissions> {
-    private final Security security;
-    private final SecurityContext securityContext;
-    private final UserAndPermissionsHelper userAndPermissionsHelper;
-    private final AuthenticationConfig securityConfig;
+    private final AppPermissionService appPermissionService;
 
     @Inject
-    FetchUserAndPermissionsHandler(final Security security,
-                                   final SecurityContext securityContext,
-                                   final UserAndPermissionsHelper userAndPermissionsHelper,
-                                   final AuthenticationConfig securityConfig) {
-        this.security = security;
-        this.securityContext = securityContext;
-        this.userAndPermissionsHelper = userAndPermissionsHelper;
-        this.securityConfig = securityConfig;
+    FetchUserAndPermissionsHandler(final AppPermissionService appPermissionService) {
+        this.appPermissionService = appPermissionService;
     }
 
     @Override
     public UserAndPermissions exec(final FetchUserAndPermissionsAction task) {
-        return security.insecureResult(() -> {
-            final User userRef = CurrentUserState.currentUser();
-            if (userRef == null) {
-                return null;
-            }
-
-            final boolean preventLogin = securityConfig.isPreventLogin();
-            if (preventLogin) {
-                security.asUser(UserTokenUtil.create(userRef.getName()), () -> {
-                    if (!securityContext.isAdmin()) {
-                        throw new AuthenticationException("Stroom is down for maintenance. Please try again later.");
-                    }
-                });
-            }
-
-            return new UserAndPermissions(userRef, userAndPermissionsHelper.get(userRef));
-        });
+        return appPermissionService.fetchUserAndPermissions();
     }
 }

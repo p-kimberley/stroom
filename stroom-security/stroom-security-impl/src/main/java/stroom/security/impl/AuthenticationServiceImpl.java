@@ -35,16 +35,16 @@ class AuthenticationServiceImpl implements AuthenticationService {
     private static final int GET_USER_ATTEMPTS = 2;
 
     private final UserService userService;
-    private final UserAppPermissionService userAppPermissionService;
+    private final AppPermissionService appPermissionService;
     private final Security security;
 
     @Inject
     AuthenticationServiceImpl(
             final UserService userService,
-            final UserAppPermissionService userAppPermissionService,
+            final AppPermissionService appPermissionService,
             final Security security) {
         this.userService = userService;
-        this.userAppPermissionService = userAppPermissionService;
+        this.appPermissionService = appPermissionService;
         this.security = security;
     }
 
@@ -145,7 +145,7 @@ class AuthenticationServiceImpl implements AuthenticationService {
 
             final User newUserGroup = userService.createUserGroup(userGroupName);
             try {
-                userAppPermissionService.addPermission(newUserGroup.getUuid(), PermissionNames.ADMINISTRATOR);
+                appPermissionService.addPermission(newUserGroup.getUuid(), PermissionNames.ADMINISTRATOR);
             } catch (final RuntimeException e) {
                 // Expected.
                 LOGGER.debug(e.getMessage());

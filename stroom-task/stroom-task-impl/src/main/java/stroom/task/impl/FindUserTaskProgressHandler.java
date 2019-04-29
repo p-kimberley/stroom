@@ -16,40 +16,28 @@
 
 package stroom.task.impl;
 
-import stroom.util.shared.BaseResultList;
-import stroom.util.shared.Sort.Direction;
 import stroom.event.logging.api.HttpServletRequestHolder;
-import stroom.security.api.Security;
-import stroom.cluster.task.api.ClusterDispatchAsyncHelper;
-import stroom.task.shared.FindTaskProgressCriteria;
+import stroom.task.api.AbstractTaskHandler;
 import stroom.task.shared.FindUserTaskProgressAction;
 import stroom.task.shared.TaskProgress;
+import stroom.util.shared.ResultList;
 
 import javax.inject.Inject;
 
-
-class FindUserTaskProgressHandler
-        extends FindTaskProgressHandlerBase<FindUserTaskProgressAction, BaseResultList<TaskProgress>> {
+class FindUserTaskProgressHandler extends AbstractTaskHandler<FindUserTaskProgressAction, ResultList<TaskProgress>> {
+    private final TaskProgressService taskProgressService;
     private final transient HttpServletRequestHolder httpServletRequestHolder;
-    private final Security security;
 
     @Inject
-    FindUserTaskProgressHandler(final ClusterDispatchAsyncHelper dispatchHelper,
-                                final HttpServletRequestHolder httpServletRequestHolder,
-                                final Security security) {
-        super(dispatchHelper);
+    FindUserTaskProgressHandler(final TaskProgressService taskProgressService,
+                                final HttpServletRequestHolder httpServletRequestHolder) {
+        this.taskProgressService = taskProgressService;
         this.httpServletRequestHolder = httpServletRequestHolder;
-        this.security = security;
     }
 
     @Override
-    public BaseResultList<TaskProgress> exec(final FindUserTaskProgressAction action) {
-        return security.secureResult(() -> {
-            final FindTaskProgressCriteria criteria = new FindTaskProgressCriteria();
-            criteria.setSort(FindTaskProgressCriteria.FIELD_AGE, Direction.DESCENDING, false);
-            criteria.setSessionId(getSessionId());
-            return doExec(action, criteria);
-        });
+    public ResultList<TaskProgress> exec(final FindUserTaskProgressAction action) {
+        return taskProgressService.findUserTaskProgress(action.getUserToken(), action.getTaskName(), getSessionId());
     }
 
     private String getSessionId() {

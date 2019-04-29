@@ -17,29 +17,35 @@
 
 package stroom.explorer.impl;
 
-import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.BulkActionResult;
 import stroom.explorer.shared.ExplorerServiceMoveAction;
-import stroom.security.api.Security;
 import stroom.task.api.AbstractTaskHandler;
 
 import javax.inject.Inject;
 
-
 class ExplorerServiceMoveHandler
         extends AbstractTaskHandler<ExplorerServiceMoveAction, BulkActionResult> {
-    private final ExplorerService explorerService;
-    private final Security security;
+    private final ExplorerServiceImpl explorerService;
+    private final ExplorerEventLog explorerEventLog;
 
     @Inject
-    ExplorerServiceMoveHandler(final ExplorerService explorerService,
-                               final Security security) {
+    ExplorerServiceMoveHandler(final ExplorerServiceImpl explorerService,
+                               final ExplorerEventLog explorerEventLog) {
         this.explorerService = explorerService;
-        this.security = security;
+        this.explorerEventLog = explorerEventLog;
     }
 
     @Override
     public BulkActionResult exec(final ExplorerServiceMoveAction action) {
-        return security.secureResult(() -> explorerService.move(action.getDocRefs(), action.getDestinationFolderRef(), action.getPermissionInheritance()));
+        BulkActionResult result = null;
+        try {
+            result = explorerService.move(action.getDocRefs(), action.getDestinationFolderRef(), action.getPermissionInheritance());
+            explorerEventLog.move(action.getDocRefs(), action.getDestinationFolderRef(), action.getPermissionInheritance(), result, null);
+        } catch (final RuntimeException e) {
+            explorerEventLog.move(action.getDocRefs(), action.getDestinationFolderRef(), action.getPermissionInheritance(), result, e);
+            throw e;
+        }
+
+        return result;
     }
 }

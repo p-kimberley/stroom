@@ -25,7 +25,6 @@ import stroom.task.api.AbstractTaskHandler;
 import java.util.HashMap;
 import java.util.Map;
 
-
 class StroomStatsStoreFieldChangeHandler
         extends AbstractTaskHandler<StroomStatsStoreFieldChangeAction, StroomStatsStoreEntityData> {
     @Override

@@ -1,7 +1,6 @@
 package stroom.search.coprocessor;
 
 import stroom.dashboard.expression.v1.FieldIndexMap;
-import stroom.query.common.v2.Coprocessor;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Payload;
@@ -14,20 +13,23 @@ public class NewCoprocessor implements Receiver, PayloadFactory {
     private final CoprocessorKey key;
     private final CoprocessorSettings settings;
     private final FieldIndexMap fieldIndexMap;
+    private final Consumer<Values> valuesConsumer;
     private final Consumer<Error> errorConsumer;
-    private final Coprocessor coprocessor;
+    private final PayloadFactory payloadFactory;
     private final AtomicLong completionCount = new AtomicLong();
 
     NewCoprocessor(final CoprocessorKey key,
                    final CoprocessorSettings settings,
                    final FieldIndexMap fieldIndexMap,
+                   final Consumer<Values> valuesConsumer,
                    final Consumer<Error> errorConsumer,
-                   final Coprocessor coprocessor) {
+                   final PayloadFactory payloadFactory) {
         this.key = key;
         this.settings = settings;
         this.fieldIndexMap = fieldIndexMap;
+        this.valuesConsumer = valuesConsumer;
         this.errorConsumer = errorConsumer;
-        this.coprocessor = coprocessor;
+        this.payloadFactory = payloadFactory;
     }
 
     public CoprocessorKey getKey() {
@@ -40,7 +42,7 @@ public class NewCoprocessor implements Receiver, PayloadFactory {
 
     @Override
     public Consumer<Values> getValuesConsumer() {
-        return values -> coprocessor.receive(values.getValues());
+        return valuesConsumer;
     }
 
     @Override
@@ -60,7 +62,7 @@ public class NewCoprocessor implements Receiver, PayloadFactory {
 
     @Override
     public Payload createPayload() {
-        return coprocessor.createPayload();
+        return payloadFactory.createPayload();
     }
 
     public long getCompletionCount() {

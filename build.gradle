@@ -30,9 +30,9 @@ plugins {
 
     id "com.github.johnrengelman.shadow" version "4.0.3" apply false
 
-    id 'nu.studer.jooq' version '3.0.2' apply false
+    id 'nu.studer.jooq' version '3.0.3' apply false
 
-    id 'org.flywaydb.flyway' version '5.2.4' apply false
+    id 'org.flywaydb.flyway' version '6.0.8' apply false
 
 //    id 'java-library'
 
@@ -183,7 +183,7 @@ ext.libs = [
         dropwizard_servlets            : "io.dropwizard:dropwizard-servlets", // version controlled by DW BOM
         dropwizard_testing             : "io.dropwizard:dropwizard-testing", // version controlled by DW BOM
         fast_infoset                   : "com.sun.xml.fastinfoset:FastInfoset:1.2.12",
-        flyway_core                    : "org.flywaydb:flyway-core:5.2.4",
+        flyway_core                    : "org.flywaydb:flyway-core:6.0.8",
         gin                            : "com.google.gwt.inject:gin:2.1.2",
         google_findbugs                : "com.google.code.findbugs:jsr305:3.0.2",
         guava                          : "com.google.guava:guava", // version controlled by DW BOM

@@ -45,12 +45,7 @@ public class DataSourceProvider implements Provider<DataSource> {
     }
 
     private Flyway flyway(final DataSource dataSource) {
-            final Flyway flyway = Flyway.configure()
-                    .dataSource(dataSource)
-                    .locations(FLYWAY_LOCATIONS)
-                    .table(FLYWAY_TABLE)
-                    .baselineOnMigrate(true)
-                    .load();
+        Flyway flyway = null;
             Version version = null;
             boolean usingFlyWay = false;
             LOGGER.info("Testing installed Stroom schema version");
@@ -143,15 +138,26 @@ public class DataSourceProvider implements Provider<DataSource> {
                 LOGGER.info("This is a new installation!");
             }
 
-            if (version == null) {
-                // If we have no version then this is a new Stroom instance so perform full FlyWay migration.
+            if (version == null || usingFlyWay) {
+                // If we have no version then this is a new Stroom instance so perform full FlyWay migration,
+                // otherwise If we are already using FlyWay then allow FlyWay to attempt migration.
+                flyway = Flyway.configure()
+                        .dataSource(dataSource)
+                        .locations(FLYWAY_LOCATIONS)
+                        .table(FLYWAY_TABLE)
+                        .load();
                 migrateDatabase(flyway);
-            } else if (usingFlyWay) {
-                // If we are already using FlyWay then allow FlyWay to attempt migration.
-                migrateDatabase(flyway);
+
             } else if (version.getMajor() == 4 && version.getMinor() == 0 && version.getPatch() >= 60) {
                 // If Stroom is currently at v4.0.60+ then tell FlyWay to baseline at that version.
-                flyway.setBaselineVersionAsString("4.0.60");
+                flyway = Flyway.configure()
+                        .dataSource(dataSource)
+                        .locations(FLYWAY_LOCATIONS)
+                        .table(FLYWAY_TABLE)
+                        .baselineOnMigrate(true)
+                        .baselineVersion("4.0.60")
+                        .load();
+
                 flyway.baseline();
                 migrateDatabase(flyway);
             } else {

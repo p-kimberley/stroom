@@ -53,7 +53,6 @@ public class SecurityDbModule extends AbstractModule {
                 .dataSource(dataSource)
                 .locations(FLYWAY_LOCATIONS)
                 .table(FLYWAY_TABLE)
-                .baselineOnMigrate(true)
                 .load();
         LOGGER.info("Applying Flyway migrations to {} in {} from {}", MODULE, FLYWAY_TABLE, FLYWAY_LOCATIONS);
         try {

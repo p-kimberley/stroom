@@ -63,7 +63,8 @@ public class CachingEntityManager implements StroomEntityManager, Clearable {
 
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(maximumSize)
-                .expireAfterWrite(1, TimeUnit.MINUTES);
+                .expireAfterWrite(1, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build();
         cacheManager.registerCache("Entity Cache", cacheBuilder, cache);
     }

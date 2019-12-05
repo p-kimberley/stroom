@@ -44,7 +44,8 @@ public class DocumentPermissionCacheImpl implements DocumentPermissionCache {
         final CacheLoader<DocumentPermission, Boolean> cacheLoader = CacheLoader.from(k -> securityContext.hasDocumentPermission(k.documentType, k.documentUuid, k.permission));
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterWrite(10, TimeUnit.MINUTES);
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Document Permission Cache", cacheBuilder, cache);
     }

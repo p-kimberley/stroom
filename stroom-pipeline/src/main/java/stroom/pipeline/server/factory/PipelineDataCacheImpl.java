@@ -62,7 +62,8 @@ public class PipelineDataCacheImpl implements PipelineDataCache {
         final CacheLoader<VersionedEntityDecorator<PipelineEntity>, PipelineData> cacheLoader = CacheLoader.from(this::create);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(10, TimeUnit.MINUTES);
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Pipeline Structure Cache", cacheBuilder, cache);
     }

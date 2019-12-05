@@ -40,7 +40,8 @@ public class ClusterResultCollectorCache implements Clearable {
     public ClusterResultCollectorCache(final CacheManager cacheManager) {
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(1, TimeUnit.MINUTES);
+                .expireAfterAccess(1, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build();
         cacheManager.registerCache("Cluster Result Collector Cache", cacheBuilder, cache);
     }

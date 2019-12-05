@@ -16,6 +16,7 @@
 
 package stroom.cache;
 
+import com.google.common.cache.Cache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -94,11 +95,17 @@ public class StroomCacheManagerImpl implements StroomCacheManager, Clearable {
 
             if (include) {
                 final CacheHolder cacheHolder = cacheManager.getCaches().get(cacheName);
-
-
                 if (cacheHolder != null) {
+                    final Cache cache = cacheHolder.getCache();
+                    final long total = cache.size();
+                    final long live = cache.getAllPresent(cache.asMap().keySet()).size();
+                    final long old = total - live;
+
                     final Map<String, String> map = new HashMap<>();
-                    map.put("Entries", String.valueOf(cacheHolder.getCache().size()));
+                    map.put("Total", String.valueOf(total));
+                    map.put("Live", String.valueOf(live));
+                    map.put("Old", String.valueOf(old));
+
                     addEntries(map, cacheHolder.getCacheBuilder().toString());
                     addEntries(map, cacheHolder.getCache().stats().toString());
 

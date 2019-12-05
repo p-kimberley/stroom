@@ -40,7 +40,8 @@ public class UserCache {
         final CacheLoader<String, Optional<UserRef>> cacheLoader = CacheLoader.from(name -> Optional.ofNullable(userService.getUserByName(name)));
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(30, TimeUnit.MINUTES);
+                .expireAfterAccess(30, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("User Cache", cacheBuilder, cache);
     }

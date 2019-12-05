@@ -51,7 +51,8 @@ public class StreamAttributeKeyServiceImpl
         final CacheLoader<String, BaseResultList<StreamAttributeKey>> cacheLoader = CacheLoader.from(k -> find(new FindStreamAttributeKeyCriteria()));
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(10, TimeUnit.MINUTES);
+                .expireAfterAccess(10, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Stream Attribute Key Cache", cacheBuilder, cache);
     }

@@ -73,13 +73,30 @@ public class CacheNodeListPresenter extends MyPresenterWidget<DataGridView<Cache
             }
         }, "Node", MEDIUM_COL);
 
-        // Entries.
+        // Live.
         getView().addResizableColumn(new Column<CacheNodeRow, String>(new TextCell()) {
             @Override
             public String getValue(final CacheNodeRow row) {
-                return row.getCacheInfo().getMap().get("Entries");
+                return row.getCacheInfo().getMap().get("Live");
             }
-        }, "Entries", SMALL_COL);
+        }, "Live", SMALL_COL);
+
+
+        // Old.
+        getView().addResizableColumn(new Column<CacheNodeRow, String>(new TextCell()) {
+            @Override
+            public String getValue(final CacheNodeRow row) {
+                return row.getCacheInfo().getMap().get("Old");
+            }
+        }, "Old", SMALL_COL);
+
+        // Total.
+        getView().addResizableColumn(new Column<CacheNodeRow, String>(new TextCell()) {
+            @Override
+            public String getValue(final CacheNodeRow row) {
+                return row.getCacheInfo().getMap().get("Total");
+            }
+        }, "Total", SMALL_COL);
 
         // Max Entries.
         getView().addResizableColumn(new Column<CacheNodeRow, String>(new TextCell()) {

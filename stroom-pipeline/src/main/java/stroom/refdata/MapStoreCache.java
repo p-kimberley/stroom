@@ -66,7 +66,8 @@ public final class MapStoreCache {
         final CacheLoader<MapStoreCacheKey, MapStore> cacheLoader = CacheLoader.from(this::create);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(maximumSize)
-                .expireAfterAccess(1, TimeUnit.HOURS);
+                .expireAfterAccess(1, TimeUnit.HOURS)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Reference Data - Map Store Cache", cacheBuilder, cache);
     }

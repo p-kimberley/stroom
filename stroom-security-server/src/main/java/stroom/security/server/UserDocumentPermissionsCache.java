@@ -126,7 +126,8 @@ public class UserDocumentPermissionsCache implements PermissionChangeEvent.Handl
             final CacheLoader<String, UserDocumentPermissions> cacheLoader = CacheLoader.from(documentPermissionService::getPermissionsForUser);
             final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                     .maximumSize(maximumSize)
-                    .expireAfterAccess(10, TimeUnit.MINUTES);
+                    .expireAfterAccess(10, TimeUnit.MINUTES)
+                    .recordStats();
             final LoadingCache<String, UserDocumentPermissions> cache = cacheBuilder.build(cacheLoader);
             if (lastMaximumSize == null) {
                 cacheManager.registerCache(CACHE_NAME, cacheBuilder, cache);

@@ -51,7 +51,8 @@ public class UserAppPermissionsCache implements EntityEvent.Handler {
         final CacheLoader<UserRef, UserAppPermissions> cacheLoader = CacheLoader.from(userAppPermissionService::getPermissionsForUser);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(30, TimeUnit.MINUTES);
+                .expireAfterAccess(30, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("User App Permissions Cache", cacheBuilder, cache);
     }

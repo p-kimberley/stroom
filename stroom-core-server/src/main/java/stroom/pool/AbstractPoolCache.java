@@ -47,7 +47,8 @@ public abstract class AbstractPoolCache<K, V> {
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(maximumSize)
                 .expireAfterAccess(10, TimeUnit.MINUTES)
-                .removalListener(removalListener);
+                .removalListener(removalListener)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache(name, cacheBuilder, cache);
     }

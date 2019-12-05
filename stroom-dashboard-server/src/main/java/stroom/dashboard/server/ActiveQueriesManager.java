@@ -45,7 +45,8 @@ public class ActiveQueriesManager {
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_ACTIVE_QUERIES)
                 .expireAfterAccess(1, TimeUnit.MINUTES)
-                .removalListener(removalListener);
+                .removalListener(removalListener)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Active Queries", cacheBuilder, cache);
     }

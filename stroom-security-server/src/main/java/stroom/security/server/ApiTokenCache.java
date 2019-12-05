@@ -60,7 +60,8 @@ public class ApiTokenCache {
         });
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterWrite(30, TimeUnit.MINUTES);
+                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("API Token Cache", cacheBuilder, cache);
     }

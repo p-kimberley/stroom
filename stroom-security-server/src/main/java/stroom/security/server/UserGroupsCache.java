@@ -51,7 +51,8 @@ public class UserGroupsCache implements EntityEvent.Handler {
         final CacheLoader<UserRef, List> cacheLoader = CacheLoader.from(userService::findGroupsForUser);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterAccess(30, TimeUnit.MINUTES);
+                .expireAfterAccess(30, TimeUnit.MINUTES)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("User Groups Cache", cacheBuilder, cache);
     }

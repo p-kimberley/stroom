@@ -71,7 +71,8 @@ public class EffectiveStreamCache {
         final CacheLoader<EffectiveStreamKey, NavigableSet> cacheLoader = CacheLoader.from(this::create);
         final CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
-                .expireAfterWrite(duration, unit);
+                .expireAfterWrite(duration, unit)
+                .recordStats();
         cache = cacheBuilder.build(cacheLoader);
         cacheManager.registerCache("Reference Data - Effective Stream Cache", cacheBuilder, cache);
     }

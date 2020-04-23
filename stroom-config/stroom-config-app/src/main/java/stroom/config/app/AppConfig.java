@@ -9,8 +9,10 @@ import stroom.authentication.config.AuthenticationConfig;
 import stroom.cluster.api.ClusterConfig;
 import stroom.cluster.lock.impl.db.ClusterLockConfig;
 import stroom.cluster.task.impl.ClusterTaskConfig;
-import stroom.config.common.ApiGatewayConfig;
 import stroom.config.common.CommonDbConfig;
+import stroom.config.common.NodeUriConfig;
+import stroom.config.common.PublicUriConfig;
+import stroom.config.common.UiUriConfig;
 import stroom.core.benchmark.BenchmarkClusterConfig;
 import stroom.core.db.CoreConfig;
 import stroom.core.receive.ProxyAggregationConfig;
@@ -25,6 +27,7 @@ import stroom.importexport.impl.ExportConfig;
 import stroom.index.impl.IndexConfig;
 import stroom.index.impl.selection.VolumeConfig;
 import stroom.job.impl.JobSystemConfig;
+import stroom.kafka.impl.KafkaConfig;
 import stroom.lifecycle.impl.LifecycleConfig;
 import stroom.node.impl.NodeConfig;
 import stroom.pipeline.PipelineConfig;
@@ -33,28 +36,28 @@ import stroom.search.impl.SearchConfig;
 import stroom.search.solr.SolrConfig;
 import stroom.searchable.impl.SearchableConfig;
 import stroom.security.impl.SecurityConfig;
+import stroom.security.impl.ValidationSeverity;
 import stroom.servicediscovery.impl.ServiceDiscoveryConfig;
 import stroom.storedquery.impl.StoredQueryConfig;
 import stroom.ui.config.shared.UiConfig;
 import stroom.util.io.PathConfig;
 import stroom.util.shared.AbstractConfig;
-import stroom.security.impl.ValidationSeverity;
 
 import javax.inject.Singleton;
-import javax.validation.Valid;
-import javax.validation.constraints.AssertFalse;
+import javax.validation.constraints.AssertTrue;
 
 @JsonRootName(AppConfig.NAME)
 @Singleton
 public class AppConfig extends AbstractConfig {
-
     public static final String NAME = "stroom";
 
-    public static final String PROP_NAME_SUPER_DEV_MODE = "superDevMode";
+    public static final String PROP_NAME_NODE_URI = "nodeUri";
+    public static final String PROP_NAME_PUBLIC_URI = "publicUri";
+    public static final String PROP_NAME_UI_URI = "uiUri";
     public static final String PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE = "haltBootOnConfigValidationFailure";
     public static final String PROP_NAME_ACTIVITY = "activity";
     public static final String PROP_NAME_ANNOTATION = "annotation";
-    public static final String PROP_NAME_API_GATEWAY = "apiGateway";
+//    public static final String PROP_NAME_API_GATEWAY = "apiGateway";
     public static final String PROP_NAME_AUTHENTICATION = "authentication";
     public static final String PROP_NAME_BENCHMARK = "benchmark";
     public static final String PROP_NAME_CLUSTER = "cluster";
@@ -68,10 +71,11 @@ public class AppConfig extends AbstractConfig {
     public static final String PROP_NAME_DATA_SOURCE_URL = "dataSourceUrl";
     public static final String PROP_NAME_DOCSTORE = "docstore";
     public static final String PROP_NAME_EXPLORER = "explorer";
-    public static final String PROP_NAME_FEED = "feed";
     public static final String PROP_NAME_EXPORT = "export";
+    public static final String PROP_NAME_FEED = "feed";
     public static final String PROP_NAME_INDEX = "index";
     public static final String PROP_NAME_JOB = "job";
+    public static final String PROP_NAME_KAFKA = "kafka";
     public static final String PROP_NAME_LIFECYCLE = "lifecycle";
     public static final String PROP_NAME_NODE = "node";
     public static final String PROP_NAME_PATH = "path";
@@ -83,20 +87,21 @@ public class AppConfig extends AbstractConfig {
     public static final String PROP_NAME_RECEIVE = "receive";
     public static final String PROP_NAME_SEARCH = "search";
     public static final String PROP_NAME_SEARCHABLE = "searchable";
-    public static final String PROP_NAME_SOLR = "solr";
     public static final String PROP_NAME_SECURITY = "security";
     public static final String PROP_NAME_SERVICE_DISCOVERY = "serviceDiscovery";
     public static final String PROP_NAME_SESSION_COOKIE = "sessionCookie";
+    public static final String PROP_NAME_SOLR = "solr";
     public static final String PROP_NAME_STATISTICS = "statistics";
     public static final String PROP_NAME_UI = "ui";
     public static final String PROP_NAME_VOLUMES = "volumes";
 
-    private boolean superDevMode;
     private boolean haltBootOnConfigValidationFailure = true;
 
+    private NodeUriConfig nodeUri = new NodeUriConfig();
+    private PublicUriConfig publicUri = new PublicUriConfig();
+    private UiUriConfig uiUri = new UiUriConfig();
     private ActivityConfig activityConfig = new ActivityConfig();
     private AnnotationConfig annotationConfig = new AnnotationConfig();
-    private ApiGatewayConfig apiGatewayConfig = new ApiGatewayConfig();
     private AuthenticationConfig authenticationConfig = new AuthenticationConfig();
     private BenchmarkClusterConfig benchmarkClusterConfig = new BenchmarkClusterConfig();
     private ClusterConfig clusterConfig = new ClusterConfig();
@@ -114,6 +119,7 @@ public class AppConfig extends AbstractConfig {
     private FeedConfig feedConfig = new FeedConfig();
     private IndexConfig indexConfig = new IndexConfig();
     private JobSystemConfig jobSystemConfig = new JobSystemConfig();
+    private KafkaConfig kafkaConfig = new KafkaConfig();
     private LifecycleConfig lifecycleConfig = new LifecycleConfig();
     private NodeConfig nodeConfig = new NodeConfig();
     private PathConfig pathConfig = new PathConfig();
@@ -133,23 +139,50 @@ public class AppConfig extends AbstractConfig {
     private UiConfig uiConfig = new UiConfig();
     private VolumeConfig volumeConfig = new VolumeConfig();
 
-    @AssertFalse(
-        message = "Super Dev Mode is enabled. This should only be used in development",
+    @JsonPropertyDescription("This is the base endpoint of the node for all inter-node communications, " +
+            "i.e. all cluster management and node info calls. " +
+            "This endpoint will typically be hidden behind a firewall and not be publicly available. " +
+            "The address must be resolvable from all other nodes in the cluster. " +
+            "This does not need to be set for a single node cluster.")
+    @JsonProperty(PROP_NAME_NODE_URI)
+    public NodeUriConfig getNodeUri() {
+        return nodeUri;
+    }
+
+    public void setNodeUri(final NodeUriConfig nodeUri) {
+        this.nodeUri = nodeUri;
+    }
+
+    @JsonPropertyDescription("This is public facing URI of stroom which may be different from the local host if behind a proxy")
+    @JsonProperty(PROP_NAME_PUBLIC_URI)
+    public PublicUriConfig getPublicUri() {
+        return publicUri;
+    }
+
+    public void setPublicUri(final PublicUriConfig publicUri) {
+        this.publicUri = publicUri;
+    }
+
+    @JsonPropertyDescription("This is the URI where the UI is hosted if different to the public facing URI of the server, e.g. during development or some other deployments")
+    @JsonProperty(PROP_NAME_UI_URI)
+    public UiUriConfig getUiUri() {
+        return uiUri;
+    }
+
+    public void setUiUri(final UiUriConfig uiUri) {
+        this.uiUri = uiUri;
+    }
+
+    @AssertTrue(
+        message = "stroom." + PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE + " is set to false. If there is " +
+            "invalid configuration the system may behave in unexpected ways. This setting is not advised.",
         payload = ValidationSeverity.Warning.class)
-    @JsonProperty(PROP_NAME_SUPER_DEV_MODE)
-    public boolean isSuperDevMode() {
-        return superDevMode;
-    }
-
-    public void setSuperDevMode(final boolean superDevMode) {
-        this.superDevMode = superDevMode;
-    }
-
     @JsonProperty(PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE)
     public boolean isHaltBootOnConfigValidationFailure() {
         return haltBootOnConfigValidationFailure;
     }
 
+    @SuppressWarnings("unused")
     public void setHaltBootOnConfigValidationFailure(final boolean haltBootOnConfigValidationFailure) {
         this.haltBootOnConfigValidationFailure = haltBootOnConfigValidationFailure;
     }
@@ -159,6 +192,7 @@ public class AppConfig extends AbstractConfig {
         return activityConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setActivityConfig(final ActivityConfig activityConfig) {
         this.activityConfig = activityConfig;
     }
@@ -168,17 +202,9 @@ public class AppConfig extends AbstractConfig {
         return annotationConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setAnnotationConfig(final AnnotationConfig annotationConfig) {
         this.annotationConfig = annotationConfig;
-    }
-
-    @JsonProperty(PROP_NAME_API_GATEWAY)
-    public ApiGatewayConfig getApiGatewayConfig() {
-        return apiGatewayConfig;
-    }
-
-    public void setApiGatewayConfig(final ApiGatewayConfig apiGatewayConfig) {
-        this.apiGatewayConfig = apiGatewayConfig;
     }
 
     @JsonProperty(PROP_NAME_AUTHENTICATION)
@@ -186,6 +212,7 @@ public class AppConfig extends AbstractConfig {
         return authenticationConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setAuthenticationConfig(final AuthenticationConfig authenticationConfig) {
         this.authenticationConfig = authenticationConfig;
     }
@@ -195,6 +222,7 @@ public class AppConfig extends AbstractConfig {
         return benchmarkClusterConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setBenchmarkClusterConfig(final BenchmarkClusterConfig benchmarkClusterConfig) {
         this.benchmarkClusterConfig = benchmarkClusterConfig;
     }
@@ -204,6 +232,7 @@ public class AppConfig extends AbstractConfig {
         return clusterConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setClusterConfig(final ClusterConfig clusterConfig) {
         this.clusterConfig = clusterConfig;
     }
@@ -213,6 +242,7 @@ public class AppConfig extends AbstractConfig {
         return clusterLockConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setClusterLockConfig(ClusterLockConfig clusterLockConfig) {
         this.clusterLockConfig = clusterLockConfig;
     }
@@ -222,6 +252,7 @@ public class AppConfig extends AbstractConfig {
         return clusterTaskConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setClusterTaskConfig(final ClusterTaskConfig clusterTaskConfig) {
         this.clusterTaskConfig = clusterTaskConfig;
     }
@@ -234,6 +265,7 @@ public class AppConfig extends AbstractConfig {
         return commonDbConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setCommonDbConfig(final CommonDbConfig commonDbConfig) {
         this.commonDbConfig = commonDbConfig;
     }
@@ -243,6 +275,7 @@ public class AppConfig extends AbstractConfig {
         return contentPackImportConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setContentPackImportConfig(final ContentPackImportConfig contentPackImportConfig) {
         this.contentPackImportConfig = contentPackImportConfig;
     }
@@ -253,6 +286,7 @@ public class AppConfig extends AbstractConfig {
         return coreConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setCoreConfig(final CoreConfig coreConfig) {
         this.coreConfig = coreConfig;
     }
@@ -262,6 +296,7 @@ public class AppConfig extends AbstractConfig {
         return dashboardConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setDashboardConfig(final DashboardConfig dashboardConfig) {
         this.dashboardConfig = dashboardConfig;
     }
@@ -272,6 +307,7 @@ public class AppConfig extends AbstractConfig {
         return dataConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setDataConfig(final DataConfig dataConfig) {
         this.dataConfig = dataConfig;
     }
@@ -281,6 +317,7 @@ public class AppConfig extends AbstractConfig {
         return dataSourceUrlConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setDataSourceUrlConfig(final DataSourceUrlConfig dataSourceUrlConfig) {
         this.dataSourceUrlConfig = dataSourceUrlConfig;
     }
@@ -290,6 +327,7 @@ public class AppConfig extends AbstractConfig {
         return docStoreConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setDocStoreConfig(final DocStoreConfig docStoreConfig) {
         this.docStoreConfig = docStoreConfig;
     }
@@ -299,6 +337,7 @@ public class AppConfig extends AbstractConfig {
         return explorerConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setExplorerConfig(final ExplorerConfig explorerConfig) {
         this.explorerConfig = explorerConfig;
     }
@@ -308,6 +347,7 @@ public class AppConfig extends AbstractConfig {
         return feedConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setFeedConfig(final FeedConfig feedConfig) {
         this.feedConfig = feedConfig;
     }
@@ -317,6 +357,7 @@ public class AppConfig extends AbstractConfig {
         return exportConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setExportConfig(final ExportConfig exportConfig) {
         this.exportConfig = exportConfig;
     }
@@ -326,6 +367,7 @@ public class AppConfig extends AbstractConfig {
         return indexConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setIndexConfig(final IndexConfig indexConfig) {
         this.indexConfig = indexConfig;
     }
@@ -335,8 +377,18 @@ public class AppConfig extends AbstractConfig {
         return jobSystemConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setJobSystemConfig(final JobSystemConfig jobSystemConfig) {
         this.jobSystemConfig = jobSystemConfig;
+    }
+
+    @JsonProperty(PROP_NAME_KAFKA)
+    public KafkaConfig getKafkaConfig() {
+        return kafkaConfig;
+    }
+
+    public void setKafkaConfig(final KafkaConfig kafkaConfig) {
+        this.kafkaConfig = kafkaConfig;
     }
 
     @JsonProperty(PROP_NAME_LIFECYCLE)
@@ -344,16 +396,17 @@ public class AppConfig extends AbstractConfig {
         return lifecycleConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setLifecycleConfig(final LifecycleConfig lifecycleConfig) {
         this.lifecycleConfig = lifecycleConfig;
     }
 
-    @Valid
     @JsonProperty(PROP_NAME_NODE)
     public NodeConfig getNodeConfig() {
         return nodeConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setNodeConfig(final NodeConfig nodeConfig) {
         this.nodeConfig = nodeConfig;
     }
@@ -363,6 +416,7 @@ public class AppConfig extends AbstractConfig {
         return pathConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setPathConfig(final PathConfig pathConfig) {
         this.pathConfig = pathConfig;
     }
@@ -372,6 +426,7 @@ public class AppConfig extends AbstractConfig {
         return pipelineConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setPipelineConfig(final PipelineConfig pipelineConfig) {
         this.pipelineConfig = pipelineConfig;
     }
@@ -381,6 +436,7 @@ public class AppConfig extends AbstractConfig {
         return processorConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setProcessorConfig(final ProcessorConfig processorConfig) {
         this.processorConfig = processorConfig;
     }
@@ -391,6 +447,7 @@ public class AppConfig extends AbstractConfig {
         return propertyServiceConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setPropertyServiceConfig(final PropertyServiceConfig propertyServiceConfig) {
         this.propertyServiceConfig = propertyServiceConfig;
     }
@@ -400,6 +457,7 @@ public class AppConfig extends AbstractConfig {
         return proxyAggregationConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setProxyAggregationConfig(final ProxyAggregationConfig proxyAggregationConfig) {
         this.proxyAggregationConfig = proxyAggregationConfig;
     }
@@ -409,6 +467,7 @@ public class AppConfig extends AbstractConfig {
         return storedQueryConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setStoredQueryConfig(final StoredQueryConfig storedQueryConfig) {
         this.storedQueryConfig = storedQueryConfig;
     }
@@ -418,6 +477,7 @@ public class AppConfig extends AbstractConfig {
         return receiveDataConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setReceiveDataConfig(final ReceiveDataConfig receiveDataConfig) {
         this.receiveDataConfig = receiveDataConfig;
     }
@@ -427,6 +487,7 @@ public class AppConfig extends AbstractConfig {
         return searchConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setSearchConfig(final SearchConfig searchConfig) {
         this.searchConfig = searchConfig;
     }
@@ -436,6 +497,7 @@ public class AppConfig extends AbstractConfig {
         return searchableConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setSearchableConfig(final SearchableConfig searchableConfig) {
         this.searchableConfig = searchableConfig;
     }
@@ -445,6 +507,7 @@ public class AppConfig extends AbstractConfig {
         return solrConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setSolrConfig(final SolrConfig solrConfig) {
         this.solrConfig = solrConfig;
     }
@@ -454,6 +517,7 @@ public class AppConfig extends AbstractConfig {
         return securityConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setSecurityConfig(final SecurityConfig securityConfig) {
         this.securityConfig = securityConfig;
     }
@@ -463,6 +527,7 @@ public class AppConfig extends AbstractConfig {
         return serviceDiscoveryConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setServiceDiscoveryConfig(final ServiceDiscoveryConfig serviceDiscoveryConfig) {
         this.serviceDiscoveryConfig = serviceDiscoveryConfig;
     }
@@ -472,6 +537,7 @@ public class AppConfig extends AbstractConfig {
         return sessionCookieConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setSessionCookieConfig(final SessionCookieConfig sessionCookieConfig) {
         this.sessionCookieConfig = sessionCookieConfig;
     }
@@ -482,16 +548,17 @@ public class AppConfig extends AbstractConfig {
         return statisticsConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setStatisticsConfig(final StatisticsConfig statisticsConfig) {
         this.statisticsConfig = statisticsConfig;
     }
 
-    @Valid
     @JsonProperty(PROP_NAME_UI)
     public UiConfig getUiConfig() {
         return uiConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setUiConfig(final UiConfig uiConfig) {
         this.uiConfig = uiConfig;
     }
@@ -501,6 +568,7 @@ public class AppConfig extends AbstractConfig {
         return volumeConfig;
     }
 
+    @SuppressWarnings("unused")
     public void setVolumeConfig(final VolumeConfig volumeConfig) {
         this.volumeConfig = volumeConfig;
     }

@@ -16,28 +16,17 @@
 
 package stroom.task.api;
 
-import stroom.util.shared.HasTerminate;
+import stroom.task.shared.TaskId;
 
 import java.util.function.Supplier;
 
-public interface TaskContext extends HasTerminate {
-    void setName(String name);
-
+public interface TaskContext {
     void info(Supplier<String> messageSupplier);
 
     /**
-     * Wrap a supplier in a sub task context that will be used when the supplier is executed.
+     * Get the task id of this context.
      *
-     * @param supplier The supplier to wrap.
-     * @return A task context wrapped supplier.
+     * @return The task id of this context.
      */
-    <U> Supplier<U> subTask(Supplier<U> supplier);
-
-    /**
-     * Wrap a runnable in a sub task context that will be used when the runnable is executed.
-     *
-     * @param runnable The runnable to wrap.
-     * @return A task context wrapped runnable.
-     */
-    Runnable subTask(Runnable runnable);
+    TaskId getTaskId();
 }

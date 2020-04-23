@@ -7,17 +7,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.util.ConsoleColour;
+import stroom.util.logging.LogUtil;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.RestResource;
 
 import javax.inject.Inject;
 import javax.ws.rs.Path;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 public class RestResources {
     private static final Logger LOGGER = LoggerFactory.getLogger(RestResources.class);
@@ -35,18 +31,18 @@ public class RestResources {
         LOGGER.info("Adding REST resources:");
 
         int maxNameLength = restResources.stream()
-            .mapToInt(restResource -> restResource.getClass().getName().length())
-            .max()
-            .orElse(0);
+                .mapToInt(restResource -> restResource.getClass().getName().length())
+                .max()
+                .orElse(0);
 
         final Set<String> allPaths = new HashSet<>();
 
         restResources.stream()
                 .map(restResource ->
-                    Tuple.of(
-                        restResource,
-                        restResource.getClass().getName(),
-                        getResourcePath(restResource).orElse("")))
+                        Tuple.of(
+                                restResource,
+                                restResource.getClass().getName(),
+                                getResourcePath(restResource).orElse("")))
                 .sorted(Comparator.comparing(Tuple3::_3))
                 .forEach(tuple3 -> {
                     final RestResource restResource = tuple3._1();
@@ -65,15 +61,14 @@ public class RestResources {
 
         if (allPaths.contains(resourcePath)) {
             LOGGER.error("\t{} => {}   {}",
-                StringUtils.rightPad(name, maxNameLength, " "),
-                resourcePath,
-                ConsoleColour.red("**Duplicate path**"));
-            // TODO uncomment this once the duplicates have been fixed
-//            throw new RuntimeException(LogUtil.message("Duplicate REST resource path {}", resourcePath));
+                    StringUtils.rightPad(name, maxNameLength, " "),
+                    resourcePath,
+                    ConsoleColour.red("**Duplicate path**"));
+            throw new RuntimeException(LogUtil.message("Duplicate REST resource path {}", resourcePath));
         } else {
             LOGGER.info("\t{} => {}",
-                StringUtils.rightPad(name, maxNameLength, " "),
-                resourcePath);
+                    StringUtils.rightPad(name, maxNameLength, " "),
+                    resourcePath);
         }
 
         environment.jersey().register(restResource);

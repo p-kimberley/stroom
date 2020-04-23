@@ -116,7 +116,7 @@ public class AppConfigMonitor implements Managed, HasHealthCheck {
             LOGGER.info("Starting config file modification watcher for {}", configFile.toAbsolutePath().normalize());
             while (true) {
                 if (Thread.currentThread().isInterrupted()) {
-                    LOGGER.debug("Thread interrupted, stopping watching directory {}", dirToWatch.toAbsolutePath());
+                    LOGGER.debug("Thread interrupted, stopping watching directory {}", dirToWatch.toAbsolutePath().normalize());
                     break;
                 }
 
@@ -246,7 +246,9 @@ public class AppConfigMonitor implements Managed, HasHealthCheck {
     }
 
     private ConfigValidator.Result validateNewConfig(final AppConfig newAppConfig) {
-        // Initialise a ConfigMapper on the new config tree so it will decorate all the paths
+        // Initialise a ConfigMapper on the new config tree so it will decorate all the paths,
+        // i.e. call setBasePath on each branch in the newAppConfig tree so if we get any violations we
+        // can log their locations with full paths.
         new ConfigMapper(newAppConfig);
 
         LOGGER.info("Validating modified config file");
@@ -268,7 +270,7 @@ public class AppConfigMonitor implements Managed, HasHealthCheck {
     @Override
     public void stop() throws Exception {
         if (isValidFile) {
-            LOGGER.info("Stopping file modification watcher for {}", configFile.toAbsolutePath());
+            LOGGER.info("Stopping file modification watcher for {}", configFile.toAbsolutePath().normalize());
 
             if (watchService != null) {
                 watchService.close();
@@ -299,7 +301,9 @@ public class AppConfigMonitor implements Managed, HasHealthCheck {
         }
 
         return resultBuilder
-                .withDetail("configFilePath", configFile)
+                .withDetail("configFilePath", configFile != null
+                    ? configFile.toAbsolutePath().normalize().toString()
+                    : null)
                 .withDetail("isRunning", isRunning)
                 .withDetail("isValidFile", isValidFile)
                 .build();

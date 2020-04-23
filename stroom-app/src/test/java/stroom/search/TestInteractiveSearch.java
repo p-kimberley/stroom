@@ -18,6 +18,7 @@
 package stroom.search;
 
 import org.apache.hadoop.util.ThreadUtil;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import stroom.annotation.api.AnnotationDataSource;
 import stroom.dictionary.impl.DictionaryStore;
@@ -37,21 +38,26 @@ import stroom.query.shared.v2.ParamUtil;
 import stroom.search.api.EventRef;
 import stroom.search.api.EventRefs;
 import stroom.search.impl.EventSearchTask;
-import stroom.task.api.TaskCallback;
-import stroom.task.api.TaskManager;
+import stroom.search.impl.EventSearchTaskHandler;
+import stroom.task.api.TaskContextFactory;
 import stroom.task.impl.ExecutorProviderImpl;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Disabled
 class TestInteractiveSearch extends AbstractSearchTest {
     @Inject
     private CommonIndexingTestHelper commonIndexingTestHelper;
@@ -60,7 +66,11 @@ class TestInteractiveSearch extends AbstractSearchTest {
     @Inject
     private DictionaryStore dictionaryStore;
     @Inject
-    private TaskManager taskManager;
+    private Executor executor;
+    @Inject
+    private TaskContextFactory taskContextFactory;
+    @Inject
+    private Provider<EventSearchTaskHandler> eventSearchTaskHandlerProvider;
     @Inject
     private ExecutorProviderImpl executorProvider;
 
@@ -449,18 +459,19 @@ class TestInteractiveSearch extends AbstractSearchTest {
         final EventSearchTask eventSearchTask = new EventSearchTask(query,
                 new EventRef(1, 1), new EventRef(Long.MAX_VALUE, Long.MAX_VALUE), 1000, 1000, 1000, 100);
         final AtomicReference<EventRefs> results = new AtomicReference<>();
-        taskManager.execAsync(eventSearchTask, new TaskCallback<EventRefs>() {
-            @Override
-            public void onSuccess(final EventRefs result) {
-                results.set(result);
-                complete.countDown();
-            }
 
-            @Override
-            public void onFailure(final Throwable t) {
-                complete.countDown();
-            }
+        final Supplier<EventRefs> supplier = taskContextFactory.contextResult("Translate", taskContext -> {
+            final EventSearchTaskHandler eventSearchTaskHandler = eventSearchTaskHandlerProvider.get();
+            return eventSearchTaskHandler.exec(eventSearchTask);
         });
+        CompletableFuture
+                .supplyAsync(supplier, executor)
+                .whenComplete((r, t) -> {
+                    if (r != null) {
+                        results.set(r);
+                    }
+                    complete.countDown();
+                });
 
         try {
             complete.await();

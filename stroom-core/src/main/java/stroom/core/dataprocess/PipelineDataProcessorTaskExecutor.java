@@ -22,23 +22,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MarkerFactory;
 import stroom.data.shared.StreamTypeNames;
-import stroom.data.store.api.InputStreamProvider;
-import stroom.data.store.api.SegmentInputStream;
-import stroom.data.store.api.Source;
-import stroom.data.store.api.Store;
-import stroom.data.store.api.Target;
+import stroom.data.store.api.*;
 import stroom.docref.DocRef;
 import stroom.docstore.shared.DocRefUtil;
 import stroom.feed.api.FeedProperties;
 import stroom.meta.api.AttributeMap;
-import stroom.meta.shared.Meta;
 import stroom.meta.api.MetaProperties;
+import stroom.meta.shared.Meta;
 import stroom.node.api.NodeInfo;
-import stroom.pipeline.DefaultErrorWriter;
-import stroom.pipeline.ErrorWriterProxy;
-import stroom.pipeline.LocationFactoryProxy;
-import stroom.pipeline.PipelineStore;
-import stroom.pipeline.StreamLocationFactory;
+import stroom.pipeline.*;
 import stroom.pipeline.destination.Destination;
 import stroom.pipeline.destination.DestinationProvider;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
@@ -51,14 +43,7 @@ import stroom.pipeline.factory.PipelineDataCache;
 import stroom.pipeline.factory.PipelineFactory;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.data.PipelineData;
-import stroom.pipeline.state.FeedHolder;
-import stroom.pipeline.state.MetaData;
-import stroom.pipeline.state.MetaDataHolder;
-import stroom.pipeline.state.MetaHolder;
-import stroom.pipeline.state.PipelineHolder;
-import stroom.pipeline.state.RecordCount;
-import stroom.pipeline.state.SearchIdHolder;
-import stroom.pipeline.state.StreamProcessorHolder;
+import stroom.pipeline.state.*;
 import stroom.pipeline.task.ProcessStatisticsFactory;
 import stroom.pipeline.task.ProcessStatisticsFactory.ProcessStatistics;
 import stroom.pipeline.task.StreamMetaDataProvider;
@@ -66,6 +51,8 @@ import stroom.pipeline.task.SupersededOutputHelper;
 import stroom.processor.api.DataProcessorTaskExecutor;
 import stroom.processor.api.InclusiveRanges;
 import stroom.processor.api.InclusiveRanges.InclusiveRange;
+import stroom.processor.api.ProcessorResult;
+import stroom.processor.api.ProcessorResultImpl;
 import stroom.processor.shared.Processor;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.ProcessorTask;
@@ -84,7 +71,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecutor {
@@ -98,7 +87,6 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
     private final PipelineFactory pipelineFactory;
     private final Store streamStore;
     private final PipelineStore pipelineStore;
-    private final TaskContext taskContext;
     private final PipelineHolder pipelineHolder;
     private final FeedHolder feedHolder;
     private final FeedProperties feedProperties;
@@ -128,7 +116,6 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
     PipelineDataProcessorTaskExecutor(final PipelineFactory pipelineFactory,
                                       final Store store,
                                       final PipelineStore pipelineStore,
-                                      final TaskContext taskContext,
                                       final PipelineHolder pipelineHolder,
                                       final FeedHolder feedHolder,
                                       final FeedProperties feedProperties,
@@ -149,7 +136,6 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
         this.pipelineFactory = pipelineFactory;
         this.streamStore = store;
         this.pipelineStore = pipelineStore;
-        this.taskContext = taskContext;
         this.pipelineHolder = pipelineHolder;
         this.feedHolder = feedHolder;
         this.feedProperties = feedProperties;
@@ -170,10 +156,11 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
     }
 
     @Override
-    public void exec(final Processor processor,
-                     final ProcessorFilter processorFilter,
-                     final ProcessorTask processorTask,
-                     final Source streamSource) {
+    public ProcessorResult exec(final TaskContext taskContext,
+                                final Processor processor,
+                                final ProcessorFilter processorFilter,
+                                final ProcessorTask processorTask,
+                                final Source streamSource) {
         this.streamProcessor = processor;
         this.processorFilter = processorFilter;
         this.streamTask = processorTask;
@@ -206,7 +193,7 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
                 errorWriter.addOutputStreamProvider(processInfoOutputStreamProvider);
                 errorWriterProxy.setErrorWriter(errorWriter);
 
-                process();
+                process(taskContext);
 
             } catch (final Exception e) {
                 outputError(e);
@@ -214,9 +201,21 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
         } catch (final IOException e) {
             LOGGER.error(e.getMessage(), e);
         }
+
+        // Produce processing result.
+        final long read = recordCount.getRead();
+        final long written = recordCount.getWritten();
+        final Map<Severity, Long> markerCounts = new HashMap<>();
+        if (errorReceiverProxy.getErrorReceiver() instanceof ErrorStatistics) {
+            final ErrorStatistics statistics = (ErrorStatistics) errorReceiverProxy.getErrorReceiver();
+            for (final Severity sev : statistics.getSeverities()) {
+                markerCounts.put(sev, statistics.getRecords(sev));
+            }
+        }
+        return new ProcessorResultImpl(read, written, markerCounts);
     }
 
-    private void process() {
+    private void process(final TaskContext taskContext) {
         String feedName = null;
         PipelineDoc pipelineDoc = null;
 
@@ -306,24 +305,27 @@ public class PipelineDataProcessorTaskExecutor implements DataProcessorTaskExecu
         }
     }
 
-    public long getRead() {
-        return recordCount.getRead();
-    }
-
-    public long getWritten() {
-        return recordCount.getWritten();
-    }
-
-    public long getMarkerCount(final Severity... severity) {
-        long count = 0;
-        if (errorReceiverProxy.getErrorReceiver() instanceof ErrorStatistics) {
-            final ErrorStatistics statistics = (ErrorStatistics) errorReceiverProxy.getErrorReceiver();
-            for (final Severity sev : severity) {
-                count += statistics.getRecords(sev);
-            }
-        }
-        return count;
-    }
+//    @Override
+//    public long getRead() {
+//        return recordCount.getRead();
+//    }
+//
+//    @Override
+//    public long getWritten() {
+//        return recordCount.getWritten();
+//    }
+//
+//    @Override
+//    public long getMarkerCount(final Severity... severity) {
+//        long count = 0;
+//        if (errorReceiverProxy.getErrorReceiver() instanceof ErrorStatistics) {
+//            final ErrorStatistics statistics = (ErrorStatistics) errorReceiverProxy.getErrorReceiver();
+//            for (final Severity sev : severity) {
+//                count += statistics.getRecords(sev);
+//            }
+//        }
+//        return count;
+//    }
 
     /**
      * Processes a source and writes the result to a target.

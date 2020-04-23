@@ -23,26 +23,23 @@ import stroom.dictionary.api.WordListProvider;
 import stroom.query.api.v2.ExpressionOperator;
 import stroom.query.api.v2.Query;
 import stroom.query.api.v2.SearchRequest;
-import stroom.query.common.v2.CompletionState;
-import stroom.query.common.v2.CoprocessorSettingsMap;
-import stroom.query.common.v2.SearchResultHandler;
-import stroom.query.common.v2.Sizes;
-import stroom.query.common.v2.Store;
-import stroom.query.common.v2.StoreFactory;
+import stroom.query.common.v2.*;
 import stroom.search.solr.CachedSolrIndex;
 import stroom.search.solr.SolrIndexCache;
 import stroom.search.solr.search.SearchExpressionQueryBuilder.SearchExpressionQuery;
 import stroom.search.solr.shared.SolrIndexDoc;
 import stroom.search.solr.shared.SolrIndexField;
 import stroom.security.api.SecurityContext;
-import stroom.task.api.TaskManager;
+import stroom.task.api.TaskContextFactory;
 import stroom.ui.config.shared.UiConfig;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -56,7 +53,9 @@ class SolrSearchStoreFactory implements StoreFactory {
 
     private final SolrIndexCache solrIndexCache;
     private final WordListProvider wordListProvider;
-    private final TaskManager taskManager;
+    private final Executor executor;
+    private final TaskContextFactory taskContextFactory;
+    private final Provider<SolrAsyncSearchTaskHandler> solrAsyncSearchTaskHandlerProvider;
     private final SolrSearchConfig searchConfig;
     private final UiConfig clientConfig;
     private final SecurityContext securityContext;
@@ -64,13 +63,17 @@ class SolrSearchStoreFactory implements StoreFactory {
     @Inject
     public SolrSearchStoreFactory(final SolrIndexCache solrIndexCache,
                                   final WordListProvider wordListProvider,
-                                  final TaskManager taskManager,
+                                  final Executor executor,
+                                  final TaskContextFactory taskContextFactory,
+                                  final Provider<SolrAsyncSearchTaskHandler> solrAsyncSearchTaskHandlerProvider,
                                   final SolrSearchConfig searchConfig,
                                   final UiConfig clientConfig,
                                   final SecurityContext securityContext) {
         this.solrIndexCache = solrIndexCache;
         this.wordListProvider = wordListProvider;
-        this.taskManager = taskManager;
+        this.executor = executor;
+        this.taskContextFactory = taskContextFactory;
+        this.solrAsyncSearchTaskHandlerProvider = solrAsyncSearchTaskHandlerProvider;
         this.searchConfig = searchConfig;
         this.clientConfig = clientConfig;
         this.securityContext = securityContext;
@@ -96,7 +99,6 @@ class SolrSearchStoreFactory implements StoreFactory {
         // Create an asynchronous search task.
         final String searchName = "Search '" + searchRequest.getKey().toString() + "'";
         final SolrAsyncSearchTask asyncSearchTask = new SolrAsyncSearchTask(
-                null,
                 searchName,
                 query,
                 SEND_INTERACTIVE_SEARCH_RESULT_FREQUENCY,
@@ -116,7 +118,9 @@ class SolrSearchStoreFactory implements StoreFactory {
 
         // Create the search result collector.
         final SolrSearchResultCollector searchResultCollector = SolrSearchResultCollector.create(
-                taskManager,
+                executor,
+                taskContextFactory,
+                solrAsyncSearchTaskHandlerProvider,
                 asyncSearchTask,
                 highlights,
                 resultHandler,

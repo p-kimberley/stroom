@@ -20,25 +20,27 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.fusesource.restygwt.client.DirectRestService;
 import stroom.meta.shared.FindMetaCriteria;
+import stroom.pipeline.shared.AbstractFetchDataResult;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.RestResource;
 
 import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
 @Api(value = "data - /v1")
 @Path("/data" + ResourcePaths.V1)
 @Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public interface DataResource extends RestResource, DirectRestService {
     @POST
     @Path("download")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Download matching data",
             response = ResourceGeneration.class)
@@ -46,10 +48,16 @@ public interface DataResource extends RestResource, DirectRestService {
 
     @POST
     @Path("upload")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Upload data",
             response = ResourceGeneration.class)
     ResourceKey upload(UploadDataRequest request);
+
+    @GET
+    AbstractFetchDataResult fetchData(
+            final @QueryParam("streamId") Long streamId,
+            final @QueryParam("streamsOffset") Long streamsOffset,
+            final @QueryParam("streamsLength") Long streamsLength,
+            final @QueryParam("pageOffset") Long pageOffset,
+            final @QueryParam("pageSize") Long pageSize);
 }

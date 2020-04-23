@@ -25,6 +25,7 @@ import java.util.List;
         description = "Stroom Authorisation API")
 @Path("/users" + ResourcePaths.V1)
 @Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public interface UserResource extends RestResource, DirectRestService {
     @GET
     List<User> get(@QueryParam("name") String name,
@@ -39,17 +40,17 @@ public interface UserResource extends RestResource, DirectRestService {
     @Path("/{userUuid}")
     User get(@PathParam("userUuid") String userUuid);
 
-    @GET
-    @Path("/usersInGroup/{groupUuid}")
-    List<User> findUsersInGroup(@PathParam("groupUuid") String groupUuid);
-
-    @GET
-    @Path("/groupsForUserName/{userName}")
-    List<User> findGroupsForUserName(@PathParam("userName") String userName);
-
-    @GET
-    @Path("/groupsForUser/{userUuid}")
-    List<User> findGroupsForUser(@PathParam("userUuid") String userUuid);
+//    @GET
+//    @Path("/usersInGroup/{groupUuid}")
+//    ResultPage<User> findUsersInGroup(@PathParam("groupUuid") String groupUuid);
+//
+//    @GET
+//    @Path("/groupsForUserName/{userName}")
+//    ResultPage<User> findGroupsForUserName(@PathParam("userName") String userName);
+//
+//    @GET
+//    @Path("/groupsForUser/{userUuid}")
+//    ResultPage<User> findGroupsForUser(@PathParam("userUuid") String userUuid);
 
     @POST
     @Path("/create/{name}/{isGroup}")
@@ -76,8 +77,6 @@ public interface UserResource extends RestResource, DirectRestService {
 
     @GET
     @Path("associates")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Gets a list of associated users",
             response = Response.class)

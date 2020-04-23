@@ -21,11 +21,7 @@ package stroom.pipeline.task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.data.shared.StreamTypeNames;
-import stroom.data.store.api.Source;
-import stroom.data.store.api.SourceUtil;
-import stroom.data.store.api.Store;
-import stroom.data.store.api.Target;
-import stroom.data.store.api.TargetUtil;
+import stroom.data.store.api.*;
 import stroom.docref.DocRef;
 import stroom.feed.api.FeedProperties;
 import stroom.feed.api.FeedStore;
@@ -33,24 +29,25 @@ import stroom.feed.shared.FeedDoc;
 import stroom.importexport.impl.ImportExportSerializer;
 import stroom.importexport.shared.ImportState.ImportMode;
 import stroom.meta.api.AttributeMap;
-import stroom.meta.shared.FindMetaCriteria;
-import stroom.meta.shared.Meta;
-import stroom.meta.shared.MetaFields;
 import stroom.meta.api.MetaProperties;
 import stroom.meta.api.MetaService;
 import stroom.meta.api.StandardHeaderArguments;
+import stroom.meta.shared.FindMetaCriteria;
+import stroom.meta.shared.Meta;
+import stroom.meta.shared.MetaFields;
 import stroom.node.api.NodeInfo;
 import stroom.pipeline.PipelineStore;
 import stroom.pipeline.shared.SharedElementData;
+import stroom.pipeline.shared.stepping.PipelineStepRequest;
 import stroom.pipeline.shared.stepping.SharedStepData;
 import stroom.pipeline.shared.stepping.StepType;
 import stroom.pipeline.shared.stepping.SteppingResult;
-import stroom.pipeline.stepping.SteppingTask;
+import stroom.pipeline.stepping.SteppingService;
 import stroom.processor.api.ProcessorFilterService;
 import stroom.processor.api.ProcessorService;
-import stroom.processor.impl.DataProcessorTask;
 import stroom.processor.impl.ProcessorTaskManager;
 import stroom.processor.shared.ProcessorTask;
+import stroom.processor.shared.ProcessorTaskList;
 import stroom.processor.shared.QueryData;
 import stroom.query.api.v2.ExpressionOperator;
 import stroom.query.api.v2.ExpressionOperator.Op;
@@ -58,9 +55,9 @@ import stroom.query.api.v2.ExpressionTerm;
 import stroom.query.api.v2.ExpressionTerm.Condition;
 import stroom.receive.common.StreamTargetStroomStreamHandler;
 import stroom.receive.common.StroomStreamProcessor;
-import stroom.task.api.SimpleTaskContext;
 import stroom.task.api.TaskManager;
 import stroom.test.AbstractCoreIntegrationTest;
+import stroom.test.CommonTranslationTestHelper;
 import stroom.test.ContentImportService;
 import stroom.test.common.ComparisonHelper;
 import stroom.test.common.StroomCoreServerTestFileUtil;
@@ -70,21 +67,11 @@ import stroom.util.io.StreamUtil;
 import stroom.util.shared.Indicators;
 
 import javax.inject.Inject;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -98,6 +85,8 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
     private ProcessorTaskManager processorTaskManager;
     @Inject
     private TaskManager taskManager;
+    @Inject
+    private SteppingService steppingService;
     @Inject
     private FeedStore feedStore;
     @Inject
@@ -116,6 +105,8 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
     private ImportExportSerializer importExportSerializer;
     @Inject
     private ContentImportService contentImportService;
+    @Inject
+    private CommonTranslationTestHelper commonTranslationTestHelper;
 
     /**
      * NOTE some of the input data for this test is buried in the following zip file so you will need
@@ -213,14 +204,14 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
 
         addStream(inputFile, feed);
 
-        processorTaskManager.createTasks(new SimpleTaskContext());
+        processorTaskManager.createTasks();
 
-        List<DataProcessorTask> tasks = getTasks();
+        List<ProcessorTask> tasks = getTasks();
         assertThat(tasks.size()).as("There should be one task here").isEqualTo(1);
 
-        for (final DataProcessorTask task : tasks) {
+        for (final ProcessorTask task : tasks) {
             final long startStreamId = getLatestStreamId();
-            taskManager.exec(task);
+            commonTranslationTestHelper.process(task);
             final long endStreamId = getLatestStreamId();
 
             if (compareOutput) {
@@ -236,14 +227,14 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
                             String errorStreamStr = SourceUtil.readString(errorStreamSource);
 
 //                            try (final InputStreamProvider inputStreamProvider = errorStreamSource.get(0)) {
-                                //got an error stream so dump it to console
+                            //got an error stream so dump it to console
 
-                                Meta parentMeta = metaService.getMeta(meta.getParentMetaId());
+                            Meta parentMeta = metaService.getMeta(meta.getParentMetaId());
 
 //                                String errorStreamStr = StreamUtil.streamToString(inputStreamProvider.get());
 //                                java.util.stream.Stream<String> errorStreamLines = StreamUtil.streamToLines(inputStreamProvider.get());
-                                LOGGER.warn("Meta {} with parent {} of type {} has errors:\n{}",
-                                        meta, parentMeta.getId(), parentMeta.getTypeName(), errorStreamStr);
+                            LOGGER.warn("Meta {} with parent {} of type {} has errors:\n{}",
+                                    meta, parentMeta.getId(), parentMeta.getTypeName(), errorStreamStr);
 
 //                            // only dump warning if debug enabled
 //                            if (LOGGER.isDebugEnabled()) {
@@ -356,22 +347,20 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
      *
      * @return The next task or null if there are currently no more tasks.
      */
-    private List<DataProcessorTask> getTasks() {
-        List<DataProcessorTask> dataProcessorTasks = Collections.emptyList();
-
-        List<ProcessorTask> processorTasks = processorTaskManager.assignTasks(nodeInfo.getThisNodeName(), 100);
-        while (processorTasks.size() > 0) {
-            dataProcessorTasks = new ArrayList<>(processorTasks.size());
-            for (final ProcessorTask processorTask : processorTasks) {
-                dataProcessorTasks.add(new DataProcessorTask(processorTask));
-            }
+    private List<ProcessorTask> getTasks() {
+        ProcessorTaskList processorTasks = processorTaskManager.assignTasks(nodeInfo.getThisNodeName(), 100);
+        List<ProcessorTask> list = processorTasks.getList();
+        final List<ProcessorTask> dataProcessorTasks = new ArrayList<>(list.size());
+        while (list.size() > 0) {
+            dataProcessorTasks.addAll(list);
             processorTasks = processorTaskManager.assignTasks(nodeInfo.getThisNodeName(), 100);
+            list = processorTasks.getList();
         }
 
         return dataProcessorTasks;
     }
 
-    protected void testSteppingTask(final String feedName, final Path dir) throws IOException {
+    protected void testSteppingTask(final String feedName, final Path dir) {
         final List<Exception> exceptions = new ArrayList<>();
 
         // feedCriteria.setFeedType(FeedType.REFERENCE);
@@ -396,7 +385,7 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
         findMetaCriteria.setExpression(expression);
         findMetaCriteria.obtainSelectedIdSet().setMatchAll(Boolean.TRUE);
 
-        final SteppingTask action = new SteppingTask();
+        final PipelineStepRequest action = new PipelineStepRequest();
         action.setPipeline(pipelineRef);
         action.setCriteria(findMetaCriteria);
 
@@ -453,13 +442,13 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
         }
     }
 
-    private SteppingResult step(final StepType direction, final int steps, final SteppingTask request,
+    private SteppingResult step(final StepType direction, final int steps, final PipelineStepRequest request,
                                 final SteppingResult existingResponse) {
         SteppingResult newResponse = existingResponse;
 
         for (int i = 0; i < steps; i++) {
             request.setStepType(direction);
-            final SteppingResult stepResponse = taskManager.exec(request);
+            final SteppingResult stepResponse = steppingService.step(request);
 
             if (stepResponse.getGeneralErrors() != null && stepResponse.getGeneralErrors().size() > 0) {
                 throw new RuntimeException(stepResponse.getGeneralErrors().iterator().next());
@@ -537,7 +526,7 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
         return newResponse;
     }
 
-    private void write(final Path file, final String data) throws IOException {
+    private void write(final Path file, final String data) {
         // We need to remove event id's because they change every time.
         final String tmp = data.replaceAll("<Event Id=\"[^\"]+\"", "<Event");
         StreamUtil.stringToFile(tmp, file);

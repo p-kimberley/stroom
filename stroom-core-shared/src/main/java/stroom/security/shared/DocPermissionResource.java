@@ -18,11 +18,10 @@ import java.util.List;
 @Api(value = "application permissions - /v1")
 @Path("/permission/doc" + ResourcePaths.V1)
 @Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public interface DocPermissionResource extends RestResource, DirectRestService {
     @POST
     @Path("/changeDocumentPermissions")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Change document permissions",
             response = Boolean.class)
@@ -30,8 +29,6 @@ public interface DocPermissionResource extends RestResource, DirectRestService {
 
     @POST
     @Path("/copyPermissionsFromParent")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Copy permissions from parent",
             response = DocumentPermissions.class)
@@ -40,8 +37,6 @@ public interface DocPermissionResource extends RestResource, DirectRestService {
 
     @POST
     @Path("/fetchAllDocumentPermissions")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Fetch document permissions",
             response = DocumentPermissions.class)
@@ -49,8 +44,6 @@ public interface DocPermissionResource extends RestResource, DirectRestService {
 
     @POST
     @Path("/checkDocumentPermission")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Check document permission",
             response = Boolean.class)
@@ -58,8 +51,6 @@ public interface DocPermissionResource extends RestResource, DirectRestService {
 
     @GET
     @Path("/getPermissionForDocType/${docType}")
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(
             value = "Get all permissions for a given document type",
             response = List.class)

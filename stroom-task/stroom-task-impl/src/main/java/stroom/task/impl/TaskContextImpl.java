@@ -18,62 +18,153 @@ package stroom.task.impl;
 
 import stroom.security.api.UserIdentity;
 import stroom.task.api.TaskContext;
-import stroom.task.api.TaskIdFactory;
 import stroom.task.shared.TaskId;
-import stroom.util.logging.LogExecutionTime;
 
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-class TaskContextImpl implements TaskContext {
-    private final TaskManagerImpl taskManager;
-    private final TaskId parentTaskId;
+public class TaskContextImpl implements TaskContext {
+    private final TaskId taskId;
     private final UserIdentity userIdentity;
-    private final String taskName;
+    private final String name;
+    private final long submitTimeMs = System.currentTimeMillis();
+    private final Set<TaskContextImpl> children = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    TaskContextImpl(final TaskManagerImpl taskManager, final TaskId parentTaskId, final String taskName, final UserIdentity userIdentity) {
-        Objects.requireNonNull(taskName, "Task has null name");
-        Objects.requireNonNull(userIdentity, "Task has null user identity: " + taskName);
+    private volatile boolean terminate;
+    private volatile Supplier<String> messageSupplier;
+    private volatile Thread thread;
 
-        this.taskManager = taskManager;
-        this.parentTaskId = parentTaskId;
+    public TaskContextImpl(final TaskId taskId, final String name, final UserIdentity userIdentity) {
+        Objects.requireNonNull(taskId, "Task has null id");
+        Objects.requireNonNull(name, "Task has null name");
+        Objects.requireNonNull(userIdentity, "Task has null user identity: " + name);
+
+        this.taskId = taskId;
         this.userIdentity = userIdentity;
-        this.taskName = taskName;
-    }
-
-    @Override
-    public void setName(final String name) {
-        CurrentTaskState.setName(name);
+        this.name = name;
     }
 
     @Override
     public void info(final Supplier<String> messageSupplier) {
-        CurrentTaskState.info(messageSupplier);
+        this.messageSupplier = messageSupplier;
     }
 
     @Override
-    public void terminate() {
-        CurrentTaskState.terminate();
+    public TaskId getTaskId() {
+        return taskId;
+    }
+
+    synchronized void terminate() {
+        this.terminate = true;
+        children.forEach(TaskContextImpl::terminate);
+
+        interrupt();
+    }
+
+    UserIdentity getUserIdentity() {
+        return userIdentity;
+    }
+
+    String getUserId() {
+        if (userIdentity != null) {
+            return userIdentity.getId();
+        }
+        return null;
+    }
+
+    String getSessionId() {
+        if (userIdentity != null) {
+            return userIdentity.getSessionId();
+        }
+        return null;
+    }
+
+    synchronized void setThread(final Thread thread) {
+        this.thread = thread;
+        if (terminate) {
+            interrupt();
+        }
+    }
+
+    boolean isTerminated() {
+        final Thread thread = this.thread;
+        if (thread != null) {
+            if (thread.isInterrupted()) {
+                // Make sure the thread hasn't been reassigned.
+                if (thread == this.thread) {
+                    return true;
+                }
+            }
+        }
+
+        return terminate;
+    }
+
+    synchronized void interrupt() {
+        final Thread thread = this.thread;
+        if (thread != null) {
+            thread.interrupt();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    synchronized void kill() {
+        final Thread thread = this.thread;
+        if (thread != null) {
+            thread.stop();
+        }
+    }
+
+    String getThreadName() {
+        final Thread thread = this.thread;
+        if (thread != null) {
+            return thread.getName();
+        }
+        return null;
+    }
+
+    long getSubmitTimeMs() {
+        return submitTimeMs;
+    }
+
+    String getName() {
+        String name = this.name;
+        if (terminate) {
+            name = "<<terminated>> " + name;
+        }
+
+        return name;
+    }
+
+
+    String getInfo() {
+        final Supplier<String> messageSupplier = this.messageSupplier;
+        if (messageSupplier != null) {
+            return messageSupplier.get();
+        }
+        return "";
+    }
+
+    synchronized void addChild(final TaskContextImpl taskState) {
+        children.add(taskState);
+        if (terminate) {
+            taskState.terminate();
+        }
+    }
+
+    void removeChild(final TaskContextImpl taskState) {
+        children.remove(taskState);
+    }
+
+    Set<TaskContextImpl> getChildren() {
+        return children;
     }
 
     @Override
-    public <U> Supplier<U> subTask(final Supplier<U> supplier) {
-        final LogExecutionTime logExecutionTime = new LogExecutionTime();
-
-        // We might need to be able to retrieve the associate task handler
-        // right away so associate it here before we execute as the task
-        // will run asynchronously.
-        final TaskId taskId = TaskIdFactory.create(parentTaskId);
-        return taskManager.wrapSupplier(taskId, taskName, userIdentity, supplier, logExecutionTime);
-    }
-
-    @Override
-    public Runnable subTask(final Runnable runnable) {
-        final Supplier<Void> supplierIn = () -> {
-            runnable.run();
-            return null;
-        };
-        final Supplier<Void> supplierOut = subTask(supplierIn);
-        return supplierOut::get;
+    public String toString() {
+        return getInfo();
     }
 }

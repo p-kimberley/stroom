@@ -26,6 +26,7 @@ dependencies {
     compile project(':stroom-security:stroom-security-api')
     compile project(':stroom-security:stroom-security-mock')
     compile project(':stroom-task:stroom-task-api')
+    compile project(':stroom-task:stroom-task-impl')
     compile project(':stroom-util')
     compile project(':stroom-util-shared')
     
@@ -59,6 +60,8 @@ dependencies {
 
     testCompile libs.assertj_core
     testCompile libs.mockito_junit_jupiter
+    testCompile libs.classgraph
+    testCompile libs.guice_grapher
 
     testCompile libs.junit_jupiter_api
 

@@ -22,6 +22,7 @@ import io.dropwizard.Application;
 import io.dropwizard.assets.AssetsBundle;
 import io.dropwizard.configuration.EnvironmentVariableSubstitutor;
 import io.dropwizard.configuration.SubstitutingSourceProvider;
+import io.dropwizard.jersey.sessions.SessionFactoryProvider;
 import io.dropwizard.servlets.tasks.LogConfigurationTask;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -31,16 +32,15 @@ import org.glassfish.jersey.logging.LoggingFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.app.commands.DbMigrationCommand;
-import stroom.app.errors.NodeCallExceptionMapper;
 import stroom.app.guice.AppModule;
 import stroom.config.app.AppConfig;
 import stroom.config.app.Config;
 import stroom.config.global.impl.ConfigMapper;
 import stroom.config.global.impl.validation.ConfigValidator;
+import stroom.dropwizard.common.DelegatingExceptionMapper;
 import stroom.dropwizard.common.Filters;
 import stroom.dropwizard.common.HealthChecks;
 import stroom.dropwizard.common.ManagedServices;
-import stroom.dropwizard.common.PermissionExceptionMapper;
 import stroom.dropwizard.common.RestResources;
 import stroom.dropwizard.common.Servlets;
 import stroom.dropwizard.common.SessionListeners;
@@ -48,8 +48,8 @@ import stroom.security.impl.AuthenticationConfig;
 import stroom.security.impl.ContentSecurityConfig;
 import stroom.util.ColouredStringBuilder;
 import stroom.util.ConsoleColour;
-import stroom.util.shared.ResourcePaths;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.ResourcePaths;
 
 import javax.inject.Inject;
 import javax.servlet.DispatcherType;
@@ -65,6 +65,11 @@ import java.util.logging.Level;
 public class App extends Application<Config> {
     private static final Logger LOGGER = LoggerFactory.getLogger(App.class);
 
+    private static final String GWT_SUPER_DEV_SYSTEM_PROP_NAME = "gwtSuperDevMode";
+    public static final String SESSION_COOKIE_NAME = "STROOM_SESSION_ID";
+    private static final boolean SUPER_DEV_AUTHENTICATION_REQUIRED_VALUE = false;
+    private static final String SUPER_DEV_CONTENT_SECURITY_POLICY_VALUE = "";
+
     @Inject
     private HealthChecks healthChecks;
     @Inject
@@ -73,6 +78,8 @@ public class App extends Application<Config> {
     private Servlets servlets;
     @Inject
     private SessionListeners sessionListeners;
+    @Inject
+    private DelegatingExceptionMapper delegatingExceptionMapper;
     @Inject
     private RestResources restResources;
     @Inject
@@ -102,7 +109,21 @@ public class App extends Application<Config> {
                 bootstrap.getConfigurationSourceProvider(),
                 new EnvironmentVariableSubstitutor(false)));
 
-        bootstrap.addBundle(new AssetsBundle("/ui", ResourcePaths.ROOT_PATH, "index.html", "ui"));
+        // Add the GWT UI assets.
+        bootstrap.addBundle(new AssetsBundle(
+                "/ui",
+                ResourcePaths.ROOT_PATH,
+                "index.html",
+                "ui"));
+
+        // Add the new React UI assets. Note that the React UI uses sub paths for navigation using the React BrowserRouter.
+        // This always needs the root page to be served regardless of the path requested so we need to use a special asset bundle to achieve this.
+        bootstrap.addBundle(new BrowserRouterAssetsBundle(
+                "/new-ui",
+                "/",
+                "index.html",
+                "new-ui",
+                ResourcePaths.SINGLE_PAGE_PREFIX));
 
         // Add a DW Command so we can run the full migration without running the
         // http server
@@ -117,13 +138,16 @@ public class App extends Application<Config> {
     public void run(final Config configuration, final Environment environment) {
         LOGGER.info("Using application configuration file {}", configFile.toAbsolutePath().normalize());
 
-        // Turn on Jersey logging.
+        // Turn on Jersey logging of request/response payloads
+        // I can't seem to get this to work unless Level is SEVERE
+        // TODO need to establish if there is a performance hit for using the JUL to SLF bridge
+        //   see http://www.slf4j.org/legacy.html#jul-to-slf4j
         environment.jersey().register(
                 new LoggingFeature(
-                    java.util.logging.Logger.getLogger(LoggingFeature.DEFAULT_LOGGER_NAME),
-                    Level.INFO,
-                    LoggingFeature.Verbosity.PAYLOAD_ANY,
-                    LoggingFeature.DEFAULT_MAX_ENTITY_SIZE));
+                        java.util.logging.Logger.getLogger(LoggingFeature.DEFAULT_LOGGER_NAME),
+                        Level.INFO,
+                        LoggingFeature.Verbosity.PAYLOAD_ANY,
+                        LoggingFeature.DEFAULT_MAX_ENTITY_SIZE));
 
         // Check if we are running GWT Super Dev Mode
         checkForSuperDev(configuration.getAppConfig());
@@ -131,14 +155,14 @@ public class App extends Application<Config> {
         // Add useful logging setup.
         registerLogConfiguration(environment);
 
-        // Add jersey exception mappers
-        registerExceptionMappers(environment);
-
         // We want Stroom to use the root path so we need to move Dropwizard's path.
         environment.jersey().setUrlPattern(ResourcePaths.API_ROOT_PATH + "/*");
 
         // Set up a session handler for Jetty
-        environment.servlets().setSessionHandler(new SessionHandler());
+        configureSessionHandling(environment);
+
+        // Ensure the session cookie that provides JSESSIONID is secure.
+        configureSessionCookie(environment, configuration.getAppConfig().getSessionCookieConfig());
 
         // Configure Cross-Origin Resource Sharing.
         configureCors(environment);
@@ -171,33 +195,18 @@ public class App extends Application<Config> {
         // Add all injectable rest resources.
         restResources.register();
 
-        // Map exceptions to helpful HTTP responses
-        environment.jersey().register(PermissionExceptionMapper.class);
+        // Add jersey exception mappers.
+        environment.jersey().register(delegatingExceptionMapper);
 
         // Listen to the lifecycle of the Dropwizard app.
         managedServices.register();
-
-        // Ensure the session cookie that provides JSESSIONID is secure.
-        final SessionCookieConfig sessionCookieConfig = environment
-                .getApplicationContext()
-                .getServletContext()
-                .getSessionCookieConfig();
-        sessionCookieConfig.setSecure(configuration.getAppConfig().getSessionCookieConfig().isSecure());
-        sessionCookieConfig.setHttpOnly(configuration.getAppConfig().getSessionCookieConfig().isHttpOnly());
-        // TODO : Add `SameSite=Strict` when supported by JEE
-    }
-
-
-    private void registerExceptionMappers(final Environment environment) {
-        // Add an exception mapper for dealing with our own NodeCallExceptions
-        environment.jersey().register(NodeCallExceptionMapper.class);
     }
 
     private String getNodeName(final AppConfig appConfig) {
         return appConfig != null
                 ? (appConfig.getNodeConfig() != null
-                    ? appConfig.getNodeConfig().getNodeName()
-                    : null)
+                ? appConfig.getNodeConfig().getNodeName()
+                : null)
                 : null;
     }
 
@@ -209,19 +218,20 @@ public class App extends Application<Config> {
         final ConfigValidator configValidator = injector.getInstance(ConfigValidator.class);
 
         LOGGER.info("Validating application configuration file {}",
-            configFile.toAbsolutePath().normalize().toString());
+                configFile.toAbsolutePath().normalize().toString());
 
-        ConfigValidator.Result result = configValidator.validate(appConfig);
+        final ConfigValidator.Result result = configValidator.validateRecursively(appConfig);
+
         result.handleViolations(ConfigValidator::logConstraintViolation);
 
         LOGGER.info("Completed validation of application configuration, errors: {}, warnings: {}",
-            result.getErrorCount(),
-            result.getWarningCount());
+                result.getErrorCount(),
+                result.getWarningCount());
 
         if (result.hasErrors() && appConfig.isHaltBootOnConfigValidationFailure()) {
             LOGGER.error("Application configuration is invalid. Stopping Stroom. To run Stroom with invalid " +
-                    "configuration, set {} to false. This is not advised!",
-                appConfig.getFullPath(AppConfig.PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE));
+                            "configuration, set {} to false. This is not advised!",
+                    appConfig.getFullPath(AppConfig.PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE));
             System.exit(1);
         }
     }
@@ -240,13 +250,34 @@ public class App extends Application<Config> {
                     // local.yaml.sh
                     throw new IllegalArgumentException(LogUtil.message(
                             "YAML config file [{}] from arguments [{}] is not a valid file.\n" +
-                            "You need to supply a valid stroom configuration YAML file.",
+                                    "You need to supply a valid stroom configuration YAML file.",
                             yamlFile, Arrays.asList(args)));
                 }
             }
         }
         throw new IllegalArgumentException(LogUtil.message("Could not extract YAML config file from arguments [{}]",
                 Arrays.asList(args)));
+    }
+
+    private static void configureSessionHandling(final Environment environment) {
+        SessionHandler sessionHandler = new SessionHandler();
+        // We need to give our session cookie a name other than JSESSIONID, otherwise it might
+        // clash with other services running on the same domain.
+        sessionHandler.setSessionCookie(SESSION_COOKIE_NAME);
+        environment.servlets().setSessionHandler(sessionHandler);
+        environment.jersey().register(SessionFactoryProvider.class);
+    }
+
+    private static void configureSessionCookie(final Environment environment,
+                                               final stroom.config.app.SessionCookieConfig config) {
+        // Ensure the session cookie that provides JSESSIONID is secure.
+        final SessionCookieConfig sessionCookieConfig = environment
+                .getApplicationContext()
+                .getServletContext()
+                .getSessionCookieConfig();
+        sessionCookieConfig.setSecure(config.isSecure());
+        sessionCookieConfig.setHttpOnly(config.isHttpOnly());
+        // TODO : Add `SameSite=Strict` when supported by JEE
     }
 
     private static void configureCors(io.dropwizard.setup.Environment environment) {
@@ -271,44 +302,66 @@ public class App extends Application<Config> {
     }
 
     private void checkForSuperDev(final AppConfig appConfig) {
-        if (appConfig.isSuperDevMode()) {
-            LOGGER.warn("\n" + ConsoleColour.red(
+        // If sys prop gwtSuperDevMode=true then override other config props
+        // i.e. use a run configuration with arg '-DgwtSuperDevMode=true'
+        if (Boolean.getBoolean(GWT_SUPER_DEV_SYSTEM_PROP_NAME)) {
+            LOGGER.warn("" + ConsoleColour.red(
+                    "" +
+                            "\n                                      _                                  _      " +
+                            "\n                                     | |                                | |     " +
+                            "\n      ___ _   _ _ __   ___ _ __    __| | _____   __  _ __ ___   ___   __| | ___ " +
+                            "\n     / __| | | | '_ \\ / _ \\ '__|  / _` |/ _ \\ \\ / / | '_ ` _ \\ / _ \\ / _` |/ _ \\" +
+                            "\n     \\__ \\ |_| | |_) |  __/ |    | (_| |  __/\\ V /  | | | | | | (_) | (_| |  __/" +
+                            "\n     |___/\\__,_| .__/ \\___|_|     \\__,_|\\___| \\_/   |_| |_| |_|\\___/ \\__,_|\\___|" +
+                            "\n               | |                                                              " +
+                            "\n               |_|                                                              " +
+                            "\n"));
 
-                "\n                                      _                                  _      " +
-                    "\n                                     | |                                | |     " +
-                    "\n      ___ _   _ _ __   ___ _ __    __| | _____   __  _ __ ___   ___   __| | ___ " +
-                    "\n     / __| | | | '_ \\ / _ \\ '__|  / _` |/ _ \\ \\ / / | '_ ` _ \\ / _ \\ / _` |/ _ \\" +
-                    "\n     \\__ \\ |_| | |_) |  __/ |    | (_| |  __/\\ V /  | | | | | | (_) | (_| |  __/" +
-                    "\n     |___/\\__,_| .__/ \\___|_|     \\__,_|\\___| \\_/   |_| |_| |_|\\___/ \\__,_|\\___|" +
-                    "\n               | |                                                              " +
-                    "\n               |_|                                                              " +
-                    "\n" +
-                    "\n     FOR DEVELOPER USE ONLY!  DO NOT RUN IN PRODUCTION ENVIRONMENTS!\n"));
+//            disableAuthentication(appConfig);
 
-            final AuthenticationConfig authenticationConfig = appConfig.getSecurityConfig().getAuthenticationConfig();
-            final ContentSecurityConfig contentSecurityConfig = appConfig.getSecurityConfig().getContentSecurityConfig();
+            // Super Dev Mode isn't compatible with HTTPS so ensure cookies are not secure.
+            appConfig.getSessionCookieConfig().setSecure(false);
 
-            String msg = new ColouredStringBuilder()
-                .appendRed("In Super Dev Mode, setting ")
-                .appendCyan(AuthenticationConfig.PROP_NAME_AUTHENTICATION_REQUIRED)
-                .appendRed(" to ")
-                .appendCyan("false ")
-                .appendRed("in appConfig")
-                .toString();
-
-            LOGGER.warn(msg);
-            authenticationConfig.setAuthenticationRequired(false);
-
-            msg = new ColouredStringBuilder()
-                .appendRed("In Super Dev Mode, setting ")
-                .appendCyan(ContentSecurityConfig.PROP_NAME_CONTENT_SECURITY_POLICY)
-                .appendRed(" to ")
-                .appendCyan("\"\" ")
-                .appendRed("in appConfig")
-                .toString();
-
-            LOGGER.warn(msg);
-            contentSecurityConfig.setContentSecurityPolicy("");
+            // The standard content security policy is incompatible with GWT super dev mode
+            disableContentSecurity(appConfig);
         }
+    }
+
+    private void disableAuthentication(final AppConfig appConfig) {
+        LOGGER.warn("\n" + ConsoleColour.red(
+                "" +
+                        "\n           ***************************************************************" +
+                        "\n           FOR DEVELOPER USE ONLY!  DO NOT RUN IN PRODUCTION ENVIRONMENTS!" +
+                        "\n" +
+                        "\n                          ALL AUTHENTICATION IS DISABLED!" +
+                        "\n           ***************************************************************"));
+
+        final AuthenticationConfig authenticationConfig = appConfig.getSecurityConfig().getAuthenticationConfig();
+
+        // Auth needs HTTPS and GWT super dev mode cannot work in HTTPS
+        String msg = new ColouredStringBuilder()
+                .appendRed("In GWT Super Dev Mode, overriding ")
+                .appendCyan(AuthenticationConfig.PROP_NAME_AUTHENTICATION_REQUIRED)
+                .appendRed(" to [")
+                .appendCyan(Boolean.toString(SUPER_DEV_AUTHENTICATION_REQUIRED_VALUE))
+                .appendRed("] in appConfig")
+                .toString();
+
+        LOGGER.warn(msg);
+        authenticationConfig.setAuthenticationRequired(SUPER_DEV_AUTHENTICATION_REQUIRED_VALUE);
+    }
+
+    private void disableContentSecurity(final AppConfig appConfig) {
+        final ContentSecurityConfig contentSecurityConfig = appConfig.getSecurityConfig().getContentSecurityConfig();
+        final String msg = new ColouredStringBuilder()
+                .appendRed("In GWT Super Dev Mode, overriding ")
+                .appendCyan(ContentSecurityConfig.PROP_NAME_CONTENT_SECURITY_POLICY)
+                .appendRed(" to [")
+                .appendCyan(SUPER_DEV_CONTENT_SECURITY_POLICY_VALUE)
+                .appendRed("] in appConfig")
+                .toString();
+
+        LOGGER.warn(msg);
+        contentSecurityConfig.setContentSecurityPolicy(SUPER_DEV_CONTENT_SECURITY_POLICY_VALUE);
     }
 }

@@ -17,7 +17,6 @@
 package stroom.data.store.impl;
 
 import com.google.inject.AbstractModule;
-import stroom.task.api.TaskHandlerBinder;
 import stroom.util.guice.GuiceUtil;
 import stroom.util.guice.ServletBinder;
 import stroom.util.shared.RestResource;
@@ -25,16 +24,11 @@ import stroom.util.shared.RestResource;
 public class DataStoreHandlerModule extends AbstractModule {
     @Override
     protected void configure() {
-        TaskHandlerBinder.create(binder())
-                .bind(DataDownloadTask.class, DataDownloadTaskHandler.class)
-                .bind(StreamUploadTask.class, StreamUploadTaskHandler.class);
-
         ServletBinder.create(binder())
                 .bind(ImportFileServlet.class);
 
         // TODO probably not the right place for this binding
         GuiceUtil.buildMultiBinder(binder(), RestResource.class)
-                .addBinding(NewUiDataResource.class)
                 .addBinding(DataResourceImpl.class)
                 .addBinding(ViewDataResourceImpl.class);
     }

@@ -19,17 +19,16 @@ package stroom.data.store.util;
 import com.google.inject.Injector;
 import stroom.data.store.api.Store;
 import stroom.data.store.impl.DataDownloadSettings;
-import stroom.data.store.impl.DataDownloadTask;
 import stroom.data.store.impl.DataDownloadTaskHandler;
+import stroom.meta.api.MetaService;
 import stroom.meta.shared.FindMetaCriteria;
 import stroom.meta.shared.MetaFields;
-import stroom.meta.api.MetaService;
 import stroom.query.api.v2.ExpressionOperator;
 import stroom.query.api.v2.ExpressionOperator.Op;
 import stroom.query.api.v2.ExpressionTerm.Condition;
 import stroom.security.api.SecurityContext;
-import stroom.task.api.SimpleTaskContext;
 import stroom.task.api.TaskContext;
+import stroom.task.shared.TaskId;
 import stroom.util.AbstractCommandLineTool;
 import stroom.util.io.BufferFactory;
 import stroom.util.shared.ModelStringUtil;
@@ -126,17 +125,11 @@ public class StreamDumpTool extends AbstractCommandLineTool {
             format = "${feed}/${pathId}/${id}";
         }
 
-        final TaskContext taskContext = new SimpleTaskContext() {
-            @Override
-            public void info(final Supplier<String> messageSupplier) {
-                System.out.println(messageSupplier.get());
-            }
-        };
         final Store streamStore = injector.getInstance(Store.class);
         final MetaService metaService = injector.getInstance(MetaService.class);
         final SecurityContext securityContext = injector.getInstance(SecurityContext.class);
         final BufferFactory bufferFactory = () -> new byte[4096];
-        final DataDownloadTaskHandler streamDownloadTaskHandler = new DataDownloadTaskHandler(taskContext, streamStore, metaService, securityContext, bufferFactory);
+        final DataDownloadTaskHandler streamDownloadTaskHandler = new DataDownloadTaskHandler(null, streamStore, metaService, securityContext, bufferFactory);
 
         securityContext.asProcessingUser(() ->
                 download(feed, streamType, createPeriodFrom, createPeriodTo, dir, format, streamDownloadTaskHandler));
@@ -181,8 +174,18 @@ public class StreamDumpTool extends AbstractCommandLineTool {
         dataDownloadSettings.setMaxFileSize(ModelStringUtil.parseIECByteSizeString("2G"));
         dataDownloadSettings.setMaxFileParts(10000L);
 
-        final DataDownloadTask streamDownloadTask = new DataDownloadTask(criteria, dir, format, dataDownloadSettings);
-        dataDownloadTaskHandler.exec(streamDownloadTask);
+        final TaskContext taskContext = new TaskContext() {
+            @Override
+            public void info(final Supplier<String> messageSupplier) {
+                System.out.println(messageSupplier.get());
+            }
+
+            @Override
+            public TaskId getTaskId() {
+                return null;
+            }
+        };
+        dataDownloadTaskHandler.downloadData(taskContext, criteria, dir, format, dataDownloadSettings);
 
 
 //        final StreamStore streamStore = appContext.getBean(StreamStore.class);

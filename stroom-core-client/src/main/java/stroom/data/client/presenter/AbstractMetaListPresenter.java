@@ -67,9 +67,10 @@ public abstract class AbstractMetaListPresenter extends MyPresenterWidget<DataGr
     private final IdSet entityIdSet = new IdSet();
     private final RestFactory restFactory;
     private RestDataProvider<MetaRow, ResultPage<MetaRow>> dataProvider;
-    boolean allowNoConstraint = true;
-    private ResultPage<MetaRow> resultPage = null;
+    boolean allowNoConstraint;
+    private ResultPage<MetaRow> resultPage;
     private FindMetaCriteria criteria;
+    private EventBus eventBus;
 
     AbstractMetaListPresenter(final EventBus eventBus,
                               final RestFactory restFactory,
@@ -78,23 +79,10 @@ public abstract class AbstractMetaListPresenter extends MyPresenterWidget<DataGr
         super(eventBus, new DataGridViewImpl<>(true));
         this.tooltipPresenter = tooltipPresenter;
         this.restFactory = restFactory;
+        this.eventBus = eventBus;
 
         entityIdSet.setMatchAll(false);
-
         addColumns(allowSelectAll);
-
-        this.dataProvider = new RestDataProvider<MetaRow, ResultPage<MetaRow>>(eventBus, criteria.obtainPageRequest()) {
-            @Override
-            protected void exec(final Consumer<ResultPage<MetaRow>> dataConsumer, final Consumer<Throwable> throwableConsumer) {
-                final Rest<ResultPage<MetaRow>> rest = restFactory.create();
-                rest.onSuccess(dataConsumer).onFailure(throwableConsumer).call(META_RESOURCE).findMetaRow(criteria);
-            }
-
-            @Override
-            protected void changeData(final ResultPage<MetaRow> data) {
-                super.changeData(onProcessData(data));
-            }
-        };
     }
 
     public RestDataProvider<MetaRow, ResultPage<MetaRow>> getDataProvider() {
@@ -393,23 +381,40 @@ public abstract class AbstractMetaListPresenter extends MyPresenterWidget<DataGr
 
     @Override
     public void refresh() {
-        if (allowNoConstraint || criteria != null) {
+        if (dataProvider != null && (allowNoConstraint || criteria != null)) {
             dataProvider.refresh();
         }
     }
 
     public void setCriteria(final FindMetaCriteria criteria) {
-        if (criteria != null) {
-            criteria.obtainPageRequest().setLength(PageRequest.DEFAULT_PAGE_SIZE);
-        }
-
-        if (allowNoConstraint || criteria != null) {
-            if (this.criteria == null) {
-                this.criteria = criteria;
-                dataProvider.addDataDisplay(getView().getDataDisplay());
+        if (criteria != null && criteria.getExpression() != null) {
+            if (criteria.equals(this.criteria) && this.dataProvider != null) {
+                this.dataProvider.refresh();
             } else {
                 this.criteria = criteria;
-                dataProvider.refresh();
+                this.criteria.obtainPageRequest().setLength(PageRequest.DEFAULT_PAGE_SIZE);
+
+                this.dataProvider = new RestDataProvider<MetaRow, ResultPage<MetaRow>>(
+                        eventBus,
+                        criteria.obtainPageRequest()) {
+
+                    @Override
+                    protected void exec(final Consumer<ResultPage<MetaRow>> dataConsumer,
+                                        final Consumer<Throwable> throwableConsumer) {
+                        final Rest<ResultPage<MetaRow>> rest = restFactory.create();
+                        rest
+                                .onSuccess(dataConsumer)
+                                .onFailure(throwableConsumer)
+                                .call(META_RESOURCE)
+                                .findMetaRow(getCriteria());
+                    }
+
+                    @Override
+                    protected void changeData(final ResultPage<MetaRow> data) {
+                        super.changeData(onProcessData(data));
+                    }
+                };
+                dataProvider.addDataDisplay(getView().getDataDisplay());
             }
         }
     }
@@ -426,5 +431,9 @@ public abstract class AbstractMetaListPresenter extends MyPresenterWidget<DataGr
 
     public ButtonView add(final SvgPreset preset) {
         return getView().addButton(preset);
+    }
+
+    private FindMetaCriteria getCriteria() {
+        return criteria;
     }
 }

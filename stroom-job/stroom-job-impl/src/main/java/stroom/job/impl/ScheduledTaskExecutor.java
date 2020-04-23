@@ -20,11 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MarkerFactory;
 import stroom.job.api.ScheduledJob;
-import stroom.job.api.TaskConsumer;
 import stroom.job.shared.JobNode;
 import stroom.security.api.SecurityContext;
-import stroom.task.api.TaskManager;
-import stroom.task.shared.Task;
+import stroom.task.api.TaskContextFactory;
+import stroom.util.logging.LogExecutionTime;
 import stroom.util.scheduler.FrequencyScheduler;
 import stroom.util.scheduler.Scheduler;
 import stroom.util.scheduler.SimpleCron;
@@ -35,10 +34,7 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -52,9 +48,10 @@ class ScheduledTaskExecutor {
     private final ConcurrentHashMap<ScheduledJob, AtomicBoolean> runningMapOfScheduledJobs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<ScheduledJob, Scheduler> schedulerMapOfScheduledJobs = new ConcurrentHashMap<>();
 
-    private final Map<ScheduledJob, Provider<TaskConsumer>> scheduledJobsMap;
+    private final Map<ScheduledJob, Provider<Runnable>> scheduledJobsMap;
     private final JobNodeTrackerCache jobNodeTrackerCache;
-    private final TaskManager taskManager;
+    private final Executor executor;
+    private final TaskContextFactory taskContextFactory;
     private final SecurityContext securityContext;
 
     private final AtomicReference<ScheduledExecutorService> scheduledExecutorService = new AtomicReference<>();
@@ -62,14 +59,16 @@ class ScheduledTaskExecutor {
     private final long executionInterval;
 
     @Inject
-    ScheduledTaskExecutor(final Map<ScheduledJob, Provider<TaskConsumer>> scheduledJobsMap,
+    ScheduledTaskExecutor(final Map<ScheduledJob, Provider<Runnable>> scheduledJobsMap,
                           final JobNodeTrackerCache jobNodeTrackerCache,
-                          final TaskManager taskManager,
+                          final Executor executor,
+                          final TaskContextFactory taskContextFactory,
                           final JobSystemConfig jobSystemConfig,
                           final SecurityContext securityContext) {
         this.scheduledJobsMap = scheduledJobsMap;
         this.jobNodeTrackerCache = jobNodeTrackerCache;
-        this.taskManager = taskManager;
+        this.executor = executor;
+        this.taskContextFactory = taskContextFactory;
         this.securityContext = securityContext;
         this.enabled = jobSystemConfig.isEnabled();
         this.executionInterval = jobSystemConfig.getExecutionIntervalMs();
@@ -132,9 +131,22 @@ class ScheduledTaskExecutor {
     private void execute() {
         for (final ScheduledJob scheduledJob : scheduledJobsMap.keySet()) {
             try {
+                final String taskName = scheduledJob.getName();
                 final ScheduledJobFunction function = create(scheduledJob);
                 if (function != null) {
-                    taskManager.execAsync(new ScheduledTask(scheduledJob.getName(), function::exec, new AtomicBoolean()));
+                    final Runnable runnable = taskContextFactory.context(taskName, taskContext -> {
+                        try {
+                            final LogExecutionTime logExecutionTime = new LogExecutionTime();
+                            LOGGER.debug("exec() - >>> {}", taskName);
+                            function.run();
+                            LOGGER.debug("exec() - <<< {} took {}", taskName, logExecutionTime);
+                        } catch (final RuntimeException e) {
+                            LOGGER.error("Error calling {}", taskName, e);
+                        }
+                    });
+                    CompletableFuture
+                            .runAsync(runnable, executor)
+                            .whenComplete((r, t) -> function.getRunning().set(false));
                 }
             } catch (final RuntimeException e) {
                 LOGGER.error(e.getMessage(), e);
@@ -155,34 +167,33 @@ class ScheduledTaskExecutor {
                 JobNodeTracker jobNodeTracker;
 
                 final JobNodeTrackerCache.Trackers trackers = jobNodeTrackerCache.getTrackers();
-               jobNodeTracker = trackers.getTrackerForJobName(scheduledJob.getName());
+                jobNodeTracker = trackers.getTrackerForJobName(scheduledJob.getName());
 
-               if(scheduledJob.isManaged()) {
-                   enabled = false;
-                   if (jobNodeTracker == null) {
-                       LOGGER.error("No job node tracker found for: " + scheduledJob.getName());
-                   } else {
-                       final JobNode jobNode = jobNodeTracker.getJobNode();
-                       if (jobNode == null) {
-                           LOGGER.error("Job node tracker has null job node for: " + scheduledJob.getName());
-                       } else {
-                           enabled = jobNode.isEnabled() && jobNode.getJob().isEnabled();
-                           scheduler = trackers.getScheduler(jobNode);
-                       }
-                   }
-               } else{
-                   scheduler = getOrCreateScheduler(scheduledJob);
-               }
+                if (scheduledJob.isManaged()) {
+                    enabled = false;
+                    if (jobNodeTracker == null) {
+                        LOGGER.error("No job node tracker found for: " + scheduledJob.getName());
+                    } else {
+                        final JobNode jobNode = jobNodeTracker.getJobNode();
+                        if (jobNode == null) {
+                            LOGGER.error("Job node tracker has null job node for: " + scheduledJob.getName());
+                        } else {
+                            enabled = jobNode.isEnabled() && jobNode.getJob().isEnabled();
+                            scheduler = trackers.getScheduler(jobNode);
+                        }
+                    }
+                } else {
+                    scheduler = getOrCreateScheduler(scheduledJob);
+                }
 
                 if (enabled && scheduler != null && scheduler.execute()) {
                     //TODO log trace
 //                    LOGGER.trace("Returning runnable for method: {} - {} - {}", methodReference, enabled, scheduler);
+                    final Provider<Runnable> consumerProvider = scheduledJobsMap.get(scheduledJob);
                     if (jobNodeTracker != null) {
-                        final Provider<TaskConsumer> consumerProvider = scheduledJobsMap.get(scheduledJob);
                         function = new JobNodeTrackedFunction(scheduledJob, consumerProvider.get(), running,
                                 jobNodeTracker);
                     } else {
-                        final Provider<TaskConsumer> consumerProvider = scheduledJobsMap.get(scheduledJob);
                         function = new ScheduledJobFunction(scheduledJob, consumerProvider.get(), running);
                     }
                 } else {
@@ -202,7 +213,7 @@ class ScheduledTaskExecutor {
     private Scheduler getOrCreateScheduler(final ScheduledJob scheduledJob) {
         Scheduler scheduler = schedulerMapOfScheduledJobs.get(scheduledJob);
         if (scheduler == null) {
-            switch(scheduledJob.getSchedule().getScheduleType()) {
+            switch (scheduledJob.getSchedule().getScheduleType()) {
                 case CRON:
                     final SimpleCron simpleCron = SimpleCron.compile(scheduledJob.getSchedule().getSchedule());
                     scheduler = simpleCron.createScheduler();
@@ -211,7 +222,8 @@ class ScheduledTaskExecutor {
                 case PERIODIC:
                     scheduler = new FrequencyScheduler(scheduledJob.getSchedule().getSchedule());
                     break;
-                default: throw new RuntimeException("Unsupported ScheduleType!");
+                default:
+                    throw new RuntimeException("Unsupported ScheduleType!");
             }
             schedulerMapOfScheduledJobs.put(scheduledJob, scheduler);
         }
@@ -220,7 +232,7 @@ class ScheduledTaskExecutor {
     }
 
     private AtomicBoolean getRunningState(final ScheduledJob scheduledJob) {
-        return runningMapOfScheduledJobs.computeIfAbsent(scheduledJob, k ->  new AtomicBoolean(false));
+        return runningMapOfScheduledJobs.computeIfAbsent(scheduledJob, k -> new AtomicBoolean(false));
     }
 
     private static class JobNodeTrackedFunction extends ScheduledJobFunction {
@@ -229,7 +241,7 @@ class ScheduledTaskExecutor {
         private final JobNodeTracker jobNodeTracker;
 
         JobNodeTrackedFunction(final ScheduledJob scheduledJob,
-                               final TaskConsumer consumer,
+                               final Runnable consumer,
                                final AtomicBoolean running,
                                final JobNodeTracker jobNodeTracker) {
             super(scheduledJob, consumer, running);
@@ -237,13 +249,13 @@ class ScheduledTaskExecutor {
         }
 
         @Override
-        public void exec(final Task<?> task) {
+        public void run() {
             try {
                 jobNodeTracker.incrementTaskCount();
                 try {
                     jobNodeTracker.setLastExecutedTime(System.currentTimeMillis());
                     try {
-                        super.exec(task);
+                        super.run();
                     } finally {
                         jobNodeTracker.setLastExecutedTime(System.currentTimeMillis());
                     }

@@ -19,37 +19,75 @@ package stroom.data.store.impl;
 import com.codahale.metrics.health.HealthCheck.Result;
 import stroom.data.shared.DataResource;
 import stroom.data.shared.UploadDataRequest;
+import stroom.data.store.api.Store;
+import stroom.feed.api.FeedProperties;
 import stroom.meta.shared.FindMetaCriteria;
+import stroom.pipeline.PipelineStore;
+import stroom.pipeline.errorhandler.ErrorReceiverProxy;
+import stroom.pipeline.factory.PipelineDataCache;
+import stroom.pipeline.factory.PipelineFactory;
+import stroom.pipeline.shared.AbstractFetchDataResult;
+import stroom.pipeline.state.FeedHolder;
+import stroom.pipeline.state.MetaDataHolder;
+import stroom.pipeline.state.MetaHolder;
+import stroom.pipeline.state.PipelineHolder;
 import stroom.resource.api.ResourceStore;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.PermissionNames;
-import stroom.task.api.TaskManager;
 import stroom.util.HasHealthCheck;
-import stroom.util.logging.LambdaLogger;
-import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.pipeline.scope.PipelineScopeRunnable;
+import stroom.util.shared.OffsetRange;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
+import stroom.util.shared.Severity;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
+import javax.ws.rs.QueryParam;
 import java.nio.file.Path;
 import java.util.ArrayList;
 
 class DataResourceImpl implements DataResource, HasHealthCheck {
-    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(DataResourceImpl.class);
-
+    private final DataFetcher dataFetcher;
     private final ResourceStore resourceStore;
-    private final TaskManager taskManager;
+    private final Provider<DataUploadTaskHandler> dataUploadTaskHandlerProvider;
+    private final Provider<DataDownloadTaskHandler> dataDownloadTaskHandlerProvider;
     private final StreamEventLog streamEventLog;
     private final SecurityContext securityContext;
 
     @Inject
-    DataResourceImpl(
-            final ResourceStore resourceStore,
-            final TaskManager taskManager,
-            final StreamEventLog streamEventLog,
-            final SecurityContext securityContext) {
+    DataResourceImpl(final Store streamStore,
+                     final FeedProperties feedProperties,
+                     final Provider<FeedHolder> feedHolderProvider,
+                     final Provider<MetaDataHolder> metaDataHolderProvider,
+                     final Provider<PipelineHolder> pipelineHolderProvider,
+                     final Provider<MetaHolder> metaHolderProvider,
+                     final PipelineStore pipelineStore,
+                     final Provider<PipelineFactory> pipelineFactoryProvider,
+                     final Provider<ErrorReceiverProxy> errorReceiverProxyProvider,
+                     final PipelineDataCache pipelineDataCache,
+                     final PipelineScopeRunnable pipelineScopeRunnable,
+                     final ResourceStore resourceStore,
+                     final Provider<DataUploadTaskHandler> dataUploadTaskHandlerProvider,
+                     final Provider<DataDownloadTaskHandler> dataDownloadTaskHandlerProvider,
+                     final StreamEventLog streamEventLog,
+                     final SecurityContext securityContext) {
+        dataFetcher = new DataFetcher(streamStore,
+                feedProperties,
+                feedHolderProvider,
+                metaDataHolderProvider,
+                pipelineHolderProvider,
+                metaHolderProvider,
+                pipelineStore,
+                pipelineFactoryProvider,
+                errorReceiverProxyProvider,
+                pipelineDataCache,
+                streamEventLog,
+                securityContext,
+                pipelineScopeRunnable);
         this.resourceStore = resourceStore;
-        this.taskManager = taskManager;
+        this.dataUploadTaskHandlerProvider = dataUploadTaskHandlerProvider;
+        this.dataDownloadTaskHandlerProvider = dataDownloadTaskHandlerProvider;
         this.streamEventLog = streamEventLog;
         this.securityContext = securityContext;
     }
@@ -69,7 +107,7 @@ class DataResourceImpl implements DataResource, HasHealthCheck {
                 }
 
                 final DataDownloadSettings settings = new DataDownloadSettings();
-                taskManager.exec(new DataDownloadTask(criteria, file.getParent(), fileName, settings));
+                dataDownloadTaskHandlerProvider.get().downloadData(criteria, file.getParent(), fileName, settings);
 
                 streamEventLog.exportStream(criteria, null);
 
@@ -88,17 +126,54 @@ class DataResourceImpl implements DataResource, HasHealthCheck {
                 // Import file.
                 final Path file = resourceStore.getTempFile(request.getKey());
 
-                taskManager.exec(new StreamUploadTask(request.getFileName(), file, request.getFeedName(),
-                        request.getStreamTypeName(), request.getEffectiveMs(), request.getMetaData()));
+                dataUploadTaskHandlerProvider.get().uploadData(
+                        request.getFileName(),
+                        file,
+                        request.getFeedName(),
+                        request.getStreamTypeName(),
+                        request.getEffectiveMs(),
+                        request.getMetaData());
 
-            } catch (final RuntimeException e) {
-                throw e;//EntityServiceExceptionUtil.create(e);
+//            } catch (final RuntimeException e) {
+//                throw e;//EntityServiceExceptionUtil.create(e);
             } finally {
                 // Delete the import if it was successful
                 resourceStore.deleteTempFile(request.getKey());
             }
 
             return request.getKey();
+        });
+    }
+
+    @Override
+    public AbstractFetchDataResult fetchData(
+            final @QueryParam("streamId") Long streamId,
+            final @QueryParam("streamsOffset") Long streamsOffset,
+            final @QueryParam("streamsLength") Long streamsLength,
+            final @QueryParam("pageOffset") Long pageOffset,
+            final @QueryParam("pageSize") Long pageSize) {
+
+        final OffsetRange<Long> pageRange = new OffsetRange<>(pageOffset, pageSize);
+        final OffsetRange<Long> streamRange = new OffsetRange<>(streamsOffset, streamsLength);
+
+        final boolean isMarkerMode = true; // Used for organising errors but only relevant when the data is in fact errors
+        final boolean showAsHtml = false; // Used for dashboards so false here.
+        final Severity[] expandedSeverities = new Severity[]{Severity.INFO, Severity.WARNING, Severity.ERROR, Severity.FATAL_ERROR};
+
+        //TODO Used for child streams. Needs implementing.
+        String childStreamTypeName = null;
+
+        return securityContext.secureResult(PermissionNames.VIEW_DATA_PERMISSION, () -> {
+            dataFetcher.reset();
+            return dataFetcher.getData(
+                    streamId,
+                    childStreamTypeName,
+                    streamRange,
+                    pageRange,
+                    isMarkerMode,
+                    null,
+                    showAsHtml,
+                    expandedSeverities);
         });
     }
 

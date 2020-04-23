@@ -20,17 +20,23 @@ import stroom.docref.DocRef;
 import stroom.meta.shared.Meta;
 import stroom.pipeline.refdata.store.RefDataStore;
 import stroom.pipeline.refdata.store.RefStreamDefinition;
-import stroom.task.api.TaskManager;
+import stroom.task.api.TaskContext;
+import stroom.task.api.TaskContextFactory;
 
 import javax.inject.Inject;
+import javax.inject.Provider;
 import java.io.InputStream;
+import java.util.function.Consumer;
 
 public class ContextDataLoaderImpl implements ContextDataLoader {
-    private final TaskManager taskManager;
+    private final TaskContextFactory taskContextFactory;
+    private final Provider<ContextDataLoadTaskHandler> taskHandlerProvider;
 
     @Inject
-    ContextDataLoaderImpl(final TaskManager taskManager) {
-        this.taskManager = taskManager;
+    ContextDataLoaderImpl(final TaskContextFactory taskContextFactory,
+                          final Provider<ContextDataLoadTaskHandler> taskHandlerProvider) {
+        this.taskContextFactory = taskContextFactory;
+        this.taskHandlerProvider = taskHandlerProvider;
     }
 
     @Override
@@ -40,8 +46,11 @@ public class ContextDataLoaderImpl implements ContextDataLoader {
                      final DocRef contextPipeline,
                      final RefStreamDefinition refStreamDefinition,
                      final RefDataStore refDataStore) {
-
-        taskManager.exec(new ContextDataLoadTask(
-                inputStream, meta, feedName, contextPipeline, refStreamDefinition, refDataStore));
+        final Consumer<TaskContext> consumer = tc ->
+                taskHandlerProvider
+                        .get()
+                        .exec(inputStream, meta, feedName, contextPipeline, refStreamDefinition, refDataStore);
+        final Runnable runnable = taskContextFactory.context(taskContextFactory.currentContext(),"Load Context Data", consumer);
+        runnable.run();
     }
 }

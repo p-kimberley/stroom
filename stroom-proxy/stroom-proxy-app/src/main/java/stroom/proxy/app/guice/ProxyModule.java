@@ -13,16 +13,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.collection.mock.MockCollectionModule;
 import stroom.dictionary.impl.DictionaryModule;
-import stroom.dictionary.impl.NewUiDictionaryResource;
-import stroom.dictionary.impl.NewUiDictionaryResource2;
 import stroom.dictionary.impl.DictionaryStore;
+import stroom.dictionary.impl.NewUiDictionaryResource2;
+import stroom.docstore.api.DocumentResourceHelper;
 import stroom.docstore.api.Serialiser2Factory;
 import stroom.docstore.api.StoreFactory;
+import stroom.docstore.impl.DocumentResourceHelperImpl;
 import stroom.docstore.impl.Persistence;
 import stroom.docstore.impl.Serialiser2FactoryImpl;
 import stroom.docstore.impl.StoreFactoryImpl;
 import stroom.docstore.impl.fs.FSPersistence;
 import stroom.dropwizard.common.LogLevelInspector;
+import stroom.dropwizard.common.PermissionExceptionMapper;
 import stroom.importexport.api.ImportExportActionHandler;
 import stroom.proxy.app.BufferFactoryImpl;
 import stroom.proxy.app.Config;
@@ -52,8 +54,8 @@ import stroom.receive.rules.impl.ReceiveDataRuleSetService;
 import stroom.receive.rules.impl.ReceiveDataRuleSetServiceImpl;
 import stroom.security.api.SecurityContext;
 import stroom.security.mock.MockSecurityContext;
-import stroom.task.api.SimpleTaskContext;
-import stroom.task.api.TaskContext;
+import stroom.task.impl.TaskContextModule;
+import stroom.util.BuildInfoProvider;
 import stroom.util.guice.FilterBinder;
 import stroom.util.guice.FilterInfo;
 import stroom.util.guice.GuiceUtil;
@@ -65,6 +67,7 @@ import stroom.util.shared.RestResource;
 
 import javax.inject.Provider;
 import javax.ws.rs.client.Client;
+import javax.ws.rs.ext.ExceptionMapper;
 import java.nio.file.Paths;
 import java.util.Optional;
 
@@ -94,23 +97,25 @@ public class ProxyModule extends AbstractModule {
         install(new DictionaryModule());
         // Allow discovery of feed status from other proxies.
         install(new RemoteFeedModule());
-        bind(BufferFactory.class).to(BufferFactoryImpl.class);
-        bind(Serialiser2Factory.class).to(Serialiser2FactoryImpl.class);
-        bind(StoreFactory.class).to(StoreFactoryImpl.class);
-        bind(DataReceiptPolicyAttributeMapFilterFactory.class).to(DataReceiptPolicyAttributeMapFilterFactoryImpl.class);
-        bind(TaskContext.class).to(SimpleTaskContext.class);
 
-        bind(RequestHandler.class).to(ProxyRequestHandler.class);
-        bind(StreamHandlerFactory.class).to(ForwardStreamHandlerFactory.class);
+        install(new TaskContextModule());
+
+        bind(BuildInfo.class).toProvider(BuildInfoProvider.class);
+        bind(BufferFactory.class).to(BufferFactoryImpl.class);
+        bind(DataReceiptPolicyAttributeMapFilterFactory.class).to(DataReceiptPolicyAttributeMapFilterFactoryImpl.class);
+        bind(DocumentResourceHelper.class).to(DocumentResourceHelperImpl.class);
+        bind(FeedStatusService.class).to(RemoteFeedStatusService.class);
         bind(ProxyRepositoryManager.class).asEagerSingleton();
         bind(ProxyRepositoryReader.class).asEagerSingleton();
         bind(ReceiveDataRuleSetService.class).to(ReceiveDataRuleSetServiceImpl.class);
+        bind(RequestHandler.class).to(ProxyRequestHandler.class);
         bind(SecurityContext.class).to(MockSecurityContext.class);
-        bind(FeedStatusService.class).to(RemoteFeedStatusService.class);
+        bind(Serialiser2Factory.class).to(Serialiser2FactoryImpl.class);
+        bind(StoreFactory.class).to(StoreFactoryImpl.class);
+        bind(StreamHandlerFactory.class).to(ForwardStreamHandlerFactory.class);
 
         HealthCheckBinder.create(binder())
                 .bind(ContentSyncService.class)
-                .bind(NewUiDictionaryResource.class)
                 .bind(NewUiDictionaryResource2.class)
                 .bind(FeedStatusResource.class)
                 .bind(ForwardStreamHandlerFactory.class)
@@ -121,7 +126,9 @@ public class ProxyModule extends AbstractModule {
                 .bind(ReceiveDataRuleSetResource.class);
 
         FilterBinder.create(binder())
-                .bind(new FilterInfo(ProxySecurityFilter.class.getSimpleName(), "/*"), ProxySecurityFilter.class);
+                .bind(
+                        new FilterInfo(ProxySecurityFilter.class.getSimpleName(), "/*"),
+                        ProxySecurityFilter.class);
 
         ServletBinder.create(binder())
                 .bind(DebugServlet.class)
@@ -130,7 +137,6 @@ public class ProxyModule extends AbstractModule {
                 .bind(ReceiveDataServlet.class);
 
         GuiceUtil.buildMultiBinder(binder(), RestResource.class)
-                .addBinding(NewUiDictionaryResource.class)
                 .addBinding(NewUiDictionaryResource2.class)
                 .addBinding(ReceiveDataRuleSetResource.class)
                 .addBinding(ReceiveDataRuleSetResourceImpl.class)
@@ -140,9 +146,14 @@ public class ProxyModule extends AbstractModule {
                 .addBinding(ContentSyncService.class)
                 .addBinding(ProxyLifecycle.class);
 
-        final Multibinder<ImportExportActionHandler> importExportActionHandlerBinder = Multibinder.newSetBinder(binder(), ImportExportActionHandler.class);
-            importExportActionHandlerBinder.addBinding().to(ReceiveDataRuleSetService.class);
-            importExportActionHandlerBinder.addBinding().to(DictionaryStore.class);
+        GuiceUtil.buildMultiBinder(binder(), ExceptionMapper.class)
+                .addBinding(PermissionExceptionMapper.class);
+
+        final Multibinder<ImportExportActionHandler> importExportActionHandlerBinder = Multibinder
+                .newSetBinder(binder(), ImportExportActionHandler.class);
+
+        importExportActionHandlerBinder.addBinding().to(ReceiveDataRuleSetService.class);
+        importExportActionHandlerBinder.addBinding().to(DictionaryStore.class);
     }
 
     @Provides
@@ -160,7 +171,8 @@ public class ProxyModule extends AbstractModule {
         // If the userAgent has not been explicitly set in the config then set it based
         // on the build version
         if (!jerseyClientConfiguration.getUserAgent().isPresent()) {
-            final String userAgent = PROXY_JERSEY_CLIENT_USER_AGENT_PREFIX + buildInfoProvider.get().getBuildVersion();
+            final String userAgent = PROXY_JERSEY_CLIENT_USER_AGENT_PREFIX
+                    + buildInfoProvider.get().getBuildVersion();
             LOGGER.info("Setting jersey client user agent string to [{}]", userAgent);
             jerseyClientConfiguration.setUserAgent(Optional.of(userAgent));
         }

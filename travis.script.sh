@@ -254,13 +254,8 @@ else
     # our docker services as well.
     ./gradlew \
       -PdumpFailedTestXml=true \
-      -Pversion="${TRAVIS_TAG}" \
-      -PgwtCompilerWorkers=2 \
-      -PgwtCompilerMinHeap=50M \
-      -PgwtCompilerMaxHeap=1G \
-      clean \
-      build \
-      buildDistribution \
+      -i \
+      :stroom-app:test --tests "TestInteractive*" -x gwtCompile \
       "${extraBuildArgs[@]}"
 
 # IF WE WANT TO SKIP SOME PARTS OF THE BUILD INCLUDE THESE LINES

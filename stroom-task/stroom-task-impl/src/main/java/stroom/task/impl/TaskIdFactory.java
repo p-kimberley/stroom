@@ -20,7 +20,9 @@ import stroom.task.shared.TaskId;
 
 import java.util.UUID;
 
-class TaskIdFactory {
+public class TaskIdFactory {
+    public static String prefix = "";
+
     static TaskId create() {
         return new TaskId(createUUID(), null);
     }
@@ -34,6 +36,6 @@ class TaskIdFactory {
     }
 
     private static String createUUID() {
-        return UUID.randomUUID().toString();
+        return prefix + UUID.randomUUID().toString();
     }
 }

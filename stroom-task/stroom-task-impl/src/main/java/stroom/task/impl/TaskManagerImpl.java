@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Singleton
-class TaskManagerImpl implements TaskManager {
+public class TaskManagerImpl implements TaskManager {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(TaskManagerImpl.class);
 
     private final NodeInfo nodeInfo;

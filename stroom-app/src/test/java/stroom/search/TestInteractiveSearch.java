@@ -19,6 +19,8 @@ package stroom.search;
 
 import org.apache.hadoop.util.ThreadUtil;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import stroom.annotation.api.AnnotationDataSource;
 import stroom.dictionary.impl.DictionaryStore;
 import stroom.dictionary.shared.DictionaryDoc;
@@ -40,6 +42,8 @@ import stroom.search.impl.EventSearchTask;
 import stroom.search.impl.EventSearchTaskHandler;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.impl.ExecutorProviderImpl;
+import stroom.task.impl.TaskIdFactory;
+import stroom.task.impl.TaskManagerImpl;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -57,6 +61,8 @@ import java.util.function.Supplier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TestInteractiveSearch extends AbstractSearchTest {
+    private static Logger LOGGER = LoggerFactory.getLogger(TestInteractiveSearch.class);
+
     @Inject
     private CommonIndexingTestHelper commonIndexingTestHelper;
     @Inject
@@ -67,6 +73,8 @@ class TestInteractiveSearch extends AbstractSearchTest {
     private Executor executor;
     @Inject
     private TaskContextFactory taskContextFactory;
+    @Inject
+    private TaskManagerImpl taskManager;
     @Inject
     private Provider<EventSearchTaskHandler> eventSearchTaskHandlerProvider;
     @Inject
@@ -85,7 +93,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveCaseInsensitiveTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description", "e0567");
-        test(expression, 5);
+        test("positiveCaseInsensitiveTest", expression, 5);
     }
 
     @Test
@@ -93,7 +101,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description", "e0567");
         final List<String> componentIds = Arrays.asList("table-1", "table-2");
-        test(expression, 5, componentIds, true);
+        test("positiveCaseInsensitiveTestMultiComponent", expression, 5, componentIds, true);
     }
 
     /**
@@ -104,7 +112,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description", "e0567");
         final List<String> componentIds = Collections.singletonList("table-1");
-        test(expression, 5, componentIds, false);
+        test("positiveCaseInsensitiveTestWithoutExtraction", expression, 5, componentIds, false);
     }
 
     /**
@@ -114,7 +122,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveCaseInsensitiveTest2() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user*", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description", "e0567");
-        test(expression, 25);
+        test("positiveCaseInsensitiveTest2", expression, 25);
     }
 
     /**
@@ -124,7 +132,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void negativeCaseSensitiveTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user*", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description (Case Sensitive)", "e0567");
-        test(expression, 0);
+        test("negativeCaseSensitiveTest", expression, 0);
     }
 
     /**
@@ -134,7 +142,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void negativeCaseSensitiveTest2() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description (Case Sensitive)", "e0567");
-        test(expression, 0);
+        test("negativeCaseSensitiveTest2", expression, 0);
     }
 
     /**
@@ -144,7 +152,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveCaseSensitiveTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user*", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description (Case Sensitive)", "E0567");
-        test(expression, 25);
+        test("positiveCaseSensitiveTest", expression, 25);
     }
 
     /**
@@ -154,7 +162,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveCaseSensitiveTest2() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "user5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description (Case Sensitive)", "E0567");
-        test(expression, 5);
+        test("positiveCaseSensitiveTest2", expression, 5);
     }
 
     /**
@@ -164,7 +172,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveCaseSensitiveTest3() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Description (Case Sensitive)", "E0567");
-        test(expression, 5);
+        test("positiveCaseSensitiveTest3", expression, 5);
     }
 
     /**
@@ -174,7 +182,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveAnalysedFieldTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command", "msg");
-        test(expression, 4);
+        test("positiveAnalysedFieldTest", expression, 4);
     }
 
     /**
@@ -184,7 +192,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveAnalysedFieldTestWithLeadingWildcard() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command", "*msg");
-        test(expression, 4);
+        test("positiveAnalysedFieldTestWithLeadingWildcard", expression, 4);
     }
 
     /**
@@ -194,7 +202,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void negativeAnalysedFieldTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command", "msg foobar");
-        test(expression, 0);
+        test("negativeAnalysedFieldTest", expression, 0);
     }
 
     /**
@@ -204,7 +212,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveAnalysedFieldTestWithIn() {
         final ExpressionOperator.Builder expression = buildInExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command", "msg foo bar");
-        test(expression, 4);
+        test("positiveAnalysedFieldTestWithIn", expression, 4);
     }
 
     /**
@@ -214,7 +222,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void negativeKeywordFieldTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command (Keyword)", "foo");
-        test(expression, 0);
+        test("negativeKeywordFieldTest", expression, 0);
     }
 
     /**
@@ -224,7 +232,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveKeywordFieldTest() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command (Keyword)", "msg=foo bar");
-        test(expression, 4);
+        test("positiveKeywordFieldTest", expression, 4);
     }
 
     /**
@@ -234,7 +242,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void positiveKeywordFieldTestWithLeadingWildcard() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command (Keyword)", "*foo bar");
-        test(expression, 4);
+        test("positiveKeywordFieldTestWithLeadingWildcard", expression, 4);
     }
 
     /**
@@ -247,7 +255,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         expression.addOperator(new ExpressionOperator.Builder(Op.NOT)
                 .addTerm("EventTime", Condition.EQUALS, "2007-08-18T13:50:56.000Z")
                 .build());
-        test(expression, 24);
+        test("notEqualsTest", expression, 24);
     }
 
     /**
@@ -263,7 +271,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
                                 .addTerm("EventTime", Condition.EQUALS, "2007-01-18T13:56:42.000Z")
                                 .build())
                         .build());
-        test(expression, 23);
+        test("notEqualsTest2", expression, 23);
     }
 
     /**
@@ -279,7 +287,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
                                 .addTerm("UserId", Condition.EQUALS, "user4")
                                 .build())
                         .build());
-        test(expression, 24);
+        test("notEqualsTest3", expression, 24);
     }
 
     /**
@@ -298,7 +306,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
                                 .addTerm("EventTime", Condition.EQUALS, "2007-01-18T13:56:42.000Z")
                                 .build())
                         .build());
-        test(expression, 23);
+        test("notEqualsTest4", expression, 23);
     }
 
     /**
@@ -314,7 +322,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         final ExpressionOperator.Builder and = new ExpressionOperator.Builder(Op.AND);
         and.addTerm("UserId", Condition.IN_DICTIONARY, stroom.docstore.shared.DocRefUtil.create(dic));
 
-        test(and, 15);
+        test("dictionaryTest1", and, 15);
 
         dictionaryStore.deleteDocument(dic.getUuid());
     }
@@ -338,7 +346,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         and.addTerm("UserId", Condition.IN_DICTIONARY, stroom.docstore.shared.DocRefUtil.create(dic1));
         and.addTerm("Command", Condition.IN_DICTIONARY, stroom.docstore.shared.DocRefUtil.create(dic2));
 
-        test(and, 10);
+        test("dictionaryTest2", and, 10);
 
         dictionaryStore.deleteDocument(dic1.getUuid());
         dictionaryStore.deleteDocument(dic2.getUuid());
@@ -363,7 +371,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
         and.addTerm("UserId", Condition.IN_DICTIONARY, stroom.docstore.shared.DocRefUtil.create(dic1));
         and.addTerm("Command", Condition.IN_DICTIONARY, stroom.docstore.shared.DocRefUtil.create(dic2));
 
-        test(and, 10);
+        test("dictionaryTest3", and, 10);
 
         dictionaryStore.deleteDocument(dic1.getUuid());
         dictionaryStore.deleteDocument(dic2.getUuid());
@@ -376,24 +384,26 @@ class TestInteractiveSearch extends AbstractSearchTest {
     void testBug173() {
         final ExpressionOperator.Builder expression = buildExpression("UserId", "use*5", "2000-01-01T00:00:00.000Z",
                 "2016-01-02T00:00:00.000Z", "Command", "!");
-        test(expression, 5);
+        test("testBug173", expression, 5);
     }
 
-    private void test(final ExpressionOperator.Builder expressionIn, final int expectResultCount) {
+    private void test(final String testName, final ExpressionOperator.Builder expressionIn, final int expectResultCount) {
         final List<String> componentIds = Collections.singletonList("table-1");
-        test(expressionIn, expectResultCount, componentIds, true);
+        test(testName, expressionIn, expectResultCount, componentIds, true);
     }
 
-    private void test(final ExpressionOperator.Builder expressionIn, final int expectResultCount, final List<String> componentIds,
+    private void test(final String testName, final ExpressionOperator.Builder expressionIn, final int expectResultCount, final List<String> componentIds,
                       final boolean extractValues) {
-        testInteractive(expressionIn, expectResultCount, componentIds, extractValues);
-        testEvents(expressionIn, expectResultCount);
+        testInteractive(testName, expressionIn, expectResultCount, componentIds, extractValues);
+        testEvents(testName, expressionIn, expectResultCount);
     }
 
-    private void testInteractive(final ExpressionOperator.Builder expressionIn,
+    private void testInteractive(final String testName, final ExpressionOperator.Builder expressionIn,
                                  final int expectResultCount,
                                  final List<String> componentIds,
                                  final boolean extractValues) {
+        report(testName + "_testInteractive");
+        TaskIdFactory.prefix = testName + "_testInteractive_";
 
         // code to test the results when they come back
         Consumer<Map<String, List<Row>>> resultMapConsumer = resultMap -> {
@@ -442,7 +452,9 @@ class TestInteractiveSearch extends AbstractSearchTest {
         assertThat(executorProvider.getCurrentTaskCount()).isEqualTo(0);
     }
 
-    private void testEvents(final ExpressionOperator.Builder expressionIn, final int expectResultCount) {
+    private void testEvents(final String testName, final ExpressionOperator.Builder expressionIn, final int expectResultCount) {
+        report(testName + "_testEvents");
+        TaskIdFactory.prefix = testName + "_testEvents_";
         // ADDED THIS SECTION TO TEST GUICE VALUE INJECTION.
 //        StroomProperties.setOverrideProperty("stroom.search.impl.shard.concurrentTasks", "1", StroomProperties.Source.TEST);
 //        StroomProperties.setOverrideProperty("stroom.search.impl.extraction.concurrentTasks", "1", StroomProperties.Source.TEST);
@@ -543,5 +555,16 @@ class TestInteractiveSearch extends AbstractSearchTest {
         operator.addTerm(wordsField, Condition.IN, wordsTerm);
 
         return operator;
+    }
+
+    private void report(final String testName) {
+//        final ResultPage<TaskProgress> resultPage = taskManager.find(new FindTaskProgressCriteria());
+        final StringBuilder sb = new StringBuilder();
+        sb.append("================================================================\n");
+        sb.append("= STARTING " + testName + "\n");
+        sb.append(taskManager.toString());
+        sb.append("\n");
+        sb.append("================================================================\n");
+        LOGGER.info(sb.toString());
     }
 }

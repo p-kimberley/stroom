@@ -115,7 +115,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
                 ancestorTaskSet.forEach(ancestorTask -> ancestorTask.addChild(subTaskContext));
 
                 taskRegistry.put(taskId, subTaskContext);
-                LOGGER.info(() -> "EXECUTING ========== " + taskId.path() + " (" + taskName + ")");
+                LOGGER.info(() -> "\n========== EXECUTING ========== \n" + taskId.path() + " (" + taskName + ")");
                 LOGGER.debug(() -> "execAsync()->exec() - " + taskName + " took " + logExecutionTime.toString());
 
                 if (stop.get() || currentThread.isInterrupted()) {
@@ -155,7 +155,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
                 subTaskContext.setThread(null);
                 currentThread.setName(oldThreadName);
 
-                LOGGER.info(() -> "FINISHED  ========== " + taskId.path() + " (" + taskName + ")");
+                LOGGER.info(() -> "\n========== FINISHED ========== \n" + taskId.path() + " (" + taskName + ")");
             }
 
             return result;

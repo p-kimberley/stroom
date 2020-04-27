@@ -268,7 +268,7 @@ public class TaskManagerImpl implements TaskManager {
         for (final TaskContextImpl taskContext : terminateList) {
             final TaskId taskId = taskContext.getTaskId();
 
-            LOGGER.info(() -> "TERMINATEX ========== " + taskId.path());
+            LOGGER.info(() -> "\n========== TERMINATEX ========== \n" + taskId.path());
 
             // First try and terminate the task.
             if (!taskContext.isTerminated()) {
@@ -346,7 +346,7 @@ public class TaskManagerImpl implements TaskManager {
 
     @Override
     public void terminate(final TaskId taskId) {
-        LOGGER.info(() -> "TERMINATE ========== " + taskId.path());
+        LOGGER.info(() -> "\n========== TERMINATE ========== \n" + taskId.path());
 
         securityContext.secure(PermissionNames.MANAGE_TASKS_PERMISSION, () -> {
             final TaskContextImpl taskContext = taskRegistry.get(taskId);

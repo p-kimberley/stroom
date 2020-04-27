@@ -56,7 +56,7 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
     private void terminate(final FindTaskCriteria findTaskCriteria, final String searchName, final String taskName) {
         final TerminateTaskProgressRequest terminateTaskProgressRequest = new TerminateTaskProgressRequest(findTaskCriteria, false);
 
-        taskContextFactory.context("TERMINATE CLUSTER " + findTaskCriteria, parentContext -> {
+        taskContextFactory.context("\n========== TERMINATE CLUSTER ==========\n" + findTaskCriteria, parentContext -> {
             parentContext.info(() -> searchName + " - terminating child tasks");
 
             try {
@@ -66,7 +66,7 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
                 // Only send the event to remote nodes and not this one.
                 // Send the entity event.
                 targetNodes.forEach(nodeName -> {
-                    final Runnable runnable = taskContextFactory.context(parentContext, "TERMINATE CLUSTER " + findTaskCriteria + " on node '" + nodeName + "'", taskContext -> {
+                    final Runnable runnable = taskContextFactory.context(parentContext, "\n========== TERMINATE CLUSTER ==========\n" + findTaskCriteria + " on node '" + nodeName + "'", taskContext -> {
                         try {
                             final Boolean response = taskResource.terminate(nodeName, terminateTaskProgressRequest);
                             if (!Boolean.TRUE.equals(response)) {

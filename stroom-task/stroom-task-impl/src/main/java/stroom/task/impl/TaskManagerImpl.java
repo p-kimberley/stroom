@@ -262,11 +262,14 @@ public class TaskManagerImpl implements TaskManager {
     }
 
     private void doTerminated(final boolean kill, final long timeNowMs, final List<TaskProgress> taskProgressList,
-                              final List<TaskContextImpl> itemsToKill) {
-        LOGGER.trace(() -> LogUtil.message("doTerminated() - itemsToKill.size() {}", itemsToKill.size()));
+                              final List<TaskContextImpl> terminateList) {
+        LOGGER.trace(() -> LogUtil.message("doTerminated() - itemsToKill.size() {}", terminateList.size()));
 
-        for (final TaskContextImpl taskContext : itemsToKill) {
+        for (final TaskContextImpl taskContext : terminateList) {
             final TaskId taskId = taskContext.getTaskId();
+
+            LOGGER.info(() -> "TERMINATEX ========== " + taskId.path());
+
             // First try and terminate the task.
             if (!taskContext.isTerminated()) {
                 LOGGER.trace(() -> LogUtil.message("terminating task {}", taskId));

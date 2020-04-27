@@ -107,8 +107,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
             final Thread currentThread = Thread.currentThread();
             final String oldThreadName = currentThread.getName();
 
-            currentThread.setName(oldThreadName + " - " + taskName);
-
+            currentThread.setName(taskId.getId());
             subTaskContext.setThread(currentThread);
 
             try {
@@ -116,6 +115,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
                 ancestorTaskSet.forEach(ancestorTask -> ancestorTask.addChild(subTaskContext));
 
                 taskRegistry.put(taskId, subTaskContext);
+                LOGGER.info(() -> "EXECUTING NEW TASK " + taskName + "\n" + taskId.path());
                 LOGGER.debug(() -> "execAsync()->exec() - " + taskName + " took " + logExecutionTime.toString());
 
                 if (stop.get() || currentThread.isInterrupted()) {

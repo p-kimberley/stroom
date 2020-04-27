@@ -22,8 +22,6 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 @JsonInclude(Include.NON_NULL)
 public class TaskId implements Serializable {
@@ -103,25 +101,14 @@ public class TaskId implements Serializable {
     }
 
     public String path() {
-        final List<TaskId> parents = new ArrayList<>();
-        parents.add(this);
+        final StringBuilder sb = new StringBuilder();
+        sb.append(id);
         TaskId parent = getParentId();
         while (parent != null) {
-            parents.add(0, parent);
-            parent = getParentId();
+            sb.append(" < ");
+            sb.append(parent.id);
+            parent = parent.getParentId();
         }
-
-        final StringBuilder sb = new StringBuilder();
-        int depth = 0;
-        for (TaskId taskId : parents) {
-            for (int i = 0; i < depth; i++) {
-                sb.append("   ");
-            }
-            sb.append(" > ");
-            sb.append(taskId.id);
-            depth++;
-        }
-
         return sb.toString();
     }
 }

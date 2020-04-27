@@ -343,7 +343,7 @@ class TaskManagerImpl implements TaskManager {
 
     @Override
     public void terminate(final TaskId taskId) {
-        LOGGER.info(() -> "TERMINATE: " + taskId.path());
+        LOGGER.info(() -> "TERMINATE ========== " + taskId.path());
 
         securityContext.secure(PermissionNames.MANAGE_TASKS_PERMISSION, () -> {
             final TaskContextImpl taskContext = taskRegistry.get(taskId);

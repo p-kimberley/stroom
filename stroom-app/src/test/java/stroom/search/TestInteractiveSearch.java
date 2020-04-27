@@ -560,7 +560,7 @@ class TestInteractiveSearch extends AbstractSearchTest {
     private void report(final String testName) {
 //        final ResultPage<TaskProgress> resultPage = taskManager.find(new FindTaskProgressCriteria());
         final StringBuilder sb = new StringBuilder();
-        sb.append("\n");
+        sb.append("\n\n");
         sb.append("================================================================\n");
         sb.append("= STARTING " + testName + "\n");
         sb.append(taskManager.toString());

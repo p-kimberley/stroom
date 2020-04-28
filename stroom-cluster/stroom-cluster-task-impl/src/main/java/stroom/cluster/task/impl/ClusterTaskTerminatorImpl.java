@@ -8,6 +8,7 @@ import stroom.cluster.task.api.NullClusterStateException;
 import stroom.cluster.task.api.TargetNodeSetFactory;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.TaskLog;
 import stroom.task.shared.FindTaskCriteria;
 import stroom.task.shared.TaskId;
 import stroom.task.shared.TaskResource;
@@ -56,7 +57,9 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
     private void terminate(final FindTaskCriteria findTaskCriteria, final String searchName, final String taskName) {
         final TerminateTaskProgressRequest terminateTaskProgressRequest = new TerminateTaskProgressRequest(findTaskCriteria, false);
 
-        taskContextFactory.context("\n========== TERMINATE CLUSTER ==========\n" + findTaskCriteria, parentContext -> {
+        taskContextFactory.context("TERMINATE CLUSTER " + findTaskCriteria, parentContext -> {
+            TaskLog.log("terminateCluster1", parentContext.getTaskId(), null);
+
             parentContext.info(() -> searchName + " - terminating child tasks");
 
             try {
@@ -66,7 +69,9 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
                 // Only send the event to remote nodes and not this one.
                 // Send the entity event.
                 targetNodes.forEach(nodeName -> {
-                    final Runnable runnable = taskContextFactory.context(parentContext, "\n========== TERMINATE CLUSTER ==========\n" + findTaskCriteria + " on node '" + nodeName + "'", taskContext -> {
+                    final Runnable runnable = taskContextFactory.context(parentContext, "TERMINATE CLUSTER 2 " + findTaskCriteria + " on node '" + nodeName + "'", taskContext -> {
+                        TaskLog.log("terminateCluster2", taskContext.getTaskId(), null);
+
                         try {
                             final Boolean response = taskResource.terminate(nodeName, terminateTaskProgressRequest);
                             if (!Boolean.TRUE.equals(response)) {

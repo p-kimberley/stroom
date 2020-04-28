@@ -36,11 +36,16 @@ import stroom.pipeline.filter.IdEnrichmentFilter;
 import stroom.pipeline.filter.XMLFilter;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.data.PipelineData;
-import stroom.pipeline.state.*;
+import stroom.pipeline.state.CurrentUserHolder;
+import stroom.pipeline.state.FeedHolder;
+import stroom.pipeline.state.MetaDataHolder;
+import stroom.pipeline.state.MetaHolder;
+import stroom.pipeline.state.PipelineHolder;
 import stroom.pipeline.task.StreamMetaDataProvider;
 import stroom.search.coprocessor.Error;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContext;
+import stroom.task.api.TaskLog;
 import stroom.util.io.IgnoreCloseInputStream;
 import stroom.util.io.StreamUtil;
 import stroom.util.logging.LambdaLogUtil;
@@ -98,6 +103,8 @@ class ExtractionTaskHandler {
     }
 
     public void exec(final TaskContext taskContext, final ExtractionTask task) {
+        TaskLog.log("IN ExtractionTaskHandler", taskContext.getTaskId(), null);
+
         // Elevate user permissions so that inherited pipelines that the user only has 'Use' permission on can be read.
         securityContext.useAsRead(() ->
                 LAMBDA_LOGGER.logDurationIfDebugEnabled(
@@ -110,6 +117,8 @@ class ExtractionTaskHandler {
                             }
                         },
                         () -> "ExtractionTaskHandler.exec()"));
+
+        TaskLog.log("OUT ExtractionTaskHandler", taskContext.getTaskId(), null);
     }
 
     private void extract(final ExtractionTask task) {

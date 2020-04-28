@@ -24,8 +24,13 @@ import stroom.cluster.task.api.ClusterTaskRef;
 import stroom.cluster.task.api.ClusterWorker;
 import stroom.pipeline.errorhandler.MessageUtil;
 import stroom.query.api.v2.ExpressionOperator;
+import stroom.search.coprocessor.CompletionState;
+import stroom.search.coprocessor.Coprocessors;
+import stroom.search.coprocessor.CoprocessorsFactory;
 import stroom.search.coprocessor.Error;
-import stroom.search.coprocessor.*;
+import stroom.search.coprocessor.NewCoprocessor;
+import stroom.search.coprocessor.Receiver;
+import stroom.search.coprocessor.ReceiverImpl;
 import stroom.search.extraction.ExpressionFilter;
 import stroom.search.extraction.ExtractionDecoratorFactory;
 import stroom.search.impl.shard.IndexShardSearchFactory;
@@ -34,6 +39,7 @@ import stroom.search.resultsender.ResultSender;
 import stroom.search.resultsender.ResultSenderFactory;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContext;
+import stroom.task.api.TaskLog;
 import stroom.task.api.TaskTerminatedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -76,6 +82,8 @@ class ClusterSearchTaskHandler implements ClusterTaskHandler<ClusterSearchTask, 
 
     @Override
     public void exec(final TaskContext taskContext, final ClusterSearchTask task, final ClusterTaskRef<NodeResult> clusterTaskRef) {
+        TaskLog.log("IN ClusterSearchTaskHandler", taskContext.getTaskId(), null);
+
         securityContext.useAsRead(() -> {
             final Consumer<NodeResult> resultConsumer = result ->
                     clusterWorker.sendResult(ClusterResult.success(clusterTaskRef, result));
@@ -144,6 +152,8 @@ class ClusterSearchTaskHandler implements ClusterTaskHandler<ClusterSearchTask, 
                 }
             }
         });
+
+        TaskLog.log("OUT ClusterSearchTaskHandler", taskContext.getTaskId(), null);
     }
 
     private void search(final TaskContext taskContext,

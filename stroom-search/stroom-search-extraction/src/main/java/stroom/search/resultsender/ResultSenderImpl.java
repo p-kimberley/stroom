@@ -6,6 +6,7 @@ import stroom.search.coprocessor.CompletionState;
 import stroom.search.coprocessor.Coprocessors;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.TaskLog;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 
@@ -56,6 +57,8 @@ class ResultSenderImpl implements ResultSender {
         LOGGER.trace(() -> "sendData() called");
 
         final Supplier<Boolean> supplier = taskContextFactory.contextResult(parentTaskContext, "Search Result Sender", taskContext -> {
+            TaskLog.log("IN ResultSenderImpl", taskContext.getTaskId(), null);
+
             // Find out if searching is complete.
             final boolean complete = searchComplete.isComplete();
 
@@ -82,6 +85,8 @@ class ResultSenderImpl implements ResultSender {
                     consumer.accept(result);
                 }
             }
+
+            TaskLog.log("OUT ResultSenderImpl", taskContext.getTaskId(), null);
 
             return complete;
         });

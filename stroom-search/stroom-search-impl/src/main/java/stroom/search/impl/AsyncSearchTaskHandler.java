@@ -19,7 +19,11 @@ package stroom.search.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import stroom.cluster.task.api.*;
+import stroom.cluster.task.api.ClusterDispatchAsync;
+import stroom.cluster.task.api.ClusterTaskTerminator;
+import stroom.cluster.task.api.NodeNotFoundException;
+import stroom.cluster.task.api.NullClusterStateException;
+import stroom.cluster.task.api.TargetNodeSetFactory;
 import stroom.index.impl.IndexShardService;
 import stroom.index.impl.IndexStore;
 import stroom.index.shared.FindIndexShardCriteria;
@@ -30,6 +34,7 @@ import stroom.index.shared.IndexShard.IndexShardStatus;
 import stroom.query.api.v2.Query;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContext;
+import stroom.task.api.TaskLog;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.TaskId;
 import stroom.util.shared.ResultPage;
@@ -37,8 +42,13 @@ import stroom.util.shared.Sort.Direction;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 class AsyncSearchTaskHandler {
@@ -70,6 +80,8 @@ class AsyncSearchTaskHandler {
     }
 
     public void exec(final TaskContext taskContext, final AsyncSearchTask task) {
+        TaskLog.log("IN AsyncSearchTaskHandler", taskContext.getTaskId(), null);
+
         securityContext.secure(() -> securityContext.useAsRead(() -> {
             final ClusterSearchResultCollector resultCollector = task.getResultCollector();
 
@@ -175,6 +187,8 @@ class AsyncSearchTaskHandler {
                 }
             }
         }));
+
+        TaskLog.log("OUT AsyncSearchTaskHandler", taskContext.getTaskId(), null);
     }
 
     private void terminateTasks(final AsyncSearchTask task, final TaskId taskId) {

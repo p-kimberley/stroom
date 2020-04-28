@@ -19,6 +19,7 @@ package stroom.task.impl;
 import stroom.node.api.NodeInfo;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.PermissionNames;
+import stroom.task.api.TaskLog;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.FindTaskCriteria;
 import stroom.task.shared.FindTaskProgressCriteria;
@@ -268,7 +269,7 @@ public class TaskManagerImpl implements TaskManager {
         for (final TaskContextImpl taskContext : terminateList) {
             final TaskId taskId = taskContext.getTaskId();
 
-            LOGGER.info(() -> "\n========== TERMINATEX ========== \n" + taskId.path());
+            TaskLog.log("doTerminated", taskId, null);
 
             // First try and terminate the task.
             if (!taskContext.isTerminated()) {
@@ -346,7 +347,7 @@ public class TaskManagerImpl implements TaskManager {
 
     @Override
     public void terminate(final TaskId taskId) {
-        LOGGER.info(() -> "\n========== TERMINATE ========== \n" + taskId.path());
+        TaskLog.log("terminate", taskId, null);
 
         securityContext.secure(PermissionNames.MANAGE_TASKS_PERMISSION, () -> {
             final TaskContextImpl taskContext = taskRegistry.get(taskId);

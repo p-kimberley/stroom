@@ -36,6 +36,7 @@ import stroom.search.impl.SearchException;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.TaskLog;
 import stroom.util.logging.LambdaLogUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -70,6 +71,8 @@ public class IndexShardSearchTaskHandler {
     }
 
     public void exec(final TaskContext taskContext, final IndexShardSearchTask task) {
+        TaskLog.log("IN IndexShardSearchTaskHandler", taskContext.getTaskId(), null);
+
         LOGGER.logDurationIfDebugEnabled(
                 () -> {
                     final long indexShardId = task.getIndexShardId();
@@ -105,6 +108,8 @@ public class IndexShardSearchTaskHandler {
                     }
                 },
                 LambdaLogUtil.message("exec() for shard {}", task.getShardNumber()));
+
+        TaskLog.log("OUT IndexShardSearchTaskHandler", taskContext.getTaskId(), null);
     }
 
     private IndexWriter getWriter(final Long indexShardId) {

@@ -4,6 +4,7 @@ import stroom.security.api.SecurityContext;
 import stroom.security.api.UserIdentity;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.TaskLog;
 import stroom.task.api.TaskTerminatedException;
 import stroom.task.shared.TaskId;
 import stroom.util.logging.LambdaLogger;
@@ -115,7 +116,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
                 ancestorTaskSet.forEach(ancestorTask -> ancestorTask.addChild(subTaskContext));
 
                 taskRegistry.put(taskId, subTaskContext);
-                LOGGER.info(() -> "\n========== EXECUTING ========== \n" + taskId.path() + " (" + taskName + ")");
+                TaskLog.log("IN", taskId, taskName);
                 LOGGER.debug(() -> "execAsync()->exec() - " + taskName + " took " + logExecutionTime.toString());
 
                 if (stop.get() || currentThread.isInterrupted()) {
@@ -155,7 +156,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
                 subTaskContext.setThread(null);
                 currentThread.setName(oldThreadName);
 
-                LOGGER.info(() -> "\n========== FINISHED ========== \n" + taskId.path() + " (" + taskName + ")");
+                TaskLog.log("OUT", taskId, taskName);
             }
 
             return result;

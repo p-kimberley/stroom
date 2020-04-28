@@ -25,6 +25,7 @@ import stroom.query.common.v2.Sizes;
 import stroom.search.api.EventRefs;
 import stroom.search.coprocessor.EventCoprocessorSettings;
 import stroom.security.api.SecurityContext;
+import stroom.task.api.TaskLog;
 import stroom.ui.config.shared.UiConfig;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -120,6 +121,7 @@ public class EventSearchTaskHandler {
                 }
             } catch (final InterruptedException e) {
                 LOGGER.info("XXXXXXXX InterruptedException " + e.getMessage() + " " + e.toString());
+                LOGGER.info("\t" + TaskLog.stack(e.getStackTrace()));
 
                 // Continue to interrupt this thread.
                 Thread.currentThread().interrupt();

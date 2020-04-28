@@ -153,7 +153,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
 
     public void complete(final String type) {
         LOGGER.info(type + " collector with id = " + id);
-        LOGGER.info("========== COMPLETE " + type + " ========== " + taskId.path() + "    " + TaskLog.stack());
+        LOGGER.info("========== " + type + " ========== " + taskId.path() + "    " + TaskLog.stack());
         completionState.complete();
 
         // We have to wrap the cluster termination task in another task or

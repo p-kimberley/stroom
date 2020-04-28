@@ -23,8 +23,11 @@ public class TaskLog {
     }
 
     public static String stack() {
+        return stack(Thread.currentThread().getStackTrace());
+    }
+
+    public static String stack(final StackTraceElement[] stackTraceElements) {
         final StringBuilder sb = new StringBuilder();
-        final StackTraceElement[] stackTraceElements = Thread.currentThread().getStackTrace();
         for (int i = 3; i < stackTraceElements.length; i++) {
             final StackTraceElement stackTraceElement = stackTraceElements[i];
             if (stackTraceElement.getClassName().contains("stroom")) {
@@ -33,7 +36,7 @@ public class TaskLog {
                 sb.append(stackTraceElement.getMethodName());
                 sb.append(":");
                 sb.append(stackTraceElement.getLineNumber());
-                    sb.append(" < ");
+                sb.append(" < ");
             }
         }
         if (sb.length() > 3) {

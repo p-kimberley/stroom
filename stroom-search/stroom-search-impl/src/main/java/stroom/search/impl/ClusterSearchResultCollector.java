@@ -32,6 +32,7 @@ import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
 import stroom.search.resultsender.NodeResult;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.TaskLog;
 import stroom.task.api.TaskTerminatedException;
 import stroom.task.shared.TaskId;
 import stroom.util.logging.LambdaLogger;
@@ -103,6 +104,8 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
 
         id = CollectorIdFactory.create();
 
+        LOGGER.info("Registering collector with id = " + id);
+
         clusterResultCollectorCache.put(id, this);
     }
 
@@ -148,7 +151,8 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
     }
 
     public void complete() {
-        LOGGER.info("========== COMPLETE 223 ========== " + taskId.path());
+        LOGGER.info("Completing collector with id = " + id);
+        LOGGER.info("========== COMPLETE 223 ========== " + taskId.path() + "    " + TaskLog.stack());
         completionState.complete();
 
         // We have to wrap the cluster termination task in another task or

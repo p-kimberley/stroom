@@ -232,6 +232,9 @@ public class TaskManagerImpl implements TaskManager {
 //    }
 
     ResultPage<TaskProgress> terminate(final FindTaskCriteria criteria, final boolean kill) {
+        LOGGER.info("TERMINATE " + criteria.toString() + "\n" + TaskLog.stack());
+
+
         return securityContext.secureResult(PermissionNames.MANAGE_TASKS_PERMISSION, () -> {
             // This can change a little between servers
             final long timeNowMs = System.currentTimeMillis();

@@ -232,9 +232,6 @@ public class TaskManagerImpl implements TaskManager {
 //    }
 
     ResultPage<TaskProgress> terminate(final FindTaskCriteria criteria, final boolean kill) {
-        LOGGER.info("TERMINATE " + criteria.toString() + "\n" + TaskLog.stack());
-
-
         return securityContext.secureResult(PermissionNames.MANAGE_TASKS_PERMISSION, () -> {
             // This can change a little between servers
             final long timeNowMs = System.currentTimeMillis();
@@ -256,6 +253,15 @@ public class TaskManagerImpl implements TaskManager {
                         }
                     }
                 }
+
+                final String list = terminateList.stream().map(tc -> "\t\t" + tc.getName() + " - " + tc.getTaskId().path()).collect(Collectors.joining("\n"));
+                LOGGER.info("\nTERMINATE " +
+                        criteria.toString() +
+                        "\n\n\tTERMINATING THE FOLLOWING TASKS\n" +
+                        list +
+                        "\n" +
+                        TaskLog.stack() +
+                        "\n");
 
                 // Now terminate the relevant tasks.
                 doTerminated(kill, timeNowMs, taskProgressList, terminateList);

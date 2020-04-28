@@ -43,6 +43,8 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
 
     @Override
     public void terminate(final String searchName, final TaskId ancestorId, final String taskName) {
+        TaskLog.log("terminate", ancestorId, null);
+
         final FindTaskCriteria findTaskCriteria = new FindTaskCriteria();
         findTaskCriteria.addAncestorId(ancestorId);
 
@@ -58,7 +60,7 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
         final TerminateTaskProgressRequest terminateTaskProgressRequest = new TerminateTaskProgressRequest(findTaskCriteria, false);
 
         taskContextFactory.context("TERMINATE CLUSTER " + findTaskCriteria, parentContext -> {
-            TaskLog.log("terminateCluster1", parentContext.getTaskId(), null);
+//            TaskLog.log("terminateCluster1", parentContext.getTaskId(), null);
 
             parentContext.info(() -> searchName + " - terminating child tasks");
 
@@ -70,7 +72,7 @@ public class ClusterTaskTerminatorImpl implements ClusterTaskTerminator {
                 // Send the entity event.
                 targetNodes.forEach(nodeName -> {
                     final Runnable runnable = taskContextFactory.context(parentContext, "TERMINATE CLUSTER 2 " + findTaskCriteria + " on node '" + nodeName + "'", taskContext -> {
-                        TaskLog.log("terminateCluster2", taskContext.getTaskId(), null);
+//                        TaskLog.log("terminateCluster2", taskContext.getTaskId(), null);
 
                         try {
                             final Boolean response = taskResource.terminate(nodeName, terminateTaskProgressRequest);

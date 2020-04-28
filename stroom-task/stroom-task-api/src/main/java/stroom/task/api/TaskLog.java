@@ -28,16 +28,16 @@ public class TaskLog {
 
     public static String stack(final StackTraceElement[] stackTraceElements) {
         final StringBuilder sb = new StringBuilder();
-        for (int i = 3; i < stackTraceElements.length; i++) {
+        for (int i = 0; i < stackTraceElements.length; i++) {
             final StackTraceElement stackTraceElement = stackTraceElements[i];
-            if (stackTraceElement.getClassName().contains("stroom")) {
+//            if (stackTraceElement.getClassName().contains("stroom")) {
                 sb.append(stackTraceElement.getClassName());
                 sb.append(".");
                 sb.append(stackTraceElement.getMethodName());
                 sb.append(":");
                 sb.append(stackTraceElement.getLineNumber());
                 sb.append(" < ");
-            }
+//            }
         }
         if (sb.length() > 3) {
             sb.setLength(sb.length() - 3);

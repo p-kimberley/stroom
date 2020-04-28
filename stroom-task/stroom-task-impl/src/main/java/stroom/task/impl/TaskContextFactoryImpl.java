@@ -108,7 +108,7 @@ class TaskContextFactoryImpl implements TaskContextFactory {
             final Thread currentThread = Thread.currentThread();
             final String oldThreadName = currentThread.getName();
 
-            currentThread.setName(taskId.getId());
+            currentThread.setName(taskId.path());
             subTaskContext.setThread(currentThread);
 
             try {

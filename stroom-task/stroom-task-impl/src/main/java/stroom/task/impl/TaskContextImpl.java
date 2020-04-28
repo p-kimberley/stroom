@@ -18,6 +18,7 @@ package stroom.task.impl;
 
 import stroom.security.api.UserIdentity;
 import stroom.task.api.TaskContext;
+import stroom.task.api.TaskLog;
 import stroom.task.shared.TaskId;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -110,7 +111,7 @@ public class TaskContextImpl implements TaskContext {
     synchronized void interrupt() {
         final Thread thread = this.thread;
         if (thread != null) {
-            LOGGER.info("INTERRUPTING - " + thread.getName());
+            LOGGER.info("INTERRUPTING - " + thread.getName() + " " + taskId.path() + " " + TaskLog.stack());
             thread.interrupt();
         }
     }

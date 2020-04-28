@@ -189,6 +189,7 @@ class AsyncSearchTaskHandler {
             }
         }));
 
+//        ThreadUtil.sleepAtLeastIgnoreInterrupts(10000);
         TaskLog.log("OUT AsyncSearchTaskHandler", taskContext.getTaskId(), null);
     }
 

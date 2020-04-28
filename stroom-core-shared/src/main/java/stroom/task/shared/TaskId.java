@@ -105,7 +105,7 @@ public class TaskId implements Serializable {
         sb.append(id);
         TaskId parent = getParentId();
         while (parent != null) {
-            sb.insert(0, " > ");
+            sb.insert(0, ">");
             sb.insert(0, parent.id);
             parent = parent.getParentId();
         }

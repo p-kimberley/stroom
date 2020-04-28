@@ -18,9 +18,18 @@ package stroom.search.impl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import stroom.cluster.task.api.*;
-import stroom.query.common.v2.*;
+import stroom.cluster.task.api.ClusterResultCollector;
+import stroom.cluster.task.api.ClusterResultCollectorCache;
+import stroom.cluster.task.api.ClusterTaskTerminator;
+import stroom.cluster.task.api.CollectorId;
+import stroom.cluster.task.api.CollectorIdFactory;
+import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
+import stroom.query.common.v2.Data;
+import stroom.query.common.v2.Payload;
+import stroom.query.common.v2.ResultHandler;
+import stroom.query.common.v2.Sizes;
+import stroom.query.common.v2.Store;
 import stroom.search.resultsender.NodeResult;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
@@ -29,9 +38,17 @@ import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 
 import javax.inject.Provider;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.*;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -113,10 +130,12 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
                         if (!(t instanceof TaskTerminatedException)) {
                             LOGGER.error(t.getMessage(), t);
                             getErrorSet(nodeName).add(t.getMessage());
+                            LOGGER.info("========== COMPLETE 345 ========== " + taskId.path());
                             completionState.complete();
                             throw new RuntimeException(t.getMessage(), t);
                         }
 
+                        LOGGER.info("========== COMPLETE 566 ========== " + taskId.path());
                         completionState.complete();
                     }
                 });
@@ -129,6 +148,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
     }
 
     public void complete() {
+        LOGGER.info("========== COMPLETE 223 ========== " + taskId.path());
         completionState.complete();
 
         // We have to wrap the cluster termination task in another task or
@@ -197,6 +217,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
             if (remainingNodeCount.compareAndSet(0, 0)) {
                 // All the results are in but we may still have work pending, so wait
                 waitForPendingWork();
+                LOGGER.info("========== COMPLETE 888 ========== " + taskId.path());
                 completionState.complete();
             }
         }
@@ -223,6 +244,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
             getErrorSet(nodeName).add(throwable.getMessage());
         } finally {
             if (remainingNodeCount.compareAndSet(0, 0)) {
+                LOGGER.info("========== COMPLETE 3233 ========== " + taskId.path());
                 completionState.complete();
             }
         }

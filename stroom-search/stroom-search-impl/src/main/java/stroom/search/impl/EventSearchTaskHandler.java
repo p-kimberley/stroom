@@ -110,6 +110,8 @@ public class EventSearchTaskHandler {
                 // Wait for completion or termination
                 searchResultCollector.awaitCompletion();
 
+                LOGGER.info(()-> "========== COMPLETED EventSearchTaskHandler");
+
                 eventRefs = resultHandler.getStreamReferences();
                 if (eventRefs != null) {
                     eventRefs.trim();

@@ -3,7 +3,6 @@ package stroom.task.api;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.task.shared.TaskId;
-import stroom.util.ConsoleColour;
 
 public class TaskLog {
     private static final Logger LOGGER = LoggerFactory.getLogger(TaskLog.class);
@@ -20,7 +19,7 @@ public class TaskLog {
             sb.append(")");
         }
 
-        LOGGER.info(ConsoleColour.yellow(sb.toString()) + ConsoleColour.blue(stack()) + ConsoleColour.yellow("\n===================="));
+//        LOGGER.info(ConsoleColour.yellow(sb.toString()) + ConsoleColour.blue(stack()) + ConsoleColour.yellow("\n===================="));
     }
 
     public static String stack() {

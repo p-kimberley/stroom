@@ -171,11 +171,19 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
 
     @Override
     public void awaitCompletion() throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            LOGGER.info("INTERRUPTED - awaitCompletion1 " + Thread.currentThread().getName());
+        }
+
         completionState.awaitCompletion();
     }
 
     @Override
     public boolean awaitCompletion(final long timeout, final TimeUnit unit) throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            LOGGER.info("INTERRUPTED - awaitCompletion2 " + Thread.currentThread().getName());
+        }
+
         return completionState.awaitCompletion(timeout, unit);
     }
 

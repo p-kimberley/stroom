@@ -19,6 +19,8 @@ package stroom.task.impl;
 import stroom.security.api.UserIdentity;
 import stroom.task.api.TaskContext;
 import stroom.task.shared.TaskId;
+import stroom.util.logging.LambdaLogger;
+import stroom.util.logging.LambdaLoggerFactory;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -27,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 public class TaskContextImpl implements TaskContext {
+    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(TaskContextImpl.class);
+
     private final TaskId taskId;
     private final UserIdentity userIdentity;
     private final String name;
@@ -106,6 +110,7 @@ public class TaskContextImpl implements TaskContext {
     synchronized void interrupt() {
         final Thread thread = this.thread;
         if (thread != null) {
+            LOGGER.info("INTERRUPTING - " + thread.getName());
             thread.interrupt();
         }
     }

@@ -61,6 +61,10 @@ public class EventSearchTaskHandler {
     }
 
     public EventRefs exec(final EventSearchTask task) {
+        if (Thread.currentThread().isInterrupted()) {
+            LOGGER.info("INTERRUPTED - EventSearchTaskHandler " + Thread.currentThread().getName());
+        }
+
         return securityContext.secureResult(() -> {
             EventRefs eventRefs;
 

@@ -180,7 +180,7 @@ class AsyncSearchTaskHandler {
 
                     // Let the result handler know search has finished.
 
-                    resultCollector.complete();
+                    resultCollector.complete("COMPLETE");
 
                     // We need to wait here for the client to keep getting results if
                     // this is an interactive search.

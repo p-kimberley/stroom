@@ -146,13 +146,14 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
 
     @Override
     public void destroy() {
+        LOGGER.info("Destroying collector with id = " + id);
         clusterResultCollectorCache.remove(id);
-        complete();
+        complete("DESTROY");
     }
 
-    public void complete() {
-        LOGGER.info("Completing collector with id = " + id);
-        LOGGER.info("========== COMPLETE 223 ========== " + taskId.path() + "    " + TaskLog.stack());
+    public void complete(final String type) {
+        LOGGER.info(type + " collector with id = " + id);
+        LOGGER.info("========== COMPLETE " + type + " ========== " + taskId.path() + "    " + TaskLog.stack());
         completionState.complete();
 
         // We have to wrap the cluster termination task in another task or
@@ -262,7 +263,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
 
     @Override
     public void terminate() {
-        complete();
+        complete("TERMINATE");
     }
 
     public Set<String> getErrorSet(final String nodeName) {

@@ -102,6 +102,8 @@ public class EventSearchTaskHandler {
             asyncSearchTask.setResultCollector(searchResultCollector);
 
             try {
+                LOGGER.info(()-> "========== STARTED EventSearchTaskHandler");
+
                 // Start asynchronous search execution.
                 searchResultCollector.start();
 
@@ -117,6 +119,8 @@ public class EventSearchTaskHandler {
                     eventRefs.trim();
                 }
             } catch (final InterruptedException e) {
+                LOGGER.info("XXXXXXXX InterruptedException " + e.getMessage() + " " + e.toString());
+
                 // Continue to interrupt this thread.
                 Thread.currentThread().interrupt();
 
@@ -125,6 +129,9 @@ public class EventSearchTaskHandler {
                 throw new RuntimeException(
                         LogUtil.message("Thread {} interrupted executing task {}",
                                 Thread.currentThread().getName(), task));
+            } catch (final Throwable e) {
+                LOGGER.info("XXXXXXXX Throwable " + e.getMessage() + " " + e.toString());
+                throw e;
             } finally {
                 searchResultCollector.destroy();
             }

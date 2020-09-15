@@ -17,12 +17,14 @@
 package stroom.search.impl;
 
 import stroom.query.api.v2.Query;
+import stroom.query.api.v2.QueryKey;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 
 import java.util.Map;
 
 public class AsyncSearchTask {
+    private final QueryKey key;
     private final String searchName;
     private final Query query;
     private final int resultSendFrequency;
@@ -30,20 +32,26 @@ public class AsyncSearchTask {
     private final String dateTimeLocale;
     private final long now;
 
-    private volatile transient ClusterSearchResultCollector resultCollector;
+    private volatile transient ClusterResultCollector resultCollector;
 
-    public AsyncSearchTask(final String searchName,
+    public AsyncSearchTask(final QueryKey key,
+                           final String searchName,
                            final Query query,
                            final int resultSendFrequency,
                            final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap,
                            final String dateTimeLocale,
                            final long now) {
+        this.key = key;
         this.searchName = searchName;
         this.query = query;
         this.resultSendFrequency = resultSendFrequency;
         this.coprocessorMap = coprocessorMap;
         this.dateTimeLocale = dateTimeLocale;
         this.now = now;
+    }
+
+    public QueryKey getKey() {
+        return key;
     }
 
     public String getSearchName() {
@@ -70,11 +78,11 @@ public class AsyncSearchTask {
         return now;
     }
 
-    public ClusterSearchResultCollector getResultCollector() {
+    public ClusterResultCollector getResultCollector() {
         return resultCollector;
     }
 
-    public void setResultCollector(final ClusterSearchResultCollector resultCollector) {
+    public void setResultCollector(final ClusterResultCollector resultCollector) {
         this.resultCollector = resultCollector;
     }
 }

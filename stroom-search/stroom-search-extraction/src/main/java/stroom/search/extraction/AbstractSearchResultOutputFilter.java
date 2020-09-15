@@ -32,4 +32,6 @@ public abstract class AbstractSearchResultOutputFilter extends AbstractXMLFilter
         this.fieldIndexes = fieldIndexes;
         this.consumer = consumer;
     }
+
+    public abstract int getCount();
 }

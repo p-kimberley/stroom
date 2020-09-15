@@ -16,11 +16,12 @@
 
 package stroom.search.impl;
 
-import stroom.cluster.task.api.ClusterTaskHandlerBinder;
-import stroom.util.RunnableWrapper;
+import stroom.cluster.api.ClusterServiceBinder;
 import stroom.job.api.ScheduledJobsBinder;
+import stroom.lifecycle.api.LifecycleBinder;
 import stroom.search.api.EventSearch;
 import stroom.search.extraction.ExtractionModule;
+import stroom.util.RunnableWrapper;
 import stroom.util.guice.GuiceUtil;
 import stroom.util.guice.RestResourcesBinder;
 import stroom.util.shared.Clearable;
@@ -37,26 +38,41 @@ public class SearchModule extends AbstractModule {
         install(new ExtractionModule());
 
         bind(EventSearch.class).to(EventSearchImpl.class);
+        bind(RemoteSearchResource.class).to(RemoteSearchResourceImpl.class);
 
         GuiceUtil.buildMultiBinder(binder(), Clearable.class).addBinding(LuceneSearchResponseCreatorManager.class);
 
         RestResourcesBinder.create(binder())
-                .bind(StroomIndexQueryResourceImpl.class);
-
-        ClusterTaskHandlerBinder.create(binder())
-                .bind(ClusterSearchTask.class, ClusterSearchTaskHandler.class);
+                .bind(StroomIndexQueryResourceImpl.class)
+                .bind(RemoteSearchResourceImpl.class);
 
         ScheduledJobsBinder.create(binder())
                 .bindJobTo(EvictExpiredElements.class, builder -> builder
                         .withName("Evict expired elements")
                         .withManagedState(false)
                         .withSchedule(PERIODIC, "10s"));
+
+        ClusterServiceBinder.create(binder())
+                .bind(RemoteSearchManager.SERVICE_NAME, RemoteSearchManager.class);
+
+        GuiceUtil.buildMultiBinder(binder(), Clearable.class)
+                .addBinding(ClusterResultCollectorCache.class);
+
+        LifecycleBinder.create(binder())
+                .bindShutdownTaskTo(ClusterResultCollectorCacheShutdown.class);
     }
 
     private static class EvictExpiredElements extends RunnableWrapper {
         @Inject
         EvictExpiredElements(final LuceneSearchResponseCreatorManager luceneSearchResponseCreatorManager) {
             super(luceneSearchResponseCreatorManager::evictExpiredElements);
+        }
+    }
+
+    private static class ClusterResultCollectorCacheShutdown extends RunnableWrapper {
+        @Inject
+        ClusterResultCollectorCacheShutdown(final ClusterResultCollectorCache clusterResultCollectorCache) {
+            super(clusterResultCollectorCache::shutdown);
         }
     }
 }

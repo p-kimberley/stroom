@@ -35,6 +35,7 @@ public class SearchResultOutputFilter extends AbstractSearchResultOutputFilter {
     private static final String VALUE = "value";
 
     private Val[] values;
+    private int count;
 
     @Override
     public void startElement(final String uri, final String localName, final String qName, final Attributes atts)
@@ -63,9 +64,15 @@ public class SearchResultOutputFilter extends AbstractSearchResultOutputFilter {
     public void endElement(final String uri, final String localName, final String qName) throws SAXException {
         if (RECORD.equals(localName)) {
             consumer.accept(new Values(values));
+            count++;
             values = null;
         }
 
         super.endElement(uri, localName, qName);
+    }
+
+    @Override
+    public int getCount() {
+        return count;
     }
 }

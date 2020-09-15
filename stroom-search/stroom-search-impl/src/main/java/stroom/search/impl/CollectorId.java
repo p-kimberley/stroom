@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package stroom.cluster.task.api;
+package stroom.search.impl;
 
-public class CollectorIdImpl implements CollectorId {
+public class CollectorId {
     private static final long serialVersionUID = 9009491007920826639L;
 
     private String id;
@@ -24,7 +24,7 @@ public class CollectorIdImpl implements CollectorId {
     /**
      * Do not use this constructor it is for GWT serialisation only.
      */
-    public CollectorIdImpl() {
+    public CollectorId() {
     }
 
     /**
@@ -33,7 +33,7 @@ public class CollectorIdImpl implements CollectorId {
      *
      * @param id The id of this collector.
      */
-    public CollectorIdImpl(final String id) {
+    public CollectorId(final String id) {
         this.id = id;
     }
 
@@ -46,11 +46,11 @@ public class CollectorIdImpl implements CollectorId {
     public boolean equals(final Object o) {
         if (o == this) {
             return true;
-        } else if (!(o instanceof CollectorIdImpl)) {
+        } else if (!(o instanceof CollectorId)) {
             return false;
         }
 
-        final CollectorIdImpl collectorIdImpl = (CollectorIdImpl) o;
+        final CollectorId collectorIdImpl = (CollectorId) o;
         return id.equals(collectorIdImpl.id);
     }
 

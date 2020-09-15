@@ -481,6 +481,10 @@ appConfig:
         maximumSize: 2
         expireAfterAccess: "PT1M"
         expireAfterWrite: null
+    remoteSearchResultCache:
+      maximumSize: 100
+      expireAfterAccess: "PT1M"
+      expireAfterWrite: null
   searchable:
     storeSize: "1000000,100,10,1"
     searchResultCache:

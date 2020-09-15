@@ -104,6 +104,7 @@ class ExtractionTaskProducer extends TaskProducer {
             // Elevate permissions so users with only `Use` feed permission can `Read` streams.
             securityContext.asProcessingUser(() -> {
                 LOGGER.debug("Starting extraction task producer");
+                tc.info(() -> "Adding extraction tasks");
 
                 try {
                     while (!streamMapCreatorCompletionState.isComplete() && !Thread.currentThread().isInterrupted()) {
@@ -139,6 +140,7 @@ class ExtractionTaskProducer extends TaskProducer {
                     LOGGER.error(e.getMessage(), e);
                 } finally {
                     streamMapCreatorCompletionState.complete();
+                    tc.info(() -> "Finished adding extraction tasks");
 
                     // Tell the supplied executor that we are ready to deliver final tasks.
                     signalAvailable();
@@ -184,8 +186,9 @@ class ExtractionTaskProducer extends TaskProducer {
     private boolean addTasks() {
         final boolean completedEventMapping = this.streamMapCreatorCompletionState.isComplete();
         for (final Entry<Long, List<Event>> entry : streamEventMap.entrySet()) {
-            if (streamEventMap.remove(entry.getKey(), entry.getValue())) {
-                final int tasksCreated = createTasks(entry.getKey(), entry.getValue());
+            final List<Event> events = streamEventMap.remove(entry.getKey());
+            if (events != null) {
+                final int tasksCreated = createTasks(entry.getKey(), events);
                 if (tasksCreated > 0) {
                     return false;
                 }

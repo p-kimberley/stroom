@@ -85,6 +85,7 @@ public class EventSearchTaskHandler {
             // Create an asynchronous search task.
             final String searchName = "Event Search";
             final AsyncSearchTask asyncSearchTask = new AsyncSearchTask(
+                    task.getKey(),
                     searchName,
                     query,
                     task.getResultSendFrequency(),
@@ -96,7 +97,7 @@ public class EventSearchTaskHandler {
             final Sizes storeSize = getStoreSizes();
             final Sizes defaultMaxResultsSizes = getDefaultMaxResultsSizes();
             final EventSearchResultHandler resultHandler = new EventSearchResultHandler();
-            final ClusterSearchResultCollector searchResultCollector = clusterSearchResultCollectorFactory.create(
+            final ClusterResultCollector searchResultCollector = clusterSearchResultCollectorFactory.create(
                     asyncSearchTask,
                     nodeInfo.getThisNodeName(),
                     null,

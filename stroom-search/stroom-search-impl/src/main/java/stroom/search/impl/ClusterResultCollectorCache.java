@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
-package stroom.cluster.task.impl;
+package stroom.search.impl;
 
 import stroom.cache.api.CacheManager;
 import stroom.cache.api.ICache;
-import stroom.cluster.task.api.ClusterResultCollector;
-import stroom.cluster.task.api.ClusterResultCollectorCache;
-import stroom.cluster.task.api.CollectorId;
 import stroom.util.shared.Clearable;
 
 import javax.inject.Inject;
@@ -28,7 +25,7 @@ import javax.inject.Singleton;
 import java.util.Optional;
 
 @Singleton
-public class ClusterResultCollectorCacheImpl implements ClusterResultCollectorCache, Clearable {
+public class ClusterResultCollectorCache implements Clearable {
     private static final String CACHE_NAME = "Cluster Result Collector Cache";
 
     private final ICache<CollectorId, ClusterResultCollector> cache;
@@ -36,7 +33,7 @@ public class ClusterResultCollectorCacheImpl implements ClusterResultCollectorCa
     private volatile boolean shutdown;
 
     @Inject
-    public ClusterResultCollectorCacheImpl(final CacheManager cacheManager, final ClusterTaskConfig clusterTaskConfig) {
+    public ClusterResultCollectorCache(final CacheManager cacheManager, final SearchConfig clusterTaskConfig) {
         cache = cacheManager.create(CACHE_NAME, clusterTaskConfig::getClusterResultCollectorCache);
     }
 
@@ -44,8 +41,7 @@ public class ClusterResultCollectorCacheImpl implements ClusterResultCollectorCa
         shutdown = true;
     }
 
-    @Override
-    public void put(final CollectorId collectorId, final ClusterResultCollector<?> clusterResultCollector) {
+    public void put(final CollectorId collectorId, final ClusterResultCollector clusterResultCollector) {
         if (shutdown) {
             throw new RuntimeException("Stroom is shutting down");
         }
@@ -59,12 +55,10 @@ public class ClusterResultCollectorCacheImpl implements ClusterResultCollectorCa
         cache.put(collectorId, clusterResultCollector);
     }
 
-    @Override
-    public ClusterResultCollector<?> get(final CollectorId collectorId) {
+    public ClusterResultCollector get(final CollectorId collectorId) {
         return cache.getOptional(collectorId).orElse(null);
     }
 
-    @Override
     public void remove(final CollectorId id) {
         cache.invalidate(id);
     }

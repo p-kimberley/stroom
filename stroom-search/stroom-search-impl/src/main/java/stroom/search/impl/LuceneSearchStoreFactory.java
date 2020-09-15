@@ -30,7 +30,6 @@ import stroom.query.api.v2.ExpressionParamUtil;
 import stroom.query.api.v2.ExpressionUtil;
 import stroom.query.api.v2.Query;
 import stroom.query.api.v2.SearchRequest;
-import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.CoprocessorSettingsMap;
 import stroom.query.common.v2.SearchResultHandler;
 import stroom.query.common.v2.Sizes;
@@ -104,6 +103,7 @@ public class LuceneSearchStoreFactory implements StoreFactory {
         // Create an asynchronous search task.
         final String searchName = "Search '" + searchRequest.getKey().toString() + "'";
         final AsyncSearchTask asyncSearchTask = new AsyncSearchTask(
+                searchRequest.getKey(),
                 searchName,
                 query,
                 SEND_INTERACTIVE_SEARCH_RESULT_FREQUENCY,
@@ -120,7 +120,7 @@ public class LuceneSearchStoreFactory implements StoreFactory {
                 storeSize);
 
         // Create the search result collector.
-        final ClusterSearchResultCollector searchResultCollector = clusterSearchResultCollectorFactory.create(
+        final ClusterResultCollector searchResultCollector = clusterSearchResultCollectorFactory.create(
                 asyncSearchTask,
                 nodeInfo.getThisNodeName(),
                 highlights,

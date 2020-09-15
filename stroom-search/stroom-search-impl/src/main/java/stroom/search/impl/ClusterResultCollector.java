@@ -16,10 +16,6 @@
 
 package stroom.search.impl;
 
-import stroom.cluster.task.api.ClusterResultCollector;
-import stroom.cluster.task.api.ClusterResultCollectorCache;
-import stroom.cluster.task.api.CollectorId;
-import stroom.cluster.task.api.CollectorIdFactory;
 import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Data;
@@ -43,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,9 +48,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class ClusterSearchResultCollector implements Store, ClusterResultCollector<NodeResult> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ClusterSearchResultCollector.class);
-    private static final LambdaLogger LAMBDA_LOGGER = LambdaLoggerFactory.getLogger(ClusterSearchResultCollector.class);
+public class ClusterResultCollector implements Store {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ClusterResultCollector.class);
+    private static final LambdaLogger LAMBDA_LOGGER = LambdaLoggerFactory.getLogger(ClusterResultCollector.class);
     private static final String TASK_NAME = "AsyncSearchTask";
 
     private final ClusterResultCollectorCache clusterResultCollectorCache;
@@ -72,16 +69,16 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
     private final Sizes defaultMaxResultsSizes;
     private final Sizes storeSize;
 
-    ClusterSearchResultCollector(final Executor executor,
-                                 final TaskContextFactory taskContextFactory,
-                                 final Provider<AsyncSearchTaskHandler> asyncSearchTaskHandlerProvider,
-                                 final AsyncSearchTask task,
-                                 final String nodeName,
-                                 final Set<String> highlights,
-                                 final ClusterResultCollectorCache clusterResultCollectorCache,
-                                 final ResultHandler resultHandler,
-                                 final Sizes defaultMaxResultsSizes,
-                                 final Sizes storeSize) {
+    ClusterResultCollector(final Executor executor,
+                           final TaskContextFactory taskContextFactory,
+                           final Provider<AsyncSearchTaskHandler> asyncSearchTaskHandlerProvider,
+                           final AsyncSearchTask task,
+                           final String nodeName,
+                           final Set<String> highlights,
+                           final ClusterResultCollectorCache clusterResultCollectorCache,
+                           final ResultHandler resultHandler,
+                           final Sizes defaultMaxResultsSizes,
+                           final Sizes storeSize) {
         this.executor = executor;
         this.taskContextFactory = taskContextFactory;
         this.asyncSearchTaskHandlerProvider = asyncSearchTaskHandlerProvider;
@@ -93,7 +90,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
         this.defaultMaxResultsSizes = defaultMaxResultsSizes;
         this.storeSize = storeSize;
 
-        id = CollectorIdFactory.create();
+        id = new CollectorId(UUID.randomUUID().toString());
 
         clusterResultCollectorCache.put(id, this);
     }
@@ -154,17 +151,14 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
         return completionState.awaitCompletion(timeout, unit);
     }
 
-    @Override
     public CollectorId getId() {
         return id;
     }
 
-    @Override
     public boolean onReceive() {
         return true;
     }
 
-    @Override
     public void onSuccess(final String nodeName, final NodeResult result) {
         try {
             final Map<CoprocessorKey, Payload> payloadMap = result.getPayloadMap();
@@ -202,7 +196,7 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
         }
     }
 
-    private void waitForPendingWork() {
+    public void waitForPendingWork() {
         LAMBDA_LOGGER.logDurationIfTraceEnabled(() -> {
             LOGGER.trace("No remaining nodes so wait for the result handler to clear any pending work");
             try {
@@ -215,7 +209,6 @@ public class ClusterSearchResultCollector implements Store, ClusterResultCollect
         }, "Waiting for resultHandler to finish pending work");
     }
 
-    @Override
     public void onFailure(final String nodeName, final Throwable throwable) {
         try {
             nodeComplete(nodeName);

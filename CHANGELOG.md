@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+* Issue **#1854** : Almost completely removed Hessian.
+
+* Issue **#1854** : Changed search mechanism to poll for remote results to reduce the chances of hung searches.
+
 * Change `prod.yml` and `proxy-prod.yml` to be templated so as to generate custom config for the zip and docker distributions.
 
 * Add the docker config files to the release artefacts.

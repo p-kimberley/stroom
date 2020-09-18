@@ -18,15 +18,14 @@ package stroom.search.solr.search;
 
 import stroom.query.api.v2.Query;
 import stroom.query.common.v2.CoprocessorSettings;
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 
-import java.util.Map;
+import java.util.List;
 
 public class SolrAsyncSearchTask {
     private final String searchName;
     private final Query query;
     private final int resultSendFrequency;
-    private final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap;
+    private final List<CoprocessorSettings> settings;
     private final String dateTimeLocale;
     private final long now;
 
@@ -35,13 +34,13 @@ public class SolrAsyncSearchTask {
     public SolrAsyncSearchTask(final String searchName,
                                final Query query,
                                final int resultSendFrequency,
-                               final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap,
+                               final List<CoprocessorSettings> settings,
                                final String dateTimeLocale,
                                final long now) {
         this.searchName = searchName;
         this.query = query;
         this.resultSendFrequency = resultSendFrequency;
-        this.coprocessorMap = coprocessorMap;
+        this.settings = settings;
         this.dateTimeLocale = dateTimeLocale;
         this.now = now;
     }
@@ -58,8 +57,8 @@ public class SolrAsyncSearchTask {
         return resultSendFrequency;
     }
 
-    public Map<CoprocessorKey, CoprocessorSettings> getCoprocessorMap() {
-        return coprocessorMap;
+    public List<CoprocessorSettings> getSettings() {
+        return settings;
     }
 
     public String getDateTimeLocale() {

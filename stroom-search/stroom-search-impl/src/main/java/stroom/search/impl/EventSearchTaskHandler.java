@@ -22,10 +22,9 @@ import stroom.query.api.v2.ExpressionParamUtil;
 import stroom.query.api.v2.ExpressionUtil;
 import stroom.query.api.v2.Query;
 import stroom.query.common.v2.CoprocessorSettings;
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
+import stroom.query.common.v2.EventCoprocessorSettings;
+import stroom.query.common.v2.EventRefs;
 import stroom.query.common.v2.Sizes;
-import stroom.search.api.EventRefs;
-import stroom.search.coprocessor.EventCoprocessorSettings;
 import stroom.security.api.SecurityContext;
 import stroom.ui.config.shared.UiConfig;
 import stroom.util.logging.LambdaLogger;
@@ -34,7 +33,8 @@ import stroom.util.logging.LogUtil;
 
 import javax.inject.Inject;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -77,10 +77,14 @@ public class EventSearchTaskHandler {
             expression = ExpressionUtil.replaceExpressionParameters(expression, paramMap);
             query.setExpression(expression);
 
-            final EventCoprocessorSettings settings = new EventCoprocessorSettings(task.getMinEvent(), task.getMaxEvent(),
-                    task.getMaxStreams(), task.getMaxEvents(), task.getMaxEventsPerStream());
-            final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap = new HashMap<>();
-            coprocessorMap.put(new CoprocessorKey(0, new String[]{"eventCoprocessor"}), settings);
+            final EventCoprocessorSettings settings = new EventCoprocessorSettings(
+                    "eventCoprocessor",
+                    task.getMinEvent(),
+                    task.getMaxEvent(),
+                    task.getMaxStreams(),
+                    task.getMaxEvents(),
+                    task.getMaxEventsPerStream());
+            final List<CoprocessorSettings> settingsList = Collections.singletonList(settings);
 
             // Create an asynchronous search task.
             final String searchName = "Event Search";
@@ -89,7 +93,7 @@ public class EventSearchTaskHandler {
                     searchName,
                     query,
                     task.getResultSendFrequency(),
-                    coprocessorMap,
+                    settingsList,
                     null,
                     nowEpochMilli);
 

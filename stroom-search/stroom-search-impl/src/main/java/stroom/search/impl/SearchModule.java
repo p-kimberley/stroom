@@ -19,7 +19,7 @@ package stroom.search.impl;
 import stroom.cluster.api.ClusterServiceBinder;
 import stroom.job.api.ScheduledJobsBinder;
 import stroom.lifecycle.api.LifecycleBinder;
-import stroom.search.api.EventSearch;
+import stroom.query.common.v2.EventSearch;
 import stroom.search.extraction.ExtractionModule;
 import stroom.util.RunnableWrapper;
 import stroom.util.guice.GuiceUtil;

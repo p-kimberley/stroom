@@ -16,32 +16,35 @@
 
 package stroom.search.resultsender;
 
-
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Payload;
 
-import java.io.Serializable;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
-import java.util.Map;
 
-public class NodeResult implements Serializable {
-    private static final long serialVersionUID = -6092749103483061802L;
+@JsonInclude(Include.NON_NULL)
+public class NodeResult {
+    @JsonProperty
+    private final List<Payload> payloads;
+    @JsonProperty
+    private final List<String> errors;
+    @JsonProperty
+    private final boolean complete;
 
-    private Map<CoprocessorKey, Payload> payloadMap;
-    private List<String> errors;
-    private boolean complete;
-
-    public NodeResult() {
-    }
-
-    public NodeResult(final Map<CoprocessorKey, Payload> payloadMap, final List<String> errors, final boolean complete) {
-        this.payloadMap = payloadMap;
+    @JsonCreator
+    public NodeResult(@JsonProperty("payloads") final List<Payload> payloads,
+                      @JsonProperty("errors") final List<String> errors,
+                      @JsonProperty("complete") final boolean complete) {
+        this.payloads = payloads;
         this.errors = errors;
         this.complete = complete;
     }
 
-    public Map<CoprocessorKey, Payload> getPayloadMap() {
-        return payloadMap;
+    public List<Payload> getPayloads() {
+        return payloads;
     }
 
     public List<String> getErrors() {
@@ -50,10 +53,5 @@ public class NodeResult implements Serializable {
 
     public boolean isComplete() {
         return complete;
-    }
-
-    @Override
-    public String toString() {
-        return "search result";
     }
 }

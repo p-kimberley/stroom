@@ -21,6 +21,7 @@ dependencies {
 //    compile project(':stroom-index-shared')
 //    permitUnusedDeclared project(':stroom-index-shared') // not clear why it thinks this is unused
     compile project(':stroom-pipeline')
+    compile project(':stroom-query:stroom-query-common')
     compile project(':stroom-task:stroom-task-api')
     compile project(':stroom-search:stroom-search-api')
     compile project(':stroom-security:stroom-security-api')
@@ -28,7 +29,7 @@ dependencies {
     compile project(':stroom-util-shared')
 
     compile libs.stroomQueryApi
-    compile libs.stroomQueryCommon
+//    compile libs.stroomQueryCommon
     compile libs.stroomExpression
     compile libs.javax_inject
     compile libs.slf4j_api

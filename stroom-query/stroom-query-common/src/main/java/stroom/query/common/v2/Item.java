@@ -20,15 +20,10 @@ import stroom.dashboard.expression.v1.Generator;
 
 import java.io.Serializable;
 
-public class Item implements Serializable {
-    private static final long serialVersionUID = 4371018450667741005L;
-
+public class Item {
     GroupKey key;
     Generator[] generators;
     int depth;
-
-    Item() {
-    }
 
     public Item(final GroupKey key,
                 final Generator[] generators,

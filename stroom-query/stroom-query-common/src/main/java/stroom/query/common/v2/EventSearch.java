@@ -1,4 +1,4 @@
-package stroom.search.api;
+package stroom.query.common.v2;
 
 import stroom.query.api.v2.Query;
 

@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-package stroom.search.api;
+package stroom.query.common.v2;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -23,18 +28,29 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
-public class EventRefs implements Iterable<EventRef>, Serializable {
-    private static final long serialVersionUID = -7274144985491220742L;
+@JsonInclude(Include.NON_NULL)
+public class EventRefs implements Iterable<EventRef> {
+    @JsonProperty
     private final EventRef minEvent;
+    @JsonProperty
     private final long maxStreams;
+    @JsonProperty
     private final long maxEvents;
+    @JsonProperty
     private final long maxEventsPerStream;
+    @JsonProperty
     private final List<EventRef> list = new ArrayList<>();
+    @JsonProperty
     private volatile EventRef maxEvent;
+    @JsonProperty
     private boolean reachedLimit;
 
-    public EventRefs(final EventRef minEvent, final EventRef maxEvent, final long maxStreams, final long maxEvents,
-                     final long maxEventsPerStream) {
+    @JsonCreator
+    public EventRefs(@JsonProperty("minEvent") final EventRef minEvent,
+                     @JsonProperty("maxEvent") final EventRef maxEvent,
+                     @JsonProperty("maxStreams") final long maxStreams,
+                     @JsonProperty("maxEvents") final long maxEvents,
+                     @JsonProperty("maxEventsPerStream") final long maxEventsPerStream) {
         this.minEvent = minEvent;
         this.maxEvent = maxEvent;
         this.maxStreams = maxStreams;
@@ -42,8 +58,8 @@ public class EventRefs implements Iterable<EventRef>, Serializable {
         this.maxEventsPerStream = maxEventsPerStream;
     }
 
-    public void add(final EventRefs store) {
-        list.addAll(store.list);
+    public void add(final EventRefs eventRefs) {
+        list.addAll(eventRefs.list);
 
         // Trim if the list gets bigger than double the number of events.
         if (list.size() > (maxEvents * 2)) {

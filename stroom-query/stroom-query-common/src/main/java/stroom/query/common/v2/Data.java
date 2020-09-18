@@ -16,9 +16,14 @@
 
 package stroom.query.common.v2;
 
+import stroom.dashboard.expression.v1.Val;
+
+import java.util.List;
 import java.util.Map;
 
 public class Data {
+    public static final GroupKey ROOT_KEY = new GroupKey(null, (List<Val>) null);
+
     private final Map<GroupKey, Items<Item>> childMap;
     private final long size;
     private final long totalSize;

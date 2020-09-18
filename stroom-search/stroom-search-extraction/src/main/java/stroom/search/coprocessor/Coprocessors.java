@@ -1,10 +1,9 @@
 package stroom.search.coprocessor;
 
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Payload;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 public class Coprocessors {
@@ -14,22 +13,22 @@ public class Coprocessors {
         this.set = set;
     }
 
-    public Map<CoprocessorKey, Payload> createPayloads() {
+    public List<Payload> createPayloads() {
         // Produce payloads for each coprocessor.
-        Map<CoprocessorKey, Payload> payloadMap = null;
+        List<Payload> payloads = null;
         if (set != null && set.size() > 0) {
             for (final NewCoprocessor coprocessor : set) {
                 final Payload payload = coprocessor.createPayload();
                 if (payload != null) {
-                    if (payloadMap == null) {
-                        payloadMap = new HashMap<>();
+                    if (payloads == null) {
+                        payloads = new ArrayList<>();
                     }
 
-                    payloadMap.put(coprocessor.getKey(), payload);
+                    payloads.add(payload);
                 }
             }
         }
-        return payloadMap;
+        return payloads;
     }
 
     public int size() {

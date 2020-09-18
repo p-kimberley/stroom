@@ -14,17 +14,27 @@
  * limitations under the License.
  */
 
-package stroom.search.api;
+package stroom.query.common.v2;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
 
+@JsonInclude(Include.NON_NULL)
 public class EventRef implements Serializable {
     private static final long serialVersionUID = -3159853837079171362L;
 
+    @JsonProperty
     private final long streamId;
+    @JsonProperty
     private final long eventId;
 
-    public EventRef(final long streamId, final long eventId) {
+    @JsonCreator
+    public EventRef(@JsonProperty("streamId") final long streamId,
+                    @JsonProperty("eventId") final long eventId) {
         this.streamId = streamId;
         this.eventId = eventId;
     }

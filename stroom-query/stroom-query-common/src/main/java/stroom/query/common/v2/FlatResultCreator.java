@@ -16,8 +16,6 @@
 
 package stroom.query.common.v2;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Generator;
 import stroom.dashboard.expression.v1.Val;
@@ -31,6 +29,9 @@ import stroom.query.api.v2.ResultRequest;
 import stroom.query.api.v2.TableSettings;
 import stroom.query.common.v2.format.FieldFormatter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class FlatResultCreator implements ResultCreator {
     private static final Logger LOGGER = LoggerFactory.getLogger(FlatResultCreator.class);
@@ -135,7 +137,7 @@ public class FlatResultCreator implements ResultCreator {
                 long totalResults = 0;
 
                 // Get top level items.
-                final Items<Item> items = mappedData.getChildMap().get(null);
+                final Items<Item> items = mappedData.getChildMap().get(Data.ROOT_KEY);
 
                 final List<List<Object>> results = new ArrayList<>();
 
@@ -174,7 +176,7 @@ public class FlatResultCreator implements ResultCreator {
 
                 return resultBuilder.build();
 
-            } catch (final RuntimeException e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error creating result for resultRequest {}", resultRequest.getComponentId(), e);
                 error = e.getMessage();
             }
@@ -327,11 +329,8 @@ public class FlatResultCreator implements ResultCreator {
 
             fieldIndexMap = new FieldIndexMap(true);
 
-            final TableCoprocessorSettings tableCoprocessorSettings = new TableCoprocessorSettings(child);
-            final TableSettings tableSettings = tableCoprocessorSettings.getTableSettings();
-
-            final List<Field> fields = tableSettings.getFields();
-            compiledDepths = new CompiledDepths(fields, tableSettings.showDetail());
+            final List<Field> fields = child.getFields();
+            compiledDepths = new CompiledDepths(fields, child.showDetail());
             compiledFields = new CompiledFields(fields, fieldIndexMap, paramMap);
 
             // Create a set of max result sizes that are determined by the supplied max results or default to integer max value.
@@ -341,11 +340,11 @@ public class FlatResultCreator implements ResultCreator {
 
         public Data map(final Data data) {
             // Create a new table coprocessor to receive data.
-            final TableCoprocessor tableCoprocessor = new TableCoprocessor(new UnsafePairQueue<>(), compiledFields, compiledDepths);
+            final TableCoprocessor tableCoprocessor = new TableCoprocessor(new LinkedBlockingQueue<>(), compiledFields, compiledDepths);
 
             // Get top level items.
             // TODO : Add an option to get detail level items rather than root level items.
-            final Items<Item> items = data.getChildMap().get(null);
+            final Items<Item> items = data.getChildMap().get(Data.ROOT_KEY);
 
             int itemCount = 0;
             tablePayloadHandler.clear();

@@ -189,6 +189,10 @@ include 'stroom-proxy:stroom-proxy-app'
 include 'stroom-proxy:stroom-proxy-repo'
 include 'stroom-proxy:stroom-proxy-remote-api'
 
+// Query
+include 'stroom-query:stroom-query-api'
+include 'stroom-query:stroom-query-common'
+
 // Resource store
 include 'stroom-resource:stroom-resource-api'
 include 'stroom-resource:stroom-resource-impl'

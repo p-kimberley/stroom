@@ -98,7 +98,7 @@ class SolrClusterSearchTaskHandler implements Consumer<Error> {
                     }
 
                     // Create coprocessors.
-                    final Coprocessors coprocessors = coprocessorsFactory.create(task.getCoprocessorMap(), storedFields, query.getParams(), this);
+                    final Coprocessors coprocessors = coprocessorsFactory.create(task.getSettings(), storedFields, query.getParams(), this);
 
                     if (coprocessors.size() > 0) {
                         // Start forwarding data to target node.

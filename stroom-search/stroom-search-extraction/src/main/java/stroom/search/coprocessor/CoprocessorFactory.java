@@ -19,6 +19,7 @@ package stroom.search.coprocessor;
 import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.query.common.v2.Coprocessor;
 import stroom.query.common.v2.CoprocessorSettings;
+import stroom.query.common.v2.EventCoprocessorSettings;
 import stroom.query.common.v2.TableCoprocessor;
 import stroom.query.common.v2.TableCoprocessorSettings;
 

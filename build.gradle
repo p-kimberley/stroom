@@ -142,7 +142,7 @@ ext.libs = [
         stroomQueryApi                 : "stroom:stroom-query-api:$versions.stroomQuery",
         stroomQueryAudit               : "stroom:stroom-query-audit:$versions.stroomQuery",
         stroomQueryAuthorisation       : "stroom:stroom-query-authorisation:$versions.stroomQuery",
-        stroomQueryCommon              : "stroom:stroom-query-common:$versions.stroomQuery",
+//        stroomQueryCommon              : "stroom:stroom-query-common:$versions.stroomQuery",
         stroomStatsSchema              : "stroom:stroom-stats-schema:$versions.stroomStats",
 
         //------3rd Party-libs---------------

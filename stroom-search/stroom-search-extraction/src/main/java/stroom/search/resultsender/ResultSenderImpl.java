@@ -1,7 +1,6 @@
 package stroom.search.resultsender;
 
 import stroom.query.common.v2.CompletionState;
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Payload;
 import stroom.search.coprocessor.Coprocessors;
 import stroom.task.api.TaskContext;
@@ -11,7 +10,6 @@ import stroom.util.logging.LambdaLoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -63,7 +61,7 @@ class ResultSenderImpl implements ResultSender {
                 taskContext.info(() -> "Creating search result");
 
                 // Produce payloads for each coprocessor.
-                final Map<CoprocessorKey, Payload> payloadMap = coprocessors.createPayloads();
+                final List<Payload> payloads = coprocessors.createPayloads();
 
                 // Drain all current errors to a list.
                 List<String> errorsSnapshot = new ArrayList<>();
@@ -73,9 +71,9 @@ class ResultSenderImpl implements ResultSender {
                 }
 
                 // Only send a result if we have something new to send.
-                if (payloadMap != null || errorsSnapshot != null || complete) {
+                if (payloads != null || errorsSnapshot != null || complete) {
                     // Form a result to send back to the requesting node.
-                    final NodeResult result = new NodeResult(payloadMap, errorsSnapshot, complete);
+                    final NodeResult result = new NodeResult(payloads, errorsSnapshot, complete);
 
                     // Give the result to the callback.
                     taskContext.info(() -> "Sending search result");

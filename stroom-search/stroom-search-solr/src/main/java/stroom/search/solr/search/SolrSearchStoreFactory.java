@@ -23,7 +23,8 @@ import stroom.query.api.v2.ExpressionParamUtil;
 import stroom.query.api.v2.ExpressionUtil;
 import stroom.query.api.v2.Query;
 import stroom.query.api.v2.SearchRequest;
-import stroom.query.common.v2.CoprocessorSettingsMap;
+import stroom.query.common.v2.CoprocessorSettings;
+import stroom.query.common.v2.CoprocessorSettingsFactory;
 import stroom.query.common.v2.SearchResultHandler;
 import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
@@ -44,6 +45,7 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
@@ -106,8 +108,8 @@ class SolrSearchStoreFactory implements StoreFactory {
         // Extract highlights.
         final Set<String> highlights = getHighlights(index, query.getExpression(), searchRequest.getDateTimeLocale(), nowEpochMilli);
 
-        // Create a coprocessor settings map.
-        final CoprocessorSettingsMap coprocessorSettingsMap = CoprocessorSettingsMap.create(searchRequest);
+        // Create a coprocessor settings list.
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
 
         // Create an asynchronous search task.
         final String searchName = "Search '" + searchRequest.getKey().toString() + "'";
@@ -115,7 +117,7 @@ class SolrSearchStoreFactory implements StoreFactory {
                 searchName,
                 query,
                 SEND_INTERACTIVE_SEARCH_RESULT_FREQUENCY,
-                coprocessorSettingsMap.getMap(),
+                settingsList,
                 searchRequest.getDateTimeLocale(),
                 nowEpochMilli);
 
@@ -123,7 +125,7 @@ class SolrSearchStoreFactory implements StoreFactory {
         final Sizes storeSize = getStoreSizes();
         final Sizes defaultMaxResultsSizes = getDefaultMaxResultsSizes();
         final SearchResultHandler resultHandler = new SearchResultHandler(
-                coprocessorSettingsMap,
+                settingsList,
                 defaultMaxResultsSizes,
                 storeSize);
 

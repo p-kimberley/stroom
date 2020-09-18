@@ -20,13 +20,16 @@ import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Val;
 import stroom.index.shared.IndexConstants;
 import stroom.query.common.v2.Coprocessor;
+import stroom.query.common.v2.EventCoprocessorSettings;
+import stroom.query.common.v2.EventRefsPayload;
 import stroom.query.common.v2.Payload;
-import stroom.search.api.EventRef;
-import stroom.search.api.EventRefs;
+import stroom.query.common.v2.EventRef;
+import stroom.query.common.v2.EventRefs;
 
 import java.util.concurrent.locks.ReentrantLock;
 
 class EventCoprocessor implements Coprocessor {
+    private final String key;
     private final EventRef minEvent;
     private final long maxStreams;
     private final long maxEvents;
@@ -38,6 +41,7 @@ class EventCoprocessor implements Coprocessor {
 
     EventCoprocessor(final EventCoprocessorSettings settings,
                      final FieldIndexMap fieldIndexMap) {
+        this.key = settings.getKey();
         this.minEvent = settings.getMinEvent();
         this.maxEvent = settings.getMaxEvent();
         this.maxStreams = settings.getMaxStreams();
@@ -85,7 +89,7 @@ class EventCoprocessor implements Coprocessor {
 
         if (refs != null && refs.size() > 0) {
             refs.trim();
-            return new EventRefsPayload(refs);
+            return new EventRefsPayload(key, refs);
         }
 
         return null;

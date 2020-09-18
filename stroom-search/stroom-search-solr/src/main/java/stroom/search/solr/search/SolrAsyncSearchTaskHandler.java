@@ -68,7 +68,7 @@ public class SolrAsyncSearchTaskHandler {
                     final String[] storedFields = getStoredFields(index);
 
                     final SolrClusterSearchTask clusterSearchTask = new SolrClusterSearchTask(index, query, task.getResultSendFrequency(), storedFields,
-                            task.getCoprocessorMap(), task.getDateTimeLocale(), task.getNow());
+                            task.getSettings(), task.getDateTimeLocale(), task.getNow());
                     clusterSearchTaskHandler.exec(taskContext, clusterSearchTask, resultCollector);
 
                     // Await completion.

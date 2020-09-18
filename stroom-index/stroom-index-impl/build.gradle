@@ -34,7 +34,7 @@ dependencies {
     compile libs.slf4j_api
     compile libs.stroomDocRef
     compile libs.stroomExpression
-    compile libs.stroomQueryCommon
+    compile libs.stroomQueryApi
     compile libs.swagger_annotations
     compile libs.ws_rs_api
     compile libs.xml_apis

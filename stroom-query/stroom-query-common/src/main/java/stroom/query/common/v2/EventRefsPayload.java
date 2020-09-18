@@ -14,18 +14,30 @@
  * limitations under the License.
  */
 
-package stroom.search.coprocessor;
+package stroom.query.common.v2;
 
-import stroom.query.common.v2.Payload;
-import stroom.search.api.EventRefs;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
+@JsonInclude(Include.NON_NULL)
 public class EventRefsPayload implements Payload {
-    private static final long serialVersionUID = 5271438218782010968L;
-
+    @JsonProperty
+    private final String key;
+    @JsonProperty
     private EventRefs eventRefs;
 
-    EventRefsPayload(final EventRefs eventRefs) {
+    @JsonCreator
+    public EventRefsPayload(@JsonProperty("key") final String key,
+                            @JsonProperty("eventRefs") final EventRefs eventRefs) {
+        this.key = key;
         this.eventRefs = eventRefs;
+    }
+
+    @Override
+    public String getKey() {
+        return key;
     }
 
     public EventRefs getEventRefs() {

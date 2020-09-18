@@ -16,117 +16,37 @@
 
 package stroom.search.impl;
 
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 import stroom.query.common.v2.Data;
+import stroom.query.common.v2.EventRefs;
+import stroom.query.common.v2.EventRefsPayload;
 import stroom.query.common.v2.Payload;
 import stroom.query.common.v2.ResultHandler;
-import stroom.search.api.EventRefs;
-import stroom.search.coprocessor.EventRefsPayload;
-import stroom.util.logging.LambdaLogger;
-import stroom.util.logging.LambdaLoggerFactory;
 
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.List;
 
 class EventSearchResultHandler implements ResultHandler {
-    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(EventSearchResultHandler.class);
-
-    private final LinkedBlockingQueue<EventRefs> pendingMerges = new LinkedBlockingQueue<>();
-    private final Lock lock = new ReentrantLock();
-
     private volatile EventRefs eventRefs;
 
     @Override
-    public void handle(final Map<CoprocessorKey, Payload> payloadMap) {
-        try {
-            if (payloadMap != null) {
-                for (final Entry<CoprocessorKey, Payload> entry : payloadMap.entrySet()) {
-                    final Payload payload = entry.getValue();
-                    if (payload instanceof EventRefsPayload) {
-                        final EventRefsPayload eventRefsPayload = (EventRefsPayload) payload;
-                        add(eventRefsPayload.getEventRefs());
-                    }
+    public void handle(final List<Payload> payloads) {
+        if (payloads != null) {
+            for (final Payload payload : payloads) {
+                if (payload instanceof EventRefsPayload) {
+                    final EventRefsPayload eventRefsPayload = (EventRefsPayload) payload;
+                    add(eventRefsPayload.getEventRefs());
                 }
             }
-        } catch (final InterruptedException e) {
-            // Continue to interrupt this thread.
-            Thread.currentThread().interrupt();
-
-            throw new RuntimeException(e.getMessage(), e);
         }
     }
 
     // Non private for testing purposes.
-    public void add(final EventRefs eventRefs) throws InterruptedException {
-        if (eventRefs != null) {
-            if (Thread.currentThread().isInterrupted()) {
-                pendingMerges.clear();
-                throw new InterruptedException();
-
+    private void add(final EventRefs eventRefs) {
+        if (eventRefs != null && !Thread.currentThread().isInterrupted()) {
+            if (this.eventRefs == null) {
+                this.eventRefs = eventRefs;
             } else {
-                // Add the new queue to the pending merge queue ready for merging.
-                try {
-                    pendingMerges.put(eventRefs);
-                } catch (final InterruptedException e) {
-                    LOGGER.error(e.getMessage(), e);
-
-                    // Continue to interrupt this thread.
-                    Thread.currentThread().interrupt();
-
-                    throw new RuntimeException(e.getMessage(), e);
-                } catch (final RuntimeException e) {
-                    LOGGER.error(e.getMessage(), e);
-                }
-
-                // Try and merge all of the items on the pending merge queue.
-                tryMergePending();
+                this.eventRefs.add(eventRefs);
             }
-        }
-    }
-
-    private void tryMergePending() throws InterruptedException {
-        // Only 1 thread will get to do a merge.
-        if (lock.tryLock()) {
-            try {
-                mergePending();
-            } finally {
-                lock.unlock();
-            }
-        } else {
-            LOGGER.trace("Another thread is busy merging, so will let it merge my items");
-        }
-    }
-
-    private void mergePending() throws InterruptedException {
-        EventRefs eventRefs = pendingMerges.poll();
-        while (eventRefs != null) {
-            if (Thread.currentThread().isInterrupted()) {
-                // Clear the queue if we are done.
-                pendingMerges.clear();
-                throw new InterruptedException();
-
-            } else {
-                try {
-                    mergeRefs(eventRefs);
-                } catch (final RuntimeException e) {
-                    LOGGER.error(e.getMessage(), e);
-                    throw e;
-                }
-            }
-
-            // Poll the next item.
-            eventRefs = pendingMerges.poll();
-        }
-    }
-
-    private void mergeRefs(final EventRefs newEventRefs) {
-        if (eventRefs == null) {
-            eventRefs = newEventRefs;
-        } else {
-            eventRefs.add(newEventRefs);
         }
     }
 
@@ -137,18 +57,5 @@ class EventSearchResultHandler implements ResultHandler {
     @Override
     public Data getResultStore(final String componentId) {
         return null;
-    }
-
-    @Override
-    public void waitForPendingWork() throws InterruptedException {
-        // This assumes that when this method has been called, all calls to addQueue
-        // have been made, thus we will lock and perform a final merge.
-        lock.lock();
-        try {
-            // Perform final merge.
-            mergePending();
-        } finally {
-            lock.unlock();
-        }
     }
 }

@@ -2,7 +2,6 @@ package stroom.config.app;
 
 import stroom.cluster.api.ClusterConfig;
 import stroom.cluster.lock.impl.db.ClusterLockConfig;
-import stroom.cluster.task.impl.ClusterTaskConfig;
 import stroom.config.common.CommonDbConfig;
 import stroom.config.common.NodeUriConfig;
 import stroom.config.common.PublicUriConfig;
@@ -116,7 +115,6 @@ public class AppConfigModule extends AbstractModule {
         bindConfig(AppConfig::getAnnotationConfig, AppConfig::setAnnotationConfig, stroom.annotation.impl.AnnotationConfig.class);
         bindConfig(AppConfig::getClusterConfig, AppConfig::setClusterConfig, ClusterConfig.class);
         bindConfig(AppConfig::getClusterLockConfig, AppConfig::setClusterLockConfig, ClusterLockConfig.class);
-        bindConfig(AppConfig::getClusterTaskConfig, AppConfig::setClusterTaskConfig, ClusterTaskConfig.class);
         bindConfig(AppConfig::getCommonDbConfig, AppConfig::setCommonDbConfig, CommonDbConfig.class);
         bindConfig(AppConfig::getContentPackImportConfig, AppConfig::setContentPackImportConfig, ContentPackImportConfig.class);
         bindConfig(AppConfig::getLegacyDbConfig, AppConfig::setLegacyDbConfig, LegacyDbConfig.class);

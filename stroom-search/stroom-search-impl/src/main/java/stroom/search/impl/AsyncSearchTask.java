@@ -19,8 +19,10 @@ package stroom.search.impl;
 import stroom.query.api.v2.Query;
 import stroom.query.api.v2.QueryKey;
 import stroom.query.common.v2.CoprocessorSettings;
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
 import java.util.Map;
 
 public class AsyncSearchTask {
@@ -28,7 +30,8 @@ public class AsyncSearchTask {
     private final String searchName;
     private final Query query;
     private final int resultSendFrequency;
-    private final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap;
+    @JsonProperty
+    private final List<CoprocessorSettings> settings;
     private final String dateTimeLocale;
     private final long now;
 
@@ -38,14 +41,14 @@ public class AsyncSearchTask {
                            final String searchName,
                            final Query query,
                            final int resultSendFrequency,
-                           final Map<CoprocessorKey, CoprocessorSettings> coprocessorMap,
+                           @JsonProperty("settings") final List<CoprocessorSettings> settings,
                            final String dateTimeLocale,
                            final long now) {
         this.key = key;
         this.searchName = searchName;
         this.query = query;
         this.resultSendFrequency = resultSendFrequency;
-        this.coprocessorMap = coprocessorMap;
+        this.settings = settings;
         this.dateTimeLocale = dateTimeLocale;
         this.now = now;
     }
@@ -66,8 +69,8 @@ public class AsyncSearchTask {
         return resultSendFrequency;
     }
 
-    public Map<CoprocessorKey, CoprocessorSettings> getCoprocessorMap() {
-        return coprocessorMap;
+    public List<CoprocessorSettings> getSettings() {
+        return settings;
     }
 
     public String getDateTimeLocale() {

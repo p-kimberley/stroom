@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package stroom.index.impl;
+package stroom.search.impl;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -38,7 +38,6 @@ import javax.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public interface StroomIndexQueryResource extends RestResource {
-
     @POST
     @Path("/dataSource")
     @ApiOperation(

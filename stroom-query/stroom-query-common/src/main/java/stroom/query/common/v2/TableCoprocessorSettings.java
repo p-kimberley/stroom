@@ -19,19 +19,38 @@ package stroom.query.common.v2;
 import stroom.docref.DocRef;
 import stroom.query.api.v2.TableSettings;
 
-import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
+
+@JsonInclude(Include.NON_NULL)
 public class TableCoprocessorSettings implements CoprocessorSettings {
-    private TableSettings tableSettings;
+    @JsonProperty
+    private final String key;
+    @JsonProperty
+    private final List<String> componentIdList;
+    @JsonProperty
+    private final TableSettings tableSettings;
 
-    private static final int DEFAULT_QUEUE_CAPACITY = 1000000;
-    private volatile int queueCapacity = DEFAULT_QUEUE_CAPACITY;
-
-    TableCoprocessorSettings() {
+    @JsonCreator
+    public TableCoprocessorSettings(@JsonProperty("key") final String key,
+                                    @JsonProperty("componentIdList") final List<String> componentIdList,
+                                    @JsonProperty("tableSettings") final TableSettings tableSettings) {
+        this.key = key;
+        this.componentIdList = componentIdList;
+        this.tableSettings = tableSettings;
     }
 
-    public TableCoprocessorSettings(final TableSettings tableSettings) {
-        this.tableSettings = tableSettings;
+    @Override
+    public String getKey() {
+        return key;
+    }
+
+    public List<String> getComponentIdList() {
+        return componentIdList;
     }
 
     public TableSettings getTableSettings() {
@@ -46,27 +65,5 @@ public class TableCoprocessorSettings implements CoprocessorSettings {
     @Override
     public DocRef getExtractionPipeline() {
         return tableSettings.getExtractionPipeline();
-    }
-
-    public int getQueueCapacity() {
-        return queueCapacity;
-    }
-
-    public void setQueueCapacity(final int queueCapacity) {
-        this.queueCapacity = queueCapacity;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final TableCoprocessorSettings that = (TableCoprocessorSettings) o;
-        return queueCapacity == that.queueCapacity &&
-                Objects.equals(tableSettings, that.tableSettings);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(tableSettings, queueCapacity);
     }
 }

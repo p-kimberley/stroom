@@ -16,17 +16,10 @@
 
 package stroom.query.common.v2;
 
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
-
-import java.util.Map;
+import java.util.List;
 
 public interface ResultHandler {
-    void handle(Map<CoprocessorKey, Payload> payloadMap);
+    void handle(List<Payload> payloads);
 
     Data getResultStore(String componentId);
-
-    /**
-     * Will block until all pending work that the {@link ResultHandler} has is complete.
-     */
-    void waitForPendingWork() throws InterruptedException;
 }

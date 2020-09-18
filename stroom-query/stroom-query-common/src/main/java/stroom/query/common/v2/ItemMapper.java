@@ -19,37 +19,40 @@ package stroom.query.common.v2;
 import stroom.dashboard.expression.v1.Expression;
 import stroom.dashboard.expression.v1.Generator;
 import stroom.dashboard.expression.v1.Val;
-import stroom.mapreduce.v2.MapperBase;
-import stroom.mapreduce.v2.OutputCollector;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
-public class ItemMapper extends MapperBase<GroupKey, Val[], GroupKey, Item> {
+public class ItemMapper {
     private static final Generator[] PARENT_GENERATORS = new Generator[0];
 
     private final CompiledFields fields;
     private final int maxDepth;
     private final int maxGroupDepth;
 
-    public ItemMapper(final OutputCollector<GroupKey, Item> outputCollector,
-                      final CompiledFields fields,
+    public ItemMapper(final CompiledFields fields,
                       final int maxDepth,
                       final int maxGroupDepth) {
-        super(outputCollector);
         this.fields = fields;
         this.maxDepth = maxDepth;
         this.maxGroupDepth = maxGroupDepth;
     }
 
-    @Override
-    public void map(final GroupKey key, final Val[] values, final OutputCollector<GroupKey, Item> output) {
+    public void map(final GroupKey key,
+                    final Val[] values,
+                    final Consumer<Item> output) {
         // Add the item to the output recursively up to the max depth.
         addItem(values, null, PARENT_GENERATORS, 0, maxDepth, maxGroupDepth, output);
     }
 
-    private void addItem(final Val[] values, final GroupKey parentKey, final Generator[] parentGenerators,
-                         final int depth, final int maxDepth, final int maxGroupDepth, final OutputCollector<GroupKey, Item> output) {
+    private void addItem(final Val[] values,
+                         final GroupKey parentKey,
+                         final Generator[] parentGenerators,
+                         final int depth,
+                         final int maxDepth,
+                         final int maxGroupDepth,
+                         final Consumer<Item> output) {
         // Process list into fields.
         final Generator[] generators = new Generator[fields.size()];
 
@@ -119,7 +122,7 @@ public class ItemMapper extends MapperBase<GroupKey, Val[], GroupKey, Item> {
         }
 
         // Add the new item.
-        output.collect(key, new Item(key, generators, depth));
+        output.accept(new Item(key, generators, depth));
 
         // If we haven't reached the max depth then recurse.
         if (depth < maxDepth) {

@@ -11,7 +11,7 @@ dependencies {
 
     compile libs.stroomDocRef
     compile libs.stroomQueryApi
-    compile libs.stroomQueryCommon
+//    compile libs.stroomQueryCommon
 
     compile libs.gin
     compile libs.guice3

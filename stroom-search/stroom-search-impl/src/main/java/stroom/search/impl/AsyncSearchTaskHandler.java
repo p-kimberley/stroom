@@ -144,7 +144,7 @@ class AsyncSearchTaskHandler {
                                     query,
                                     shards,
                                     storedFields,
-                                    task.getCoprocessorMap(),
+                                    task.getSettings(),
                                     task.getDateTimeLocale(),
                                     task.getNow());
                             LOGGER.debug("Dispatching clusterSearchTask to node {}", node);
@@ -212,7 +212,6 @@ class AsyncSearchTaskHandler {
                     }
 
                     // Perform a final wait for the result collector to do final merges.
-                    resultCollector.waitForPendingWork();
                     taskContext.info(() -> task.getSearchName() + " - complete");
 
                 } catch (final NullClusterStateException | NodeNotFoundException | RuntimeException e) {

@@ -25,14 +25,14 @@ import javax.inject.Provider;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
-public class ClusterSearchResultCollectorFactory {
+class ClusterSearchResultCollectorFactory {
     private final Executor executor;
     private final TaskContextFactory taskContextFactory;
     private final Provider<AsyncSearchTaskHandler> asyncSearchTaskHandlerProvider;
     private final ClusterResultCollectorCache clusterResultCollectorCache;
 
     @Inject
-    private ClusterSearchResultCollectorFactory(final Executor executor,
+    ClusterSearchResultCollectorFactory(final Executor executor,
                                                 final TaskContextFactory taskContextFactory,
                                                 final Provider<AsyncSearchTaskHandler> asyncSearchTaskHandlerProvider,
                                                 final ClusterResultCollectorCache clusterResultCollectorCache) {

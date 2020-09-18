@@ -16,36 +16,33 @@
 
 package stroom.query.common.v2;
 
-import stroom.mapreduce.v2.UnsafePairQueue;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Objects;
+import java.util.List;
 
+@JsonInclude(Include.NON_NULL)
 public class TablePayload implements Payload {
-    private static final long serialVersionUID = 5271438218782010968L;
+    @JsonProperty
+    private final String key;
+    @JsonProperty
+    private final List<Item> queue;
 
-    private UnsafePairQueue<GroupKey, Item> queue;
-
-    public TablePayload() {
-    }
-
-    public TablePayload(final UnsafePairQueue<GroupKey, Item> queue) {
+    @JsonCreator
+    public TablePayload(@JsonProperty("key") final String key,
+                        @JsonProperty("queue") final List<Item> queue) {
+        this.key = key;
         this.queue = queue;
     }
 
-    public UnsafePairQueue<GroupKey, Item> getQueue() {
+    @Override
+    public String getKey() {
+        return key;
+    }
+
+    public List<Item> getQueue() {
         return queue;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final TablePayload that = (TablePayload) o;
-        return Objects.equals(queue, that.queue);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(queue);
     }
 }

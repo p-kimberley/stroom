@@ -15,5 +15,5 @@ dependencies {
     compile libs.lucene_core
     compile libs.lucene_queryparser
     compile libs.stroomExpression
-    compile libs.stroomQueryCommon
+//    compile libs.stroomQueryCommon
 }

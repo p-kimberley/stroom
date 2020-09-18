@@ -7,9 +7,10 @@ import stroom.query.api.v2.SearchRequest;
 import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.Coprocessor;
 import stroom.query.common.v2.CoprocessorSettings;
-import stroom.query.common.v2.CoprocessorSettingsMap;
+import stroom.query.common.v2.CoprocessorSettingsFactory;
 import stroom.query.common.v2.Data;
 import stroom.query.common.v2.Payload;
+import stroom.query.common.v2.PayloadFactory;
 import stroom.query.common.v2.ResultHandler;
 import stroom.query.common.v2.SearchResultHandler;
 import stroom.query.common.v2.Sizes;
@@ -41,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -80,19 +82,19 @@ public class SqlStatisticsStore implements Store {
         this.taskContextFactory = taskContextFactory;
         this.resultHandlerBatchSize = resultHandlerBatchSize;
 
-        final CoprocessorSettingsMap coprocessorSettingsMap = CoprocessorSettingsMap.create(searchRequest);
-        Preconditions.checkNotNull(coprocessorSettingsMap);
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
+        Preconditions.checkNotNull(settingsList);
 
         final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
         final Map<String, String> paramMap = getParamMap(searchRequest);
 
-        final Map<CoprocessorSettingsMap.CoprocessorKey, Coprocessor> coprocessorMap = getCoprocessorMap(
-                coprocessorSettingsMap, fieldIndexMap, paramMap);
+        final Map<String, Coprocessor> coprocessorMap = getCoprocessorMap(
+                settingsList, fieldIndexMap, paramMap);
 
         // convert the search into something stats understands
         final FindEventCriteria criteria = StatStoreCriteriaBuilder.buildCriteria(searchRequest, statisticStoreDoc);
 
-        resultHandler = new SearchResultHandler(coprocessorSettingsMap, defaultMaxResultsSizes, storeSize);
+        resultHandler = new SearchResultHandler(settingsList, defaultMaxResultsSizes, storeSize);
 
         taskContextFactory.context(TASK_NAME, parentTaskContext -> {
 
@@ -190,7 +192,7 @@ public class SqlStatisticsStore implements Store {
 
     private CompositeDisposable startAsyncSearch(final TaskContext parentContext,
                                                  final Flowable<Val[]> searchResultsFlowable,
-                                                 final Map<CoprocessorSettingsMap.CoprocessorKey, Coprocessor> coprocessorMap,
+                                                 final Map<String, Coprocessor> coprocessorMap,
                                                  final Executor executor) {
         LOGGER.debug("Starting search with key {}", searchKey);
         parentContext.info(() -> "Sql Statistics search " + searchKey + " - running query");
@@ -267,19 +269,18 @@ public class SqlStatisticsStore implements Store {
         return compositeDisposable;
     }
 
-    private Map<CoprocessorSettingsMap.CoprocessorKey, Coprocessor> getCoprocessorMap(
-            final CoprocessorSettingsMap coprocessorSettingsMap,
+    private Map<String, Coprocessor> getCoprocessorMap(
+            final List<CoprocessorSettings> settingsList,
             final FieldIndexMap fieldIndexMap,
             final Map<String, String> paramMap) {
 
-        return coprocessorSettingsMap.getMap()
-                .entrySet()
+        return settingsList
                 .stream()
-                .map(entry -> Maps.immutableEntry(
-                        entry.getKey(),
-                        createCoprocessor(entry.getValue(), fieldIndexMap, paramMap)))
+                .map(settings -> Maps.immutableEntry(
+                        settings.getKey(),
+                        createCoprocessor(settings, fieldIndexMap, paramMap)))
                 .filter(entry -> entry.getKey() != null)
-                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
@@ -287,29 +288,27 @@ public class SqlStatisticsStore implements Store {
      * happen anyway as it is mostly used in
      */
     private synchronized void processPayloads(final ResultHandler resultHandler,
-                                              final Map<CoprocessorSettingsMap.CoprocessorKey, Coprocessor> coprocessorMap) {
+                                              final Map<String, Coprocessor> coprocessorMap) {
 
         if (!Thread.currentThread().isInterrupted()) {
             LAMBDA_LOGGER.debug(() ->
                     LogUtil.message("processPayloads called for {} coprocessors", coprocessorMap.size()));
 
             //build a payload map from whatever the coprocessors have in them, if anything
-            final Map<CoprocessorSettingsMap.CoprocessorKey, Payload> payloadMap = coprocessorMap.entrySet().stream()
-                    .map(entry ->
-                            Maps.immutableEntry(entry.getKey(), entry.getValue().createPayload()))
-                    .filter(entry ->
-                            entry.getValue() != null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            final List<Payload> payloads = coprocessorMap.values().stream()
+                    .map(PayloadFactory::createPayload)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
 
             // log the queue sizes in the payload map
             if (LOGGER.isDebugEnabled()) {
-                final String contents = payloadMap.entrySet().stream()
-                        .map(entry -> {
-                            String key = entry.getKey() != null ? entry.getKey().toString() : "null";
+                final String contents = payloads.stream()
+                        .map(payload -> {
+                            String key = payload.getKey() != null ? payload.getKey() : "null";
                             String size;
                             // entry checked for null in stream above
-                            if (entry.getValue() instanceof TablePayload) {
-                                TablePayload tablePayload = (TablePayload) entry.getValue();
+                            if (payload instanceof TablePayload) {
+                                TablePayload tablePayload = (TablePayload) payload;
                                 if (tablePayload.getQueue() != null) {
                                     size = Integer.toString(tablePayload.getQueue().size());
                                 } else {
@@ -325,7 +324,7 @@ public class SqlStatisticsStore implements Store {
             }
 
             // give the processed results to the collector, it will handle nulls
-            resultHandler.handle(payloadMap);
+            resultHandler.handle(payloads);
         } else {
             LOGGER.debug("Thread is interrupted, not processing payload");
         }

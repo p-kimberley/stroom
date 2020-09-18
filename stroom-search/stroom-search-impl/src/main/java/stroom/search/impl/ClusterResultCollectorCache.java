@@ -25,7 +25,7 @@ import javax.inject.Singleton;
 import java.util.Optional;
 
 @Singleton
-public class ClusterResultCollectorCache implements Clearable {
+class ClusterResultCollectorCache implements Clearable {
     private static final String CACHE_NAME = "Cluster Result Collector Cache";
 
     private final ICache<CollectorId, ClusterResultCollector> cache;
@@ -33,7 +33,7 @@ public class ClusterResultCollectorCache implements Clearable {
     private volatile boolean shutdown;
 
     @Inject
-    public ClusterResultCollectorCache(final CacheManager cacheManager, final SearchConfig clusterTaskConfig) {
+    ClusterResultCollectorCache(final CacheManager cacheManager, final SearchConfig clusterTaskConfig) {
         cache = cacheManager.create(CACHE_NAME, clusterTaskConfig::getClusterResultCollectorCache);
     }
 

@@ -21,7 +21,6 @@ import io.swagger.annotations.ApiParam;
 import stroom.datasource.api.v2.DataSource;
 import stroom.docref.DocRef;
 import stroom.index.impl.IndexStore;
-import stroom.index.impl.StroomIndexQueryResource;
 import stroom.index.shared.IndexDoc;
 import stroom.query.api.v2.FlatResult;
 import stroom.query.api.v2.QueryKey;

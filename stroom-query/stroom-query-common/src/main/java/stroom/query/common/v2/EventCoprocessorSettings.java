@@ -14,47 +14,50 @@
  * limitations under the License.
  */
 
-package stroom.search.impl;
+package stroom.query.common.v2;
 
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.common.v2.EventRef;
+import stroom.docref.DocRef;
 
-public class EventSearchTask {
-    private final QueryKey key;
-    private final Query query;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonInclude(Include.NON_NULL)
+public class EventCoprocessorSettings implements CoprocessorSettings {
+    private static final long serialVersionUID = -4916050910828000494L;
+
+    @JsonProperty
+    private final String key;
+    @JsonProperty
     private final EventRef minEvent;
+    @JsonProperty
     private final EventRef maxEvent;
+    @JsonProperty
     private final long maxStreams;
+    @JsonProperty
     private final long maxEvents;
+    @JsonProperty
     private final long maxEventsPerStream;
 
-    private final int resultSendFrequency;
-
-    public EventSearchTask(final QueryKey key,
-                           final Query query,
-                           final EventRef minEvent,
-                           final EventRef maxEvent,
-                           final long maxStreams,
-                           final long maxEvents,
-                           final long maxEventsPerStream,
-                           final int resultSendFrequency) {
+    @JsonCreator
+    public EventCoprocessorSettings(@JsonProperty("key") final String key,
+                                    @JsonProperty("minEvent") final EventRef minEvent,
+                                    @JsonProperty("maxEvent") final EventRef maxEvent,
+                                    @JsonProperty("maxStreams") final long maxStreams,
+                                    @JsonProperty("maxEvents") final long maxEvents,
+                                    @JsonProperty("maxEventsPerStream") final long maxEventsPerStream) {
         this.key = key;
-        this.query = query;
         this.minEvent = minEvent;
         this.maxEvent = maxEvent;
         this.maxStreams = maxStreams;
         this.maxEvents = maxEvents;
         this.maxEventsPerStream = maxEventsPerStream;
-        this.resultSendFrequency = resultSendFrequency;
     }
 
-    public QueryKey getKey() {
+    @Override
+    public String getKey() {
         return key;
-    }
-
-    public Query getQuery() {
-        return query;
     }
 
     public EventRef getMinEvent() {
@@ -77,7 +80,13 @@ public class EventSearchTask {
         return maxEventsPerStream;
     }
 
-    public int getResultSendFrequency() {
-        return resultSendFrequency;
+    @Override
+    public boolean extractValues() {
+        return false;
+    }
+
+    @Override
+    public DocRef getExtractionPipeline() {
+        return null;
     }
 }

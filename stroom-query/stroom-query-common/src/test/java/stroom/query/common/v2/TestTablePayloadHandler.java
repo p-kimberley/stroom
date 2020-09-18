@@ -19,6 +19,7 @@ package stroom.query.common.v2;
 import org.junit.jupiter.api.Test;
 import stroom.dashboard.expression.v1.Val;
 import stroom.dashboard.expression.v1.ValString;
+import stroom.mapreduce.v2.Pair;
 import stroom.mapreduce.v2.UnsafePairQueue;
 import stroom.query.api.v2.Field;
 import stroom.query.api.v2.Format;
@@ -33,7 +34,9 @@ import stroom.query.common.v2.format.FieldFormatter;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.shared.v2.ParamUtil;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,8 +62,10 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper(
+                compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -68,7 +73,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(
@@ -115,8 +120,9 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -124,7 +130,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -160,8 +166,9 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -169,7 +176,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -211,8 +218,9 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -220,7 +228,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -262,8 +270,9 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper(             compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -271,7 +280,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -312,8 +321,9 @@ class TestTablePayloadHandler {
         final CompiledDepths compiledDepths = new CompiledDepths(tableSettings.getFields(), tableSettings.showDetail());
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
-        final UnsafePairQueue<GroupKey, Item> queue = new UnsafePairQueue<>();
-        final ItemMapper itemMapper = new ItemMapper(queue, compiledFields, compiledDepths.getMaxDepth(),
+        final List<Item> queue = new ArrayList<>();
+        final ItemMapper itemMapper = new ItemMapper(compiledFields,
+                compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
         for (int i = 0; i < 3000; i++) {
@@ -321,7 +331,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.collect(null, values);
+            itemMapper.map(null, values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),

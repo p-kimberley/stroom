@@ -5,14 +5,12 @@ import stroom.query.api.v2.ExpressionParamUtil;
 import stroom.query.api.v2.Param;
 import stroom.query.common.v2.Coprocessor;
 import stroom.query.common.v2.CoprocessorSettings;
-import stroom.query.common.v2.CoprocessorSettingsMap.CoprocessorKey;
 
 import javax.inject.Inject;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -24,7 +22,7 @@ public class CoprocessorsFactory {
         this.coprocessorFactory = coprocessorFactory;
     }
 
-    public Coprocessors create(final Map<CoprocessorKey, CoprocessorSettings> coprocessorSettingsMap,
+    public Coprocessors create(final List<CoprocessorSettings> settingsList,
                                final String[] storedFields,
                                final List<Param> params,
                                final Consumer<Error> errorConsumer) {
@@ -33,28 +31,25 @@ public class CoprocessorsFactory {
 
         final Set<NewCoprocessor> coprocessors = new HashSet<>();
         final Map<String, FieldIndexMap> fieldIndexes = new HashMap<>();
-        if (coprocessorSettingsMap != null) {
+        if (settingsList != null) {
             // Get an array of stored index fields that will be used for getting stored data.
             final FieldIndexMap storedFieldIndexMap = new FieldIndexMap();
             for (final String storedField : storedFields) {
                 storedFieldIndexMap.create(storedField, true);
             }
 
-            for (final Entry<CoprocessorKey, CoprocessorSettings> entry : coprocessorSettingsMap.entrySet()) {
-                final CoprocessorKey coprocessorKey = entry.getKey();
-                final CoprocessorSettings coprocessorSettings = entry.getValue();
-
+            for (final CoprocessorSettings settings : settingsList) {
                 // Figure out where the fields required by this coprocessor will be found.
                 FieldIndexMap fieldIndexMap = storedFieldIndexMap;
-                if (coprocessorSettings.extractValues() && coprocessorSettings.getExtractionPipeline() != null
-                        && coprocessorSettings.getExtractionPipeline().getUuid() != null) {
-                    fieldIndexMap = fieldIndexes.computeIfAbsent(coprocessorSettings.getExtractionPipeline().getUuid(), k -> new FieldIndexMap(true));
+                if (settings.extractValues() && settings.getExtractionPipeline() != null
+                        && settings.getExtractionPipeline().getUuid() != null) {
+                    fieldIndexMap = fieldIndexes.computeIfAbsent(settings.getExtractionPipeline().getUuid(), k -> new FieldIndexMap(true));
                 }
 
-                final Coprocessor coprocessor = coprocessorFactory.create(coprocessorSettings, fieldIndexMap, paramMap);
+                final Coprocessor coprocessor = coprocessorFactory.create(settings, fieldIndexMap, paramMap);
 
                 if (coprocessor != null) {
-                    final NewCoprocessor newCoprocessor = new NewCoprocessor(coprocessorKey, coprocessorSettings, fieldIndexMap, errorConsumer, coprocessor);
+                    final NewCoprocessor newCoprocessor = new NewCoprocessor(settings.getKey(), settings, fieldIndexMap, errorConsumer, coprocessor);
                     coprocessors.add(newCoprocessor);
                 }
             }

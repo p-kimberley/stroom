@@ -17,7 +17,7 @@
 package stroom.search.solr.search;
 
 import stroom.query.api.v2.Query;
-import stroom.search.api.EventRef;
+import stroom.query.common.v2.EventRef;
 
 public class SolrEventSearchTask {
     private final EventRef minEvent;

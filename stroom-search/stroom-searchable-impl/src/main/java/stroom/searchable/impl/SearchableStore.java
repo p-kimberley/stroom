@@ -28,7 +28,6 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -86,7 +85,7 @@ class SearchableStore implements Store {
         final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
         final Map<String, String> paramMap = getParamMap(searchRequest);
 
-        final Map<String, Coprocessor> coprocessorMap = getCoprocessorMap(
+        final List<Coprocessor> coprocessors = getCoprocessors(
                 settingsList, fieldIndexMap, paramMap);
 
         final ExpressionOperator expression = searchRequest.getQuery().getExpression();
@@ -105,7 +104,7 @@ class SearchableStore implements Store {
         });
 
         final Runnable runnable = taskContextFactory.context(taskContext, TASK_NAME, tc ->
-                searchAsync(tc, searchable, criteria, fieldArray, coprocessorMap, resultHandlerBatchSize));
+                searchAsync(tc, searchable, criteria, fieldArray, coprocessors, resultHandlerBatchSize));
         CompletableFuture.runAsync(runnable, executor);
     }
 
@@ -113,7 +112,7 @@ class SearchableStore implements Store {
                              final Searchable searchable,
                              final ExpressionCriteria criteria,
                              final AbstractField[] fieldArray,
-                             final Map<String, Coprocessor> coprocessorMap,
+                             final List<Coprocessor> coprocessors,
                              final int resultHandlerBatchSize) {
         synchronized (SearchableStore.class) {
             thread = Thread.currentThread();
@@ -153,8 +152,7 @@ class SearchableStore implements Store {
                 LOGGER.trace(() -> String.format("data: [%s]", Arrays.toString(data)));
 
                 // Give the data array to each of our coprocessors
-                coprocessorMap.values().forEach(coprocessor ->
-                        coprocessor.receive(data));
+                coprocessors.forEach(coprocessor -> coprocessor.receive(data));
                 // Send what we have every 1s or when the batch reaches a set size
                 long now = System.currentTimeMillis();
                 if (now >= nextProcessPayloadsTime.get() ||
@@ -164,7 +162,7 @@ class SearchableStore implements Store {
                             now, nextProcessPayloadsTime,
                             countSinceLastSend.get(), resultHandlerBatchSize));
 
-                    processPayloads(resultHandler, coprocessorMap);
+                    processPayloads(resultHandler, coprocessors);
                     taskContext.info(() -> searchKey +
                             " - running database query (" + counter.longValue() + " rows fetched)");
                     nextProcessPayloadsTime.set(Instant.now().plus(RESULT_SEND_INTERVAL).toEpochMilli());
@@ -181,7 +179,7 @@ class SearchableStore implements Store {
                         counter.longValue()));
         // completed our window so create and pass on a payload for the
         // data we have gathered so far
-        processPayloads(resultHandler, coprocessorMap);
+        processPayloads(resultHandler, coprocessors);
         taskContext.info(() -> searchKey + " - complete");
 
         LOGGER.debug(() -> "completeSearch called");
@@ -201,18 +199,15 @@ class SearchableStore implements Store {
         return paramMap;
     }
 
-    private Map<String, Coprocessor> getCoprocessorMap(
+    private List<Coprocessor> getCoprocessors(
             final List<CoprocessorSettings> settingsList,
             final FieldIndexMap fieldIndexMap,
             final Map<String, String> paramMap) {
 
         return settingsList
                 .stream()
-                .map(settings -> Maps.immutableEntry(
-                        settings.getKey(),
-                        createCoprocessor(settings, fieldIndexMap, paramMap)))
-                .filter(entry -> entry.getKey() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .map(settings -> createCoprocessor(settings, fieldIndexMap, paramMap))
+                .collect(Collectors.toList());
     }
 
     private Coprocessor createCoprocessor(final CoprocessorSettings settings,
@@ -230,14 +225,14 @@ class SearchableStore implements Store {
      * happen anyway as it is mostly used in
      */
     private synchronized void processPayloads(final ResultHandler resultHandler,
-                                              final Map<String, Coprocessor> coprocessorMap) {
+                                              final List<Coprocessor> coprocessors) {
 
         if (!Thread.currentThread().isInterrupted()) {
             LOGGER.debug(() ->
-                    LogUtil.message("processPayloads called for {} coprocessors", coprocessorMap.size()));
+                    LogUtil.message("processPayloads called for {} coprocessors", coprocessors.size()));
 
             // Build a payload map from whatever the coprocessors have in them, if anything
-            final List<Payload> payloads = coprocessorMap.values().stream()
+            final List<Payload> payloads = coprocessors.stream()
                     .map(PayloadFactory::createPayload)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());

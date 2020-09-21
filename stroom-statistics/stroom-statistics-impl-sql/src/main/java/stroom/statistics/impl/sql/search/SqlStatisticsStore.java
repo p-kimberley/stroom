@@ -26,7 +26,6 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.disposables.CompositeDisposable;
@@ -88,7 +87,7 @@ public class SqlStatisticsStore implements Store {
         final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
         final Map<String, String> paramMap = getParamMap(searchRequest);
 
-        final Map<String, Coprocessor> coprocessorMap = getCoprocessorMap(
+        final List<Coprocessor> coprocessors = getCoprocessors(
                 settingsList, fieldIndexMap, paramMap);
 
         // convert the search into something stats understands
@@ -102,7 +101,7 @@ public class SqlStatisticsStore implements Store {
             final Flowable<Val[]> searchResultsFlowable = statisticsSearchService.search(parentTaskContext,
                     statisticStoreDoc, criteria, fieldIndexMap);
 
-            this.compositeDisposable = startAsyncSearch(parentTaskContext, searchResultsFlowable, coprocessorMap, executor);
+            this.compositeDisposable = startAsyncSearch(parentTaskContext, searchResultsFlowable, coprocessors, executor);
 
             LOGGER.debug("Async search task started for key {}", searchKey);
 
@@ -192,7 +191,7 @@ public class SqlStatisticsStore implements Store {
 
     private CompositeDisposable startAsyncSearch(final TaskContext parentContext,
                                                  final Flowable<Val[]> searchResultsFlowable,
-                                                 final Map<String, Coprocessor> coprocessorMap,
+                                                 final List<Coprocessor> coprocessors,
                                                  final Executor executor) {
         LOGGER.debug("Starting search with key {}", searchKey);
         parentContext.info(() -> "Sql Statistics search " + searchKey + " - running query");
@@ -224,7 +223,7 @@ public class SqlStatisticsStore implements Store {
                                     LAMBDA_LOGGER.trace(() -> String.format("data: [%s]", Arrays.toString(data)));
 
                                     // give the data array to each of our coprocessors
-                                    coprocessorMap.values().forEach(coprocessor ->
+                                    coprocessors.forEach(coprocessor ->
                                             coprocessor.receive(data));
                                     // send what we have every 1s or when the batch reaches a set size
                                     long now = System.currentTimeMillis();
@@ -235,7 +234,7 @@ public class SqlStatisticsStore implements Store {
                                                 now, nextProcessPayloadsTime,
                                                 countSinceLastSend.get(), resultHandlerBatchSize));
 
-                                        processPayloads(resultHandler, coprocessorMap);
+                                        processPayloads(resultHandler, coprocessors);
                                         taskContext.info(() -> searchKey +
                                                 " - running database query (" + counter.longValue() + " rows fetched)");
                                         nextProcessPayloadsTime.set(Instant.now().plus(RESULT_SEND_INTERVAL).toEpochMilli());
@@ -254,7 +253,7 @@ public class SqlStatisticsStore implements Store {
                                             counter.longValue()));
                             // completed our window so create and pass on a payload for the
                             // data we have gathered so far
-                            processPayloads(resultHandler, coprocessorMap);
+                            processPayloads(resultHandler, coprocessors);
                             parentContext.info(() -> searchKey + " - complete");
                             completionState.complete();
 
@@ -269,18 +268,15 @@ public class SqlStatisticsStore implements Store {
         return compositeDisposable;
     }
 
-    private Map<String, Coprocessor> getCoprocessorMap(
+    private List<Coprocessor> getCoprocessors(
             final List<CoprocessorSettings> settingsList,
             final FieldIndexMap fieldIndexMap,
             final Map<String, String> paramMap) {
 
         return settingsList
                 .stream()
-                .map(settings -> Maps.immutableEntry(
-                        settings.getKey(),
-                        createCoprocessor(settings, fieldIndexMap, paramMap)))
-                .filter(entry -> entry.getKey() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .map(settings -> createCoprocessor(settings, fieldIndexMap, paramMap))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -288,14 +284,14 @@ public class SqlStatisticsStore implements Store {
      * happen anyway as it is mostly used in
      */
     private synchronized void processPayloads(final ResultHandler resultHandler,
-                                              final Map<String, Coprocessor> coprocessorMap) {
+                                              final List<Coprocessor> coprocessors) {
 
         if (!Thread.currentThread().isInterrupted()) {
             LAMBDA_LOGGER.debug(() ->
-                    LogUtil.message("processPayloads called for {} coprocessors", coprocessorMap.size()));
+                    LogUtil.message("processPayloads called for {} coprocessors", coprocessors.size()));
 
             //build a payload map from whatever the coprocessors have in them, if anything
-            final List<Payload> payloads = coprocessorMap.values().stream()
+            final List<Payload> payloads = coprocessors.stream()
                     .map(PayloadFactory::createPayload)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());

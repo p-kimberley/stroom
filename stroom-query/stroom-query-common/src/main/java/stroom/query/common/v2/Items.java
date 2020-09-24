@@ -18,18 +18,18 @@ package stroom.query.common.v2;
 
 import java.util.Comparator;
 
-public interface Items<E> extends Iterable<E> {
-    boolean add(E item);
+public interface Items extends Iterable<Item> {
+    boolean add(Item item);
 
-    boolean remove(E item);
+    boolean remove(Item item);
 
     int size();
 
-    void sort(Comparator<E> comparator);
+    void sort(Comparator<Item> comparator);
 
-    void sortAndTrim(int size, Comparator<E> comparator, RemoveHandler<E> removeHandler);
+    void sortAndTrim(int size, Comparator<Item> comparator, RemoveHandler removeHandler);
 
-    interface RemoveHandler<E> {
-        void onRemove(E item);
+    interface RemoveHandler {
+        void onRemove(Item item);
     }
 }

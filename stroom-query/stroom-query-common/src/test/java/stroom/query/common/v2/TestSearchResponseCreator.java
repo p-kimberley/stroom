@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class TestSearchResponseCreator {
-    private static Duration TOLLERANCE = Duration.ofMillis(100);
+    private static final Duration TOLERANCE = Duration.ofMillis(100);
 
     @Mock
     private Store mockStore;
@@ -68,7 +68,7 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 serverTimeout,
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
 
         assertThat(searchResponse.getErrors()).hasSize(1);
         assertThat(searchResponse.getErrors().get(0)).containsIgnoringCase("timed out");
@@ -98,7 +98,7 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 Duration.ZERO,
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
     }
 
     @Test
@@ -125,7 +125,7 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 Duration.ofMillis(sleepTime),
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
     }
 
     @Test
@@ -156,7 +156,7 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 clientTimeout,
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
 
         assertThat(searchResponse.getErrors()).isNullOrEmpty();
     }
@@ -186,7 +186,7 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 clientTimeout,
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
 
 
         //Now the search request is sent again but this time the data will be available and the search complete
@@ -208,12 +208,12 @@ class TestSearchResponseCreator {
         assertThat(TimingUtils.isWithinTollerance(
                 Duration.ofMillis(sleepTime),
                 actualDuration,
-                TOLLERANCE)).isTrue();
+                TOLERANCE)).isTrue();
     }
 
     private void makeSearchStateAfter(final long sleepTime, final boolean state) {
         try {
-            final Answer answer = invocation -> {
+            final Answer<Boolean> answer = invocation -> {
                 TimingUtils.sleep(sleepTime);
                 //change the store to be complete
                 Mockito.when(mockStore.isComplete()).thenReturn(state);
@@ -268,14 +268,14 @@ class TestSearchResponseCreator {
     }
 
     private Data createSingleItemDataObject() {
-        final Items<Item> items = new ItemsArrayList<>();
+        final Items items = new ItemsArrayList();
         final Generator[] generators = new Generator[3];
         generators[0] = new StaticValueFunction(ValString.create("A")).createGenerator();
         generators[1] = new StaticValueFunction(ValString.create("B")).createGenerator();
         generators[2] = new StaticValueFunction(ValString.create("C")).createGenerator();
         items.add(new Item(null, generators, 0));
 
-        final Map<GroupKey, Items<Item>> map = new HashMap<>();
+        final Map<GroupKey, Items> map = new HashMap<>();
         map.put(null, items);
 
         return new Data(map, items.size(), items.size());

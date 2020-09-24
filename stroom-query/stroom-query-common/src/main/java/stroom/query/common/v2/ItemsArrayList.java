@@ -21,16 +21,16 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
-public class ItemsArrayList<E> implements Items<E> {
-    private final List<E> list = new ArrayList<>();
+public class ItemsArrayList implements Items {
+    private final List<Item> list = new ArrayList<>();
 
     @Override
-    public boolean add(final E item) {
+    public boolean add(final Item item) {
         return list.add(item);
     }
 
     @Override
-    public boolean remove(final E item) {
+    public boolean remove(final Item item) {
         return list.remove(item);
     }
 
@@ -40,19 +40,19 @@ public class ItemsArrayList<E> implements Items<E> {
     }
 
     @Override
-    public void sort(Comparator<E> comparator) {
+    public void sort(Comparator<Item> comparator) {
         if (comparator != null) {
             list.sort(comparator);
         }
     }
 
     @Override
-    public void sortAndTrim(final int size, final Comparator<E> comparator, final RemoveHandler<E> removeHandler) {
+    public void sortAndTrim(final int size, final Comparator<Item> comparator, final RemoveHandler removeHandler) {
         // Sort the list before trimming if we have a comparator.
         sort(comparator);
 
         while (list.size() > size) {
-            final E lastItem = list.remove(list.size() - 1);
+            final Item lastItem = list.remove(list.size() - 1);
 
             // Tell the remove handler that we have removed an item.
             if (removeHandler != null) {
@@ -62,7 +62,7 @@ public class ItemsArrayList<E> implements Items<E> {
     }
 
     @Override
-    public Iterator<E> iterator() {
+    public Iterator<Item> iterator() {
         return list.iterator();
     }
 

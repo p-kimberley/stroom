@@ -18,24 +18,56 @@ package stroom.query.common.v2;
 
 import stroom.dashboard.expression.v1.Val;
 
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class Data {
     public static final GroupKey ROOT_KEY = new GroupKey(null, (List<Val>) null);
 
-    private final Map<GroupKey, Items<Item>> childMap;
+    private final Map<GroupKey, Items> childMap;
     private final long size;
     private final long totalSize;
 
-    public Data(final Map<GroupKey, Items<Item>> childMap, final long size, final long totalSize) {
+    public Data(final Map<GroupKey, Items> childMap, final long size, final long totalSize) {
         this.childMap = childMap;
         this.size = size;
         this.totalSize = totalSize;
     }
 
-    public Map<GroupKey, Items<Item>> getChildMap() {
-        return childMap;
+    public DataItems get() {
+        return get(ROOT_KEY);
+    }
+
+    public DataItems get(final GroupKey groupKey) {
+        final Items items = childMap.get(groupKey);
+        if (items == null) {
+            return new DataItems() {
+                @Override
+                public Iterator<Item> iterator() {
+                    return Collections.emptyIterator();
+                }
+
+                @Override
+                public int size() {
+                    return 0;
+                }
+            };
+        }
+
+        return new DataItems() {
+            @Override
+            public Iterator<Item> iterator() {
+                return items.iterator();
+            }
+
+            @Override
+            public int size() {
+                return items.size();
+            }
+        };
     }
 
     public long getSize() {
@@ -44,5 +76,9 @@ public class Data {
 
     public long getTotalSize() {
         return totalSize;
+    }
+
+    public interface DataItems extends Iterable<Item> {
+        int size();
     }
 }

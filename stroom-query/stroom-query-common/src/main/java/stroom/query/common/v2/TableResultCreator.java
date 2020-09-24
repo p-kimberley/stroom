@@ -26,6 +26,7 @@ import stroom.query.api.v2.ResultRequest;
 import stroom.query.api.v2.Row;
 import stroom.query.api.v2.TableResult;
 import stroom.query.api.v2.TableSettings;
+import stroom.query.common.v2.Data.DataItems;
 import stroom.query.common.v2.format.FieldFormatter;
 
 import java.util.ArrayList;
@@ -82,7 +83,7 @@ public class TableResultCreator implements ResultCreator {
                     length,
                     openGroups,
                     resultList,
-                    Data.ROOT_KEY,
+                    data.get(),
                     0,
                     0);
         } catch (final Exception e) {
@@ -99,89 +100,86 @@ public class TableResultCreator implements ResultCreator {
                                 final int length,
                                 final Set<String> openGroups,
                                 final List<Row> resultList,
-                                final GroupKey parentKey,
+                                final DataItems items,
                                 final int depth,
                                 final int position) {
         int maxResultsAtThisDepth = maxResults.size(depth);
         int pos = position;
         int resultCountAtThisLevel = 0;
-        // Get top level items.
-        final Items<Item> items = data.getChildMap().get(parentKey);
-        if (items != null) {
-            for (final Item item : items) {
-                final GroupKey groupKey = item.getKey();
 
-                // If the result is within the requested window (offset + length) then add it.
-                if (pos >= offset &&
-                        resultList.size() < length) {
-                    // Convert all list into fully resolved objects evaluating functions where necessary.
-                    final List<String> values = new ArrayList<>(item.getGenerators().length);
-                    int i = 0;
+        for (final Item item : items) {
+            final GroupKey groupKey = item.getKey();
 
-                    for (final Field field : fields) {
-                        String string = null;
+            // If the result is within the requested window (offset + length) then add it.
+            if (pos >= offset &&
+                    resultList.size() < length) {
+                // Convert all list into fully resolved objects evaluating functions where necessary.
+                final List<String> values = new ArrayList<>(item.getGenerators().length);
+                int i = 0;
 
-                        if (item.getGenerators().length > i) {
-                            final Generator generator = item.getGenerators()[i];
-                            if (generator != null) {
-                                Val val;
+                for (final Field field : fields) {
+                    String string = null;
 
-                                if (groupKey != null && generator instanceof Selector) {
-                                    // If the generator is a selector then select a child row.
-                                    final Items<Item> childItems = data.getChildMap().get(groupKey);
-                                    if (childItems != null) {
-                                        // Create a list of child generators.
-                                        final List<Generator> childGenerators = new ArrayList<>(childItems.size());
-                                        for (final Item childItem : childItems) {
-                                            final Generator childGenerator = childItem.getGenerators()[i];
-                                            childGenerators.add(childGenerator);
-                                        }
+                    if (item.getGenerators().length > i) {
+                        final Generator generator = item.getGenerators()[i];
+                        if (generator != null) {
+                            Val val;
 
-                                        // Make the selector select from the list of child generators.
-                                        final Selector selector = (Selector) generator;
-                                        val = selector.select(childGenerators.toArray(new Generator[0]));
-
-                                    } else {
-                                        // If there are are no child items then just evaluate the inner expression
-                                        // provided to the selector function.
-                                        val = generator.eval();
+                            if (groupKey != null && generator instanceof Selector) {
+                                // If the generator is a selector then select a child row.
+                                final DataItems childItems = data.get(groupKey);
+                                if (childItems.size() > 0) {
+                                    // Create a list of child generators.
+                                    final List<Generator> childGenerators = new ArrayList<>(childItems.size());
+                                    for (final Item childItem : childItems) {
+                                        final Generator childGenerator = childItem.getGenerators()[i];
+                                        childGenerators.add(childGenerator);
                                     }
+
+                                    // Make the selector select from the list of child generators.
+                                    final Selector selector = (Selector) generator;
+                                    val = selector.select(childGenerators.toArray(new Generator[0]));
+
                                 } else {
-                                    // Convert all list into fully resolved objects evaluating functions where
-                                    // necessary.
+                                    // If there are are no child items then just evaluate the inner expression
+                                    // provided to the selector function.
                                     val = generator.eval();
                                 }
-
-                                string = fieldFormatter.format(field, val);
+                            } else {
+                                // Convert all list into fully resolved objects evaluating functions where
+                                // necessary.
+                                val = generator.eval();
                             }
+
+                            string = fieldFormatter.format(field, val);
                         }
-
-                        values.add(string);
-                        i++;
                     }
 
-                    if (item.getKey() != null) {
-                        resultList.add(new Row(item.getKey().toString(), values, item.getDepth()));
-                    } else {
-                        resultList.add(new Row(null, values, item.getDepth()));
-                    }
+                    values.add(string);
+                    i++;
                 }
 
-                // Increment the overall position.
-                pos++;
-
-                // Add child results if a node is open.
-                if (groupKey != null && openGroups != null && openGroups.contains(item.getKey().toString())) {
-                    pos = addTableResults(data, fields, maxResults, offset, length, openGroups, resultList,
-                            item.getKey(), depth + 1, pos);
+                if (item.getKey() != null) {
+                    resultList.add(new Row(item.getKey().toString(), values, item.getDepth()));
+                } else {
+                    resultList.add(new Row(null, values, item.getDepth()));
                 }
+            }
 
-                // Increment the total results at this depth.
-                resultCountAtThisLevel++;
-                // Stop adding results if we have reached the maximum for this level.
-                if (resultCountAtThisLevel >= maxResultsAtThisDepth) {
-                    break;
-                }
+            // Increment the overall position.
+            pos++;
+
+            // Add child results if a node is open.
+            if (groupKey != null && openGroups != null && openGroups.contains(item.getKey().toString())) {
+                pos = addTableResults(data, fields, maxResults, offset, length, openGroups, resultList,
+                        data.get(item.getKey()), depth + 1, pos);
+            }
+
+            // Increment the total results at this depth.
+            resultCountAtThisLevel++;
+            // Stop adding results if we have reached the maximum for this level.
+            if (resultCountAtThisLevel >= maxResultsAtThisDepth) {
+                break;
             }
         }
         return pos;

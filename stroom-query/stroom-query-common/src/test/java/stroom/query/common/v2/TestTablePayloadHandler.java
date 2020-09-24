@@ -16,11 +16,8 @@
 
 package stroom.query.common.v2;
 
-import org.junit.jupiter.api.Test;
 import stroom.dashboard.expression.v1.Val;
 import stroom.dashboard.expression.v1.ValString;
-import stroom.mapreduce.v2.Pair;
-import stroom.mapreduce.v2.UnsafePairQueue;
 import stroom.query.api.v2.Field;
 import stroom.query.api.v2.Format;
 import stroom.query.api.v2.OffsetRange;
@@ -33,6 +30,8 @@ import stroom.query.api.v2.TableSettings;
 import stroom.query.common.v2.format.FieldFormatter;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.shared.v2.ParamUtil;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,7 +72,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(
@@ -121,7 +120,7 @@ class TestTablePayloadHandler {
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
         final List<Item> queue = new ArrayList<>();
-        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+        final ItemMapper itemMapper = new ItemMapper(compiledFields,
                 compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
@@ -130,7 +129,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -167,7 +166,7 @@ class TestTablePayloadHandler {
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
         final List<Item> queue = new ArrayList<>();
-        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+        final ItemMapper itemMapper = new ItemMapper(compiledFields,
                 compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
@@ -176,7 +175,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[1];
             values[0] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -219,7 +218,7 @@ class TestTablePayloadHandler {
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
         final List<Item> queue = new ArrayList<>();
-        final ItemMapper itemMapper = new ItemMapper( compiledFields,
+        final ItemMapper itemMapper = new ItemMapper(compiledFields,
                 compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
@@ -228,7 +227,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -271,7 +270,7 @@ class TestTablePayloadHandler {
         final CompiledFields compiledFields = new CompiledFields(tableSettings.getFields(), null, Collections.emptyMap());
 
         final List<Item> queue = new ArrayList<>();
-        final ItemMapper itemMapper = new ItemMapper(             compiledFields,
+        final ItemMapper itemMapper = new ItemMapper(compiledFields,
                 compiledDepths.getMaxDepth(),
                 compiledDepths.getMaxGroupDepth());
 
@@ -280,7 +279,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),
@@ -331,7 +330,7 @@ class TestTablePayloadHandler {
             final Val[] values = new Val[2];
             values[1] = ValString.create(text);
 
-            itemMapper.map(null, values, queue::add);
+            itemMapper.map(values, queue::add);
         }
 
         final TablePayloadHandler payloadHandler = new TablePayloadHandler(tableSettings.getFields(),

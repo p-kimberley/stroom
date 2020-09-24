@@ -39,8 +39,7 @@ public class ItemMapper {
         this.maxGroupDepth = maxGroupDepth;
     }
 
-    public void map(final GroupKey key,
-                    final Val[] values,
+    public void map(final Val[] values,
                     final Consumer<Item> output) {
         // Add the item to the output recursively up to the max depth.
         addItem(values, null, PARENT_GENERATORS, 0, maxDepth, maxGroupDepth, output);

@@ -17,6 +17,7 @@
 package stroom.pipeline.writer;
 
 import stroom.test.common.util.test.StroomUnitTest;
+import stroom.util.io.PathCreator;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

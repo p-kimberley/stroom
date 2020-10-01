@@ -36,7 +36,7 @@ import stroom.pipeline.refdata.store.offheapstore.databases.MapUidReverseDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.ProcessingInfoDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.RangeStoreDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.ValueStoreDb;
-import stroom.pipeline.refdata.util.ByteBufferPool;
+import stroom.lmdb.bytebuffer.ByteBufferPool;
 import stroom.util.io.ByteSize;
 import stroom.util.io.TempDirProvider;
 import stroom.util.logging.LambdaLogger;
@@ -107,14 +107,14 @@ class TestRefDataOffHeapStore extends AbstractLmdbDbTest {
     }
 
     void setDbMaxSizeProperty(final ByteSize size) {
-        referenceDataConfig.setMaxStoreSize(size);
+        referenceDataConfig.getLmdbConfig().setMaxStoreSize(size);
     }
 
     @BeforeEach
     void setup() {
         LOGGER.debug("Creating LMDB environment in dbDir {}", getDbDir().toAbsolutePath().toString());
 
-        referenceDataConfig.setLocalDir(getDbDir().toAbsolutePath().toString());
+        referenceDataConfig.getLmdbConfig().setLocalDir(getDbDir().toAbsolutePath().toString());
 
         setDbMaxSizeProperty();
 
@@ -152,7 +152,7 @@ class TestRefDataOffHeapStore extends AbstractLmdbDbTest {
 
     @Test
     void testNoReadAhead() {
-        getReferenceDataConfig().setReadAheadEnabled(false);
+        getReferenceDataConfig().getLmdbConfig().setReadAheadEnabled(false);
 
         // ensure loading and reading works with the NOREADAHEAD flag set
         bulkLoadAndAssert(true, 100);
@@ -490,7 +490,7 @@ class TestRefDataOffHeapStore extends AbstractLmdbDbTest {
 
         bulkLoadAndAssert(refStreamDefinitions, false, 1000);
 
-        getReferenceDataConfig().setPurgeAge(StroomDuration.ZERO);
+        getReferenceDataConfig().getLmdbConfig().setPurgeAge(StroomDuration.ZERO);
 
         assertThat(refDataStore.getProcessingInfoEntryCount()).isEqualTo(2);
         assertThat(refDataStore.getKeyValueEntryCount()).isGreaterThan(0);
@@ -1362,6 +1362,6 @@ class TestRefDataOffHeapStore extends AbstractLmdbDbTest {
     }
 
     protected void setPurgeAgeProperty(final StroomDuration purgeAge) {
-        referenceDataConfig.setPurgeAge(purgeAge);
+        referenceDataConfig.getLmdbConfig().setPurgeAge(purgeAge);
     }
 }

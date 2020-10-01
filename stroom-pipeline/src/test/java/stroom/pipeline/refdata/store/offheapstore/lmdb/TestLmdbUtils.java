@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import stroom.pipeline.refdata.store.ProcessingState;
 import stroom.pipeline.refdata.store.RefDataProcessingInfo;
 import stroom.pipeline.refdata.store.offheapstore.serdes.RefDataProcessingInfoSerde;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 
 import java.nio.ByteBuffer;
 

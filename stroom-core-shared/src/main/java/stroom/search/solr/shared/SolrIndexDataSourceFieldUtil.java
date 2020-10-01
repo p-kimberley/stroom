@@ -26,19 +26,44 @@ import stroom.datasource.api.v2.IntegerField;
 import stroom.datasource.api.v2.LongField;
 import stroom.datasource.api.v2.TextField;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public final class SolrIndexDataSourceFieldUtil {
     public static List<AbstractField> getDataSourceFields(final SolrIndexDoc index) {
         if (index == null || index.getFields() == null) {
-            return null;
+            return Collections.emptyList();
         }
 
         return index.getFields()
                 .stream()
                 .map(SolrIndexDataSourceFieldUtil::convert)
                 .collect(Collectors.toList());
+    }
+
+    public static List<AbstractField> getAvailableFields(final SolrIndexDoc index) {
+        return Optional
+                .ofNullable(index)
+                .map(SolrIndexDoc::getFields)
+                .map(fields ->
+                        fields.stream()
+                                .map(SolrIndexDataSourceFieldUtil::convert)
+                                .collect(Collectors.toList()))
+                .orElse(Collections.emptyList());
+    }
+
+    public static List<AbstractField> getStoredFields(final SolrIndexDoc index) {
+        return Optional
+                .ofNullable(index)
+                .map(SolrIndexDoc::getFields)
+                .map(fields ->
+                        fields.stream()
+                                .filter(SolrIndexField::isStored)
+                                .map(SolrIndexDataSourceFieldUtil::convert)
+                                .collect(Collectors.toList()))
+                .orElse(Collections.emptyList());
     }
 
     private static AbstractField convert(final SolrIndexField field) {

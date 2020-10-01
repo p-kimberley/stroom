@@ -17,17 +17,19 @@
 
 package stroom.pipeline.refdata.store.offheapstore;
 
-import stroom.pipeline.refdata.store.ByteBufferPoolFactory;
+import stroom.lmdb.bytebuffer.ByteBufferPoolFactory;
 import stroom.pipeline.refdata.store.MapDefinition;
 import stroom.pipeline.refdata.store.RefStreamDefinition;
 import stroom.pipeline.refdata.store.offheapstore.databases.AbstractLmdbDbTest;
 import stroom.pipeline.refdata.store.offheapstore.databases.MapUidForwardDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.MapUidReverseDb;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.LmdbUtils;
+import stroom.lmdb.LmdbUtils;
 import stroom.pipeline.refdata.store.offheapstore.serdes.MapDefinitionSerde;
-import stroom.pipeline.refdata.store.offheapstore.serdes.UIDSerde;
-import stroom.pipeline.refdata.util.ByteBufferPool;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.serdes.UID;
+import stroom.lmdb.serdes.UIDSerde;
+import stroom.lmdb.serdes.UnsignedBytes;
+import stroom.lmdb.bytebuffer.ByteBufferPool;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

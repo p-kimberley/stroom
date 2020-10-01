@@ -17,6 +17,7 @@
 
 package stroom.pipeline.refdata.store.offheapstore;
 
+import stroom.lmdb.serdes.UID;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Range;
 

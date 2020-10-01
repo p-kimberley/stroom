@@ -44,7 +44,7 @@ public class DumpRefDataOffHeapStore {
         LOGGER.info("Using storeDir {}", storeDir.toAbsolutePath().normalize());
 
         ReferenceDataConfig referenceDataConfig = new ReferenceDataConfig();
-        referenceDataConfig.setLocalDir(storeDir.toAbsolutePath().toString());
+        referenceDataConfig.getLmdbConfig().setLocalDir(storeDir.toAbsolutePath().toString());
 
         Injector injector = Guice.createInjector(
                 new AbstractModule() {

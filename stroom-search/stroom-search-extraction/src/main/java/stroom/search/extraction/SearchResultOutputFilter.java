@@ -16,15 +16,17 @@
 
 package stroom.search.extraction;
 
-import org.xml.sax.Attributes;
-import org.xml.sax.SAXException;
 import stroom.dashboard.expression.v1.Val;
 import stroom.dashboard.expression.v1.ValString;
 import stroom.pipeline.factory.ConfigurableElement;
 import stroom.pipeline.shared.ElementIcons;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
+import stroom.search.coprocessor.FieldUtil;
 import stroom.search.coprocessor.Values;
+
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
 
 @ConfigurableElement(type = "SearchResultOutputFilter", category = Category.FILTER, roles = {
         PipelineElementType.ROLE_TARGET}, icon = ElementIcons.SEARCH)
@@ -48,14 +50,14 @@ public class SearchResultOutputFilter extends AbstractSearchResultOutputFilter {
                 value = value.trim();
 
                 if (name.length() > 0 && value.length() > 0) {
-                    final int fieldIndex = fieldIndexes.get(name);
+                    final int fieldIndex = FieldUtil.getFieldIndex(fields, name);
                     if (fieldIndex >= 0) {
                         values[fieldIndex] = ValString.create(value);
                     }
                 }
             }
         } else if (RECORD.equals(localName)) {
-            values = new Val[fieldIndexes.size()];
+            values = new Val[fields.length];
         }
         super.startElement(uri, localName, qName, atts);
     }

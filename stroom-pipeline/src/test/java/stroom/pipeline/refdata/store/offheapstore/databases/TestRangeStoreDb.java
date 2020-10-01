@@ -17,14 +17,14 @@
 
 package stroom.pipeline.refdata.store.offheapstore.databases;
 
-import stroom.pipeline.refdata.store.ByteBufferPoolFactory;
+import stroom.lmdb.bytebuffer.ByteBufferPoolFactory;
 import stroom.pipeline.refdata.store.offheapstore.RangeStoreKey;
-import stroom.pipeline.refdata.store.offheapstore.UID;
+import stroom.lmdb.serdes.UID;
 import stroom.pipeline.refdata.store.offheapstore.ValueStoreKey;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.LmdbUtils;
+import stroom.lmdb.LmdbUtils;
 import stroom.pipeline.refdata.store.offheapstore.serdes.RangeStoreKeySerde;
 import stroom.pipeline.refdata.store.offheapstore.serdes.ValueStoreKeySerde;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 import stroom.util.shared.Range;
 
 import com.google.common.util.concurrent.Striped;

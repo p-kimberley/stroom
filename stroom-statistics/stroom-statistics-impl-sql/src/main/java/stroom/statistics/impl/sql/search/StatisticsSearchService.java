@@ -1,10 +1,11 @@
 package stroom.statistics.impl.sql.search;
 
-import io.reactivex.Flowable;
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Val;
+import stroom.datasource.api.v2.AbstractField;
 import stroom.statistics.impl.sql.shared.StatisticStoreDoc;
 import stroom.task.api.TaskContext;
+
+import io.reactivex.Flowable;
 
 //TODO StatisticsDatabaseSearchService
 public interface StatisticsSearchService {
@@ -12,5 +13,5 @@ public interface StatisticsSearchService {
     Flowable<Val[]> search(final TaskContext parentTaskContext,
                            final StatisticStoreDoc statisticStoreEntity,
                            final FindEventCriteria criteria,
-                           final FieldIndexMap fieldIndexMap);
+                           final AbstractField[] fields);
 }

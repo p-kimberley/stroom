@@ -1,6 +1,5 @@
 package stroom.searchable.impl;
 
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.datasource.api.v2.AbstractField;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.query.api.v2.ExpressionOperator;
@@ -8,6 +7,7 @@ import stroom.query.api.v2.Param;
 import stroom.query.api.v2.SearchRequest;
 import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.Coprocessor;
+import stroom.query.common.v2.CoprocessorFactory;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorSettingsFactory;
 import stroom.query.common.v2.Data;
@@ -17,8 +17,6 @@ import stroom.query.common.v2.ResultHandler;
 import stroom.query.common.v2.SearchResultHandler;
 import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
-import stroom.query.common.v2.TableCoprocessor;
-import stroom.query.common.v2.TableCoprocessorSettings;
 import stroom.query.common.v2.TablePayload;
 import stroom.searchable.api.Searchable;
 import stroom.task.api.TaskContext;
@@ -37,14 +35,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 class SearchableStore implements Store {
@@ -57,6 +53,7 @@ class SearchableStore implements Store {
     private final Sizes defaultMaxResultsSizes;
     private final Sizes storeSize;
     private final String searchKey;
+    private final CoprocessorFactory coprocessorFactory;
 
     private final CompletionState completionState = new CompletionState();
     private final ResultHandler resultHandler;
@@ -71,40 +68,41 @@ class SearchableStore implements Store {
                     final TaskContextFactory taskContextFactory,
                     final TaskContext taskContext,
                     final SearchRequest searchRequest,
-                    final Executor executor) {
+                    final Executor executor,
+                    final CoprocessorFactory coprocessorFactory) {
         this.defaultMaxResultsSizes = defaultMaxResultsSizes;
         this.storeSize = storeSize;
+        this.coprocessorFactory = coprocessorFactory;
 
         searchKey = searchRequest.getKey().toString();
         LOGGER.debug(() -> LogUtil.message("Starting search with key {}", searchKey));
         taskContext.info(() -> "DB search " + searchKey + " - running query");
 
-        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
+        // We want to get all common fields so find all unique field referenced in teh search request.
+        final String[] mandatoryFieldNames = CoprocessorSettingsFactory.getAllRequiredFieldNames(searchRequest);
+        final List<AbstractField> fields = searchable.getDataSource().getFields();
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(
+                searchRequest,
+                fields,
+                fields,
+                List.of(mandatoryFieldNames));
         Preconditions.checkNotNull(settingsList);
 
-        final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
         final Map<String, String> paramMap = getParamMap(searchRequest);
 
-        final List<Coprocessor> coprocessors = getCoprocessors(
-                settingsList, fieldIndexMap, paramMap);
+        final List<Coprocessor> coprocessors = getCoprocessors(settingsList);
 
         final ExpressionOperator expression = searchRequest.getQuery().getExpression();
         final ExpressionCriteria criteria = new ExpressionCriteria(expression);
 
-        resultHandler = new SearchResultHandler(settingsList, defaultMaxResultsSizes, storeSize);
-
-        final Map<String, AbstractField> fieldMap = searchable.getDataSource().getFields()
-                .stream()
-                .collect(Collectors.toMap(AbstractField::getName, Function.identity()));
-        final OptionalInt max = fieldIndexMap.getMap().values().stream().mapToInt(Integer::intValue).max();
-        final AbstractField[] fieldArray = new AbstractField[max.orElse(-1) + 1];
-        fieldIndexMap.getMap().forEach((k, v) -> {
-            final AbstractField field = fieldMap.get(k);
-            fieldArray[v] = field;
-        });
+        resultHandler = new SearchResultHandler(
+                settingsList,
+                defaultMaxResultsSizes,
+                storeSize,
+                paramMap);
 
         final Runnable runnable = taskContextFactory.context(taskContext, TASK_NAME, tc ->
-                searchAsync(tc, searchable, criteria, fieldArray, coprocessors, resultHandlerBatchSize));
+                searchAsync(tc, searchable, criteria, settingsList.get(0).getFields(), coprocessors, resultHandlerBatchSize));
         CompletableFuture.runAsync(runnable, executor);
     }
 
@@ -200,24 +198,12 @@ class SearchableStore implements Store {
     }
 
     private List<Coprocessor> getCoprocessors(
-            final List<CoprocessorSettings> settingsList,
-            final FieldIndexMap fieldIndexMap,
-            final Map<String, String> paramMap) {
+            final List<CoprocessorSettings> settingsList) {
 
         return settingsList
                 .stream()
-                .map(settings -> createCoprocessor(settings, fieldIndexMap, paramMap))
+                .map(coprocessorFactory::create)
                 .collect(Collectors.toList());
-    }
-
-    private Coprocessor createCoprocessor(final CoprocessorSettings settings,
-                                          final FieldIndexMap fieldIndexMap,
-                                          final Map<String, String> paramMap) {
-        if (settings instanceof TableCoprocessorSettings) {
-            final TableCoprocessorSettings tableCoprocessorSettings = (TableCoprocessorSettings) settings;
-            return new TableCoprocessor(tableCoprocessorSettings, fieldIndexMap, paramMap);
-        }
-        return null;
     }
 
     /**
@@ -246,8 +232,8 @@ class SearchableStore implements Store {
                             // entry checked for null in stream above
                             if (payload instanceof TablePayload) {
                                 TablePayload tablePayload = (TablePayload) payload;
-                                if (tablePayload.getQueue() != null) {
-                                    size = Integer.toString(tablePayload.getQueue().size());
+                                if (tablePayload.getSize() > 0) {
+                                    size = Integer.toString(tablePayload.getSize());
                                 } else {
                                     size = "null";
                                 }

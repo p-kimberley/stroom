@@ -16,48 +16,45 @@
 
 package stroom.query.common.v2;
 
+import stroom.dashboard.expression.v1.ExpressionParser;
+import stroom.dashboard.expression.v1.FunctionFactory;
+import stroom.dashboard.expression.v1.ParamFactory;
+import stroom.datasource.api.v2.AbstractField;
 import stroom.query.api.v2.ResultRequest;
 import stroom.query.api.v2.SearchRequest;
 import stroom.query.api.v2.TableSettings;
 
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class CoprocessorSettingsFactory {
-//    private final Map<String, CoprocessorKey> componentIdToCoprocessorKeyMap = new HashMap<>();
-//    private final Map<CoprocessorKey, CoprocessorSettings> map = new HashMap<>();
-//
-//    private CoprocessorSettingsMap(final Map<String, TableSettings> settingsMap) {
-//        // Group common settings.
-//        final Map<TableSettings, Set<String>> groupMap = new HashMap<>();
-//        for (final Entry<String, TableSettings> entry : settingsMap.entrySet()) {
-//            final String componentId = entry.getKey();
-//            final TableSettings tableSettings = entry.getValue();
-//            if (tableSettings != null) {
-//                Set<String> set = groupMap.computeIfAbsent(tableSettings, k -> new HashSet<>());
-//                set.add(componentId);
-//            }
-//        }
-//
-//        int i = 0;
-//        for (final Entry<TableSettings, Set<String>> entry : groupMap.entrySet()) {
-//            final TableSettings tableSettings = entry.getKey();
-//            final Set<String> componentIds = entry.getValue();
-//            final CoprocessorKey key = new CoprocessorKey(i++, componentIds.toArray(new String[componentIds.size()]));
-//            map.put(key, new TableCoprocessorSettings(tableSettings));
-//            for (String componentId : componentIds) {
-//                componentIdToCoprocessorKeyMap.put(componentId, key);
-//            }
-//        }
-//    }
+    public static String[] getAllRequiredFieldNames(final SearchRequest searchRequest) {
+        final List<String> requiredFieldNames = new ArrayList<>();
+        for (final ResultRequest resultRequest : searchRequest.getResultRequests()) {
+            final TableSettings tableSettings = resultRequest.getMappings().get(0);
+            if (tableSettings != null) {
+                final String[] fieldNames = getRequiredFieldNames(tableSettings, Collections.emptyList());
+                for (final String fieldName : fieldNames) {
+                    if (!requiredFieldNames.contains(fieldName)) {
+                        requiredFieldNames.add(fieldName);
+                    }
+                }
+            }
+        }
+        return requiredFieldNames.toArray(new String[0]);
+    }
 
-    public static List<CoprocessorSettings> create(final SearchRequest searchRequest) {
+    public static List<CoprocessorSettings> create(final SearchRequest searchRequest,
+                                                   final List<AbstractField> availableFields,
+                                                   final List<AbstractField> storedFields,
+                                                   final List<String> mandatoryFieldNames) {
         // Group common settings.
         final Map<TableSettings, List<String>> groupMap = new HashMap<>();
         for (final ResultRequest resultRequest : searchRequest.getResultRequests()) {
@@ -72,21 +69,66 @@ public class CoprocessorSettingsFactory {
                 .entrySet()
                 .stream()
                 .map(e -> {
-                            final String key = String.valueOf(atomicInteger.incrementAndGet());
-                            return new TableCoprocessorSettings(key, e.getValue(), e.getKey());
-                        })
+                    final String coprocessorId = String.valueOf(atomicInteger.incrementAndGet());
+                    final String[] fieldNames = getRequiredFieldNames(e.getKey(), mandatoryFieldNames);
+                    final AbstractField[] fields =
+                            getRealFields(e.getKey(), availableFields, storedFields, fieldNames);
+                    return new TableCoprocessorSettings(searchRequest.getKey(), coprocessorId, e.getValue(), e.getKey(), fieldNames, fields);
+                })
                 .collect(Collectors.toList());
     }
 
-//    public static List<CoprocessorSettings> createSettingsList(final List<CoprocessorSettings> settingsList) {
-//        return settingsList.stream().map(CoprocessorSet::getSettings).collect(Collectors.toList());
-//    }
+    private static AbstractField[] getRealFields(final TableSettings tableSettings,
+                                                 final List<AbstractField> availableFields,
+                                                 final List<AbstractField> storedFields,
+                                                 final String[] requiredFieldNames) {
+        final Map<String, AbstractField> availableFieldMap = availableFields
+                .stream()
+                .collect(Collectors.toMap(AbstractField::getName, Function.identity()));
 
-//    public CoprocessorKey getCoprocessorKey(final String componentId) {
-//        return componentIdToCoprocessorKeyMap.get(componentId);
-//    }
-//
-//    public Map<CoprocessorKey, CoprocessorSettings> getMap() {
-//        return map;
-//    }
+        final Map<String, AbstractField> storedFieldMap = storedFields
+                .stream()
+                .collect(Collectors.toMap(AbstractField::getName, Function.identity()));
+
+        final AbstractField[] fields = new AbstractField[requiredFieldNames.length];
+        for (int i = 0; i < requiredFieldNames.length; i++) {
+            final String name = requiredFieldNames[i];
+            final AbstractField storedField = storedFieldMap.get(name);
+            if (storedField != null) {
+                fields[i] = storedField;
+            } else if (tableSettings.extractValues() &&
+                    tableSettings.getExtractionPipeline() != null &&
+                    tableSettings.getExtractionPipeline().getUuid() != null) {
+                // If we are doing extraction then we can use non stored fields.
+                final AbstractField field = availableFieldMap.get(name);
+                if (field != null) {
+                    fields[i] = field;
+                }
+            }
+        }
+
+        return fields;
+    }
+
+    public static String[] getRequiredFieldNames(final TableSettings tableSettings,
+                                                 final List<String> mandatoryFieldNames) {
+        // Add mandatory field names to the field name list.
+        final List<String> fieldNames = new ArrayList<>(mandatoryFieldNames);
+
+        final ExpressionParser expressionParser = new ExpressionParser(new FunctionFactory(), new ParamFactory());
+        tableSettings.getFields().forEach(field -> {
+            try {
+                final String[] referencedFieldNames = expressionParser.getReferencedFieldNames(field.getExpression());
+                for (final String referencedFieldName : referencedFieldNames) {
+                    if (!fieldNames.contains(referencedFieldName)) {
+                        fieldNames.add(referencedFieldName);
+                    }
+                }
+            } catch (final ParseException e) {
+                throw new RuntimeException(e.getMessage(), e);
+            }
+        });
+
+        return fieldNames.toArray(new String[0]);
+    }
 }

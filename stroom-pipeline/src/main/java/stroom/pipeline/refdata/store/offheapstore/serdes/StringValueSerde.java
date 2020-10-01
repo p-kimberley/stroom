@@ -17,6 +17,7 @@
 
 package stroom.pipeline.refdata.store.offheapstore.serdes;
 
+import stroom.lmdb.serdes.StringSerde;
 import stroom.pipeline.refdata.store.RefDataValue;
 import stroom.pipeline.refdata.store.StringValue;
 import stroom.util.logging.LogUtil;

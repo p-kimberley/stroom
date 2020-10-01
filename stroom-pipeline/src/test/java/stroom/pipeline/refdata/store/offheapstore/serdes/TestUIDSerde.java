@@ -18,8 +18,10 @@
 package stroom.pipeline.refdata.store.offheapstore.serdes;
 
 
+import stroom.lmdb.serdes.UID;
+import stroom.lmdb.serdes.UIDSerde;
+
 import org.junit.jupiter.api.Test;
-import stroom.pipeline.refdata.store.offheapstore.UID;
 
 class TestUIDSerde extends AbstractSerdeTest<UID, UIDSerde> {
 

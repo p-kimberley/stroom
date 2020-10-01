@@ -9,6 +9,8 @@ dependencies {
 ////    compile project(':stroom-entity-shared')
 //    compile project(':stroom-explorer-api')
     compile project(':stroom-pipeline')
+    compile project(':stroom-query:stroom-expression')
+    compile project(':stroom-query:stroom-query-api')
     compile project(':stroom-search:stroom-search-extraction')
         compile project(':stroom-search:stroom-search-api')
 //    compile project(':stroom-security-api')
@@ -25,8 +27,8 @@ dependencies {
     compile libs.lucene_core
     compile libs.slf4j_api
     compile libs.solrj
-    compile libs.stroomExpression
-    compile libs.stroomQueryApi
+//    compile libs.stroomExpression
+//    compile libs.stroomQueryApi
 //    compile libs.stroomQueryCommon
     compile libs.swagger_annotations
     compile libs.javax_inject

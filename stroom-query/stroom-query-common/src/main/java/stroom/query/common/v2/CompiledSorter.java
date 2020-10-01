@@ -16,6 +16,9 @@
 
 package stroom.query.common.v2;
 
+import stroom.dashboard.expression.v1.Generator;
+import stroom.dashboard.expression.v1.Val;
+import stroom.dashboard.expression.v1.ValComparator;
 import stroom.query.api.v2.Field;
 import stroom.query.api.v2.Sort;
 import stroom.query.api.v2.Sort.SortDirection;
@@ -25,13 +28,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class CompiledSorter implements Serializable, Comparator<Item> {
+class CompiledSorter implements Serializable, Comparator<Item> {
     private static final long serialVersionUID = -64195891930546352L;
+
+    private static final ValComparator COMPARATOR = new ValComparator();
 
     private final List<CompiledSort> compiledSorts = new ArrayList<>();
     private final boolean hasSort;
 
-    public CompiledSorter(final List<Field> fields) {
+    CompiledSorter(final List<Field> fields) {
         int pos = 0;
 
         if (fields != null) {
@@ -72,15 +77,17 @@ public class CompiledSorter implements Serializable, Comparator<Item> {
     public int compare(final Item o1, final Item o2) {
         for (final CompiledSort compiledSort : compiledSorts) {
             final int fieldPos = compiledSort.getFieldIndex();
-            final Comparable v1 = o1.generators[fieldPos];
-            final Comparable v2 = o2.generators[fieldPos];
+            final Generator g1 = o1.generators[fieldPos];
+            final Generator g2 = o2.generators[fieldPos];
 
             int res = 0;
-            if (v1 != null && v2 != null) {
-                res = v1.compareTo(v2);
-            } else if (v1 != null) {
+            if (g1 != null && g2 != null) {
+                final Val v1 = g1.eval();
+                final Val v2 = g2.eval();
+                res = COMPARATOR.compare(v1, v2);
+            } else if (g1 != null) {
                 res = 1;
-            } else if (v2 != null) {
+            } else if (g2 != null) {
                 res = -1;
             }
 

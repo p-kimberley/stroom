@@ -4,8 +4,8 @@ import stroom.app.uri.UriFactoryModule;
 import stroom.cluster.impl.ClusterModule;
 import stroom.config.app.AppConfig;
 import stroom.config.app.AppConfigModule;
-import stroom.config.app.ConfigHolder;
 import stroom.config.app.Config;
+import stroom.config.app.ConfigHolder;
 import stroom.db.util.DbModule;
 import stroom.dropwizard.common.LogLevelInspector;
 import stroom.index.impl.IndexShardWriterExecutorProvider;
@@ -16,6 +16,8 @@ import stroom.resource.impl.SessionResourceModule;
 import stroom.security.impl.SecurityContextModule;
 import stroom.statistics.impl.sql.search.SQLStatisticSearchModule;
 import stroom.util.guice.HasSystemInfoBinder;
+import stroom.util.io.TempDirProvider;
+import stroom.util.io.TempDirProviderImpl;
 
 import com.google.inject.AbstractModule;
 import io.dropwizard.setup.Environment;
@@ -78,6 +80,9 @@ public class AppModule extends AbstractModule {
         install(new SessionResourceModule());
         install(new JerseyModule());
         bind(IndexShardWriterExecutorProvider.class).to(IndexShardWriterExecutorProviderImpl.class);
+
+        // Bind the temporary directory provider.
+        bind(TempDirProvider.class).to(TempDirProviderImpl.class);
 
         HasSystemInfoBinder.create(binder())
                 .bind(LogLevelInspector.class);

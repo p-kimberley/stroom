@@ -16,13 +16,14 @@
 
 package stroom.pipeline.destination;
 
+import stroom.util.io.ByteCountOutputStream;
+import stroom.util.io.FileUtil;
+import stroom.util.io.PathCreator;
+import stroom.util.scheduler.SimpleCron;
+
 import com.google.common.base.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import stroom.pipeline.writer.PathCreator;
-import stroom.util.io.ByteCountOutputStream;
-import stroom.util.io.FileUtil;
-import stroom.util.scheduler.SimpleCron;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;

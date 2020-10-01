@@ -1,11 +1,12 @@
 package stroom.statistics.impl.sql.search;
 
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Val;
 import stroom.dashboard.expression.v1.ValDouble;
 import stroom.dashboard.expression.v1.ValLong;
 import stroom.dashboard.expression.v1.ValNull;
 import stroom.dashboard.expression.v1.ValString;
+import stroom.datasource.api.v2.AbstractField;
+import stroom.search.coprocessor.FieldUtil;
 import stroom.statistics.impl.sql.PreparedStatementUtil;
 import stroom.statistics.impl.sql.SQLStatisticConstants;
 import stroom.statistics.impl.sql.SQLStatisticNames;
@@ -87,24 +88,24 @@ class StatisticsSearchServiceImpl implements StatisticsSearchService {
     public Flowable<Val[]> search(final TaskContext parentTaskContext,
                                   final StatisticStoreDoc statisticStoreEntity,
                                   final FindEventCriteria criteria,
-                                  final FieldIndexMap fieldIndexMap) {
+                                  final AbstractField[] fields) {
 
-        List<String> selectCols = getSelectColumns(statisticStoreEntity, fieldIndexMap);
-        SqlBuilder sql = buildSql(statisticStoreEntity, criteria, fieldIndexMap);
+        List<String> selectCols = getSelectColumns(statisticStoreEntity, fields);
+        SqlBuilder sql = buildSql(statisticStoreEntity, criteria, fields);
 
         // build a mapper function to convert a resultSet row into a String[] based on the fields
         // required by all coprocessors
-        Function<ResultSet, Val[]> resultSetMapper = buildResultSetMapper(fieldIndexMap, statisticStoreEntity);
+        Function<ResultSet, Val[]> resultSetMapper = buildResultSetMapper(fields, statisticStoreEntity);
 
         // the query will not be executed until somebody subscribes to the flowable
         return getFlowableQueryResults(parentTaskContext, sql, resultSetMapper);
     }
 
     private List<String> getSelectColumns(final StatisticStoreDoc statisticStoreEntity,
-                                          final FieldIndexMap fieldIndexMap) {
+                                          final AbstractField[] fields) {
         //assemble a map of how fields map to 1-* select cols
 
-        if (fieldIndexMap == null || fieldIndexMap.size() == 0) {
+        if (fields == null || fields.length == 0) {
             // This is a slight fudge to allow a dash query with a table that only has custom cols
             // tha involve no fields, e.g. one col of 'add(1,2)'. So we just return a col of nulls.
             return Collections.singletonList("null");
@@ -126,7 +127,7 @@ class StatisticsSearchServiceImpl implements StatisticsSearchService {
                     .flatMap(entry ->
                             entry.getValue().stream()
                                     .map(colName ->
-                                            getOptFieldIndexPosition(fieldIndexMap, entry.getKey())
+                                            FieldUtil.getOptFieldIndexPosition(fields, entry.getKey())
                                                     .map(val -> colName))
                                     .filter(Optional::isPresent)
                                     .map(Optional::get))
@@ -140,7 +141,7 @@ class StatisticsSearchServiceImpl implements StatisticsSearchService {
      */
     private SqlBuilder buildSql(final StatisticStoreDoc statisticStoreEntity,
                                 final FindEventCriteria criteria,
-                                final FieldIndexMap fieldIndexMap) {
+                                final AbstractField[] fields) {
         /**
          * SQL for testing querying the stat/tag names
          * <p>
@@ -165,7 +166,7 @@ class StatisticsSearchServiceImpl implements StatisticsSearchService {
         SqlBuilder sql = new SqlBuilder();
         sql.append("SELECT ");
 
-        String selectColsStr = getSelectColumns(statisticStoreEntity, fieldIndexMap).stream()
+        String selectColsStr = getSelectColumns(statisticStoreEntity, fields).stream()
                 .collect(Collectors.joining(", "));
 
         sql.append(selectColsStr);
@@ -204,62 +205,49 @@ class StatisticsSearchServiceImpl implements StatisticsSearchService {
         return sql;
     }
 
-    private Optional<Integer> getOptFieldIndexPosition(final FieldIndexMap fieldIndexMap, final String fieldName) {
-        int idx = fieldIndexMap.get(fieldName);
-        if (idx == -1) {
-            return Optional.empty();
-        } else {
-            return Optional.of(idx);
-        }
-    }
-
-
     /**
      * Build a mapper function that will only extract the columns of interest from the resultSet row.
      * Assumes something external to the returned function will advance the resultSet
      */
     private Function<ResultSet, Val[]> buildResultSetMapper(
-            final FieldIndexMap fieldIndexMap,
+            final AbstractField[] fields,
             final StatisticStoreDoc statisticStoreEntity) {
 
-        LAMBDA_LOGGER.debug(() -> String.format("Building mapper for fieldIndexMap %s, entity %s",
-                fieldIndexMap, statisticStoreEntity.getUuid()));
+        LAMBDA_LOGGER.debug(() -> String.format("Building mapper for fieldNames %s, entity %s",
+                fields, statisticStoreEntity.getUuid()));
 
         // construct a list of field extractors that can populate the appropriate bit of the data arr
         // when given a resultSet row
-        List<ValueExtractor> valueExtractors = fieldIndexMap.getMap().entrySet().stream()
-                .map(entry -> {
-                    final int idx = entry.getValue();
-                    final String fieldName = entry.getKey();
-                    final ValueExtractor extractor;
-                    if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_DATE_TIME)) {
-                        extractor = buildLongValueExtractor(SQLStatisticNames.TIME_MS, idx);
-                    } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_COUNT)) {
-                        extractor = buildLongValueExtractor(SQLStatisticNames.COUNT, idx);
-                    } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_PRECISION_MS)) {
-                        extractor = buildPrecisionMsExtractor(idx);
-                    } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_VALUE)) {
-                        final StatisticType statisticType = statisticStoreEntity.getStatisticType();
-                        if (statisticType.equals(StatisticType.COUNT)) {
-                            extractor = buildLongValueExtractor(SQLStatisticNames.COUNT, idx);
-                        } else if (statisticType.equals(StatisticType.VALUE)) {
-                            // value stat
-                            extractor = buildStatValueExtractor(idx);
-                        } else {
-                            throw new RuntimeException(String.format("Unexpected type %s", statisticType));
-                        }
-                    } else if (statisticStoreEntity.getFieldNames().contains(fieldName)) {
-                        // this is a tag field so need to extract the tags/values from the NAME col.
-                        // We only want to do this extraction once so we cache the values
-                        extractor = buildTagFieldValueExtractor(fieldName, idx);
-                    } else {
-                        throw new RuntimeException(String.format("Unexpected fieldName %s", fieldName));
-                    }
-                    LAMBDA_LOGGER.debug(() ->
-                            String.format("Adding extraction function for field %s, idx %s", fieldName, idx));
-                    return extractor;
-                })
-                .collect(Collectors.toList());
+        final List<ValueExtractor> valueExtractors = new ArrayList<>();
+        for (int i = 0; i < fields.length; i++) {
+            final String fieldName = fields[i].getName();
+            final ValueExtractor extractor;
+            if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_DATE_TIME)) {
+                extractor = buildLongValueExtractor(SQLStatisticNames.TIME_MS, i);
+            } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_COUNT)) {
+                extractor = buildLongValueExtractor(SQLStatisticNames.COUNT, i);
+            } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_PRECISION_MS)) {
+                extractor = buildPrecisionMsExtractor(i);
+            } else if (fieldName.equals(StatisticStoreDoc.FIELD_NAME_VALUE)) {
+                final StatisticType statisticType = statisticStoreEntity.getStatisticType();
+                if (statisticType.equals(StatisticType.COUNT)) {
+                    extractor = buildLongValueExtractor(SQLStatisticNames.COUNT, i);
+                } else if (statisticType.equals(StatisticType.VALUE)) {
+                    // value stat
+                    extractor = buildStatValueExtractor(i);
+                } else {
+                    throw new RuntimeException(String.format("Unexpected type %s", statisticType));
+                }
+            } else if (statisticStoreEntity.getFieldNames().contains(fieldName)) {
+                // this is a tag field so need to extract the tags/values from the NAME col.
+                // We only want to do this extraction once so we cache the values
+                extractor = buildTagFieldValueExtractor(fieldName, i);
+            } else {
+                throw new RuntimeException(String.format("Unexpected fieldName %s", fieldName));
+            }
+            LAMBDA_LOGGER.debug("Adding extraction function for field {}, idx {}", fieldName, i);
+            valueExtractors.add(extractor);
+        }
 
         final int arrSize = valueExtractors.size();
 

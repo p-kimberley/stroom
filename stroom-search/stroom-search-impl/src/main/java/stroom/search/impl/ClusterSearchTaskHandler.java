@@ -92,11 +92,7 @@ class ClusterSearchTaskHandler implements Consumer<Error> {
                     }
 
                     // Create coprocessors.
-                    final Coprocessors coprocessors = coprocessorsFactory.create(
-                            task.getSettings(),
-                            storedFields,
-                            query.getParams(),
-                            this);
+                    final Coprocessors coprocessors = coprocessorsFactory.create(task.getSettings(), this);
 
                     // Start forwarding data to target node.
                     resultFactory.setCoprocessors(coprocessors);

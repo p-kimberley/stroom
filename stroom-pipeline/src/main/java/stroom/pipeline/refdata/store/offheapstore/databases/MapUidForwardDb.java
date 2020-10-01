@@ -19,13 +19,13 @@ package stroom.pipeline.refdata.store.offheapstore.databases;
 
 import stroom.pipeline.refdata.store.MapDefinition;
 import stroom.pipeline.refdata.store.RefStreamDefinition;
-import stroom.pipeline.refdata.store.offheapstore.UID;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.AbstractLmdbDb;
+import stroom.lmdb.serdes.UID;
+import stroom.lmdb.AbstractLmdbDb;
 import stroom.pipeline.refdata.store.offheapstore.serdes.MapDefinitionSerde;
-import stroom.pipeline.refdata.store.offheapstore.serdes.UIDSerde;
-import stroom.pipeline.refdata.util.ByteBufferPool;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
-import stroom.pipeline.refdata.util.PooledByteBuffer;
+import stroom.lmdb.serdes.UIDSerde;
+import stroom.lmdb.bytebuffer.ByteBufferPool;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.PooledByteBuffer;
 import stroom.util.logging.LogUtil;
 
 import com.google.inject.assistedinject.Assisted;

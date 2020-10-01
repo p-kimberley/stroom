@@ -18,8 +18,6 @@ package stroom.query.common.v2;
 
 import stroom.dashboard.expression.v1.Generator;
 
-import java.io.Serializable;
-
 public class Item {
     GroupKey key;
     Generator[] generators;

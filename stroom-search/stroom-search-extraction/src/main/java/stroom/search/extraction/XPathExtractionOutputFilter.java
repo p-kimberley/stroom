@@ -163,17 +163,17 @@ public class XPathExtractionOutputFilter extends AbstractSearchResultOutputFilte
     }
 
     private void createXPathExecutables() {
-        xPathExecutables = new XPathExecutable[fieldIndexes.size()];
+        xPathExecutables = new XPathExecutable[fields.length];
 
-        for (String xpathPart : fieldIndexes.getMap().keySet()) {
-            int index = fieldIndexes.get(xpathPart);
+        for (int index = 0; index < fields.length; index++) {
+            String fieldName = fields[index].getName();
 
-            if (EVENT_ID.equals(xpathPart))
-                xpathPart = "@" + EVENT_ID;
-            else if (STREAM_ID.equals(xpathPart))
-                xpathPart = "@" + STREAM_ID;
+            if (EVENT_ID.equals(fieldName))
+                fieldName = "@" + EVENT_ID;
+            else if (STREAM_ID.equals(fieldName))
+                fieldName = "@" + STREAM_ID;
 
-            String xpath = "/" + topLevelElementToSkip + "/" + secondLevelElementToCreateDocs + "/" + xpathPart;
+            String xpath = "/" + topLevelElementToSkip + "/" + secondLevelElementToCreateDocs + "/" + fieldName;
 
             try {
                 xPathExecutables[index] = compiler.compile(xpath);

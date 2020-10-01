@@ -16,8 +16,6 @@
 
 package stroom.query.common.v2;
 
-import stroom.dashboard.expression.v1.FieldIndexMap;
-import stroom.dashboard.expression.v1.Generator;
 import stroom.dashboard.expression.v1.Val;
 import stroom.query.api.v2.Field;
 import stroom.query.api.v2.FlatResult;
@@ -33,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -196,7 +195,7 @@ public class FlatResultCreator implements ResultCreator {
             }
         }
 
-        for (final Item item : items) {
+        for (final DataItem item : items) {
             if (rangeChecker.check(count)) {
 
                 final List<Object> values = new ArrayList<>(fields.size() + 3);
@@ -214,18 +213,15 @@ public class FlatResultCreator implements ResultCreator {
                 // functions where necessary.
                 int i = 0;
                 for (final Field field : fields) {
-                    final Generator generator = item.getGenerators()[i];
+                    final Val val = item.getValues()[i];
                     Object value = null;
-                    if (generator != null) {
+                    if (val != null) {
                         // Convert all list into fully resolved
                         // objects evaluating functions where necessary.
-                        final Val val = generator.eval();
-                        if (val != null) {
-                            if (fieldFormatter != null) {
-                                value = fieldFormatter.format(field, val);
-                            } else {
-                                value = convert(field, val);
-                            }
+                        if (fieldFormatter != null) {
+                            value = fieldFormatter.format(field, val);
+                        } else {
+                            value = convert(field, val);
                         }
                     }
 
@@ -281,11 +277,8 @@ public class FlatResultCreator implements ResultCreator {
     }
 
     private static class Mapper {
-        private final String[] parentFields;
-        private final FieldIndexMap fieldIndexMap;
-        private final CompiledFields compiledFields;
-        private final CompiledDepths compiledDepths;
-        private final TablePayloadHandler tablePayloadHandler;
+        private final int[] parentFieldIndices;
+        private final TableDataFactory tableDataFactory;
         private final int maxItems;
 
         Mapper(final TableSettings parent,
@@ -294,21 +287,31 @@ public class FlatResultCreator implements ResultCreator {
                final int maxItems) {
             this.maxItems = maxItems;
 
-            parentFields = new String[parent.getFields().size()];
-            int i = 0;
-            for (final Field field : parent.getFields()) {
-                parentFields[i++] = field.getName();
-            }
-
-            fieldIndexMap = new FieldIndexMap(true);
-
-            final List<Field> fields = child.getFields();
-            compiledDepths = new CompiledDepths(fields, child.showDetail());
-            compiledFields = new CompiledFields(fields, fieldIndexMap, paramMap);
-
             // Create a set of max result sizes that are determined by the supplied max results or default to integer max value.
             final Sizes maxResults = Sizes.create(child.getMaxResults(), Integer.MAX_VALUE);
-            tablePayloadHandler = new TablePayloadHandler(child.getFields(), true, maxResults, null);
+            final String[] fieldNames = CoprocessorSettingsFactory.getRequiredFieldNames(child, Collections.emptyList());
+            tableDataFactory = new TableDataFactory(
+                    child,
+                    fieldNames,
+                    paramMap,
+                    maxResults,
+                    null);
+
+            int i = 0;
+            final Map<String, Integer> parentIndex = new HashMap<>();
+            for (final Field field : parent.getFields()) {
+                parentIndex.put(field.getName(), i++);
+            }
+
+            final String[] childFieldNames = tableDataFactory.getFieldNames();
+            parentFieldIndices = new int[childFieldNames.length];
+            Arrays.fill(parentFieldIndices, -1);
+            for (i = 0; i < childFieldNames.length; i++) {
+                final Integer index = parentIndex.get(childFieldNames[i]);
+                if (index != null) {
+                    parentFieldIndices[i] = index;
+                }
+            }
         }
 
         public Data map(final Data data) {
@@ -316,25 +319,19 @@ public class FlatResultCreator implements ResultCreator {
             // TODO : Add an option to get detail level items rather than root level items.
             final DataItems items = data.get();
 
-            tablePayloadHandler.clear();
+            tableDataFactory.clear();
             if (items.size() > 0) {
-                final ItemMapper mapper = new ItemMapper(compiledFields, compiledDepths.getMaxDepth(), compiledDepths.getMaxGroupDepth());
-                final List<Item> queue = new ArrayList<>(items.size());
-
                 int itemCount = 0;
-                for (final Item item : items) {
-                    final Generator[] generators = item.getGenerators();
-                    final Val[] values = new Val[fieldIndexMap.size()];
-                    for (int i = 0; i < generators.length; i++) {
-                        final Generator generator = generators[i];
-                        if (generator != null) {
-                            final int index = fieldIndexMap.get(parentFields[i]);
-                            if (index >= 0) {
-                                values[index] = generator.eval();
-                            }
+                for (final DataItem item : items) {
+                    final Val[] values = new Val[parentFieldIndices.length];
+                    for (int i = 0; i < values.length; i++) {
+                        final int index = parentFieldIndices[i];
+                        if (index != -1) {
+                            final Val val = item.values[index];
+                            values[index] = val;
                         }
                     }
-                    mapper.map(values, queue::add);
+                    tableDataFactory.add(values);
 
                     // Trim the data to the parent first level result size.
                     itemCount++;
@@ -342,10 +339,9 @@ public class FlatResultCreator implements ResultCreator {
                         break;
                     }
                 }
-                tablePayloadHandler.addQueue(queue);
             }
 
-            return tablePayloadHandler.getData();
+            return tableDataFactory.getData();
         }
     }
 

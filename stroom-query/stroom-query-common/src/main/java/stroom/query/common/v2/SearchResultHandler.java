@@ -17,6 +17,7 @@
 package stroom.query.common.v2;
 
 import stroom.query.api.v2.TableSettings;
+import stroom.search.coprocessor.FieldUtil;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,23 +25,37 @@ import java.util.Map;
 
 public class SearchResultHandler implements ResultHandler {
     private final Map<String, TablePayloadHandler> handlerMap;
-    private final Map<String, TablePayloadHandler> componentMap;
+    private final Map<String, TableDataFactory> componentMap;
 
     public SearchResultHandler(final List<CoprocessorSettings> settingsList,
                                final Sizes defaultMaxResultsSizes,
-                               final Sizes storeSize) {
+                               final Sizes storeSize,
+                               final Map<String, String> paramMap) {
         handlerMap = new HashMap<>();
         componentMap = new HashMap<>();
+
         settingsList.forEach(settings -> {
             if (settings instanceof TableCoprocessorSettings) {
                 final TableCoprocessorSettings tableCoprocessorSettings = (TableCoprocessorSettings) settings;
                 final TableSettings tableSettings = tableCoprocessorSettings.getTableSettings();
-                // Create a set of sizes that are the minimum values for the combination of user provided sizes for the table and the default maximum sizes.
+                // Create a set of sizes that are the minimum values for the combination of user provided sizes for the
+                // table and the default maximum sizes.
                 final Sizes maxResults = Sizes.min(Sizes.create(tableSettings.getMaxResults()), defaultMaxResultsSizes);
-                final TablePayloadHandler tablePayloadHandler = new TablePayloadHandler(tableSettings.getFields(), tableSettings.showDetail(), maxResults, storeSize);
-                handlerMap.put(tableCoprocessorSettings.getKey(), tablePayloadHandler);
+                final String[] fieldNames = FieldUtil.getFieldNames(tableCoprocessorSettings.getFields());
+
+                final TableDataFactory tableDataFactory = new TableDataFactory(
+                        tableSettings,
+                        fieldNames,
+                        paramMap,
+                        maxResults,
+                        storeSize);
+
+                final ValArraySerde valArraySerde = ValArraySerde.create(tableCoprocessorSettings.getFields());
+
+                final TablePayloadHandler tablePayloadHandler = new TablePayloadHandler(valArraySerde, tableDataFactory);
+                handlerMap.put(tableCoprocessorSettings.getCoprocessorId(), tablePayloadHandler);
                 tableCoprocessorSettings.getComponentIdList().forEach(componentId ->
-                        componentMap.put(componentId, tablePayloadHandler));
+                        componentMap.put(componentId, tableDataFactory));
             }
         });
     }
@@ -51,12 +66,8 @@ public class SearchResultHandler implements ResultHandler {
             for (final Payload payload : payloads) {
                 if (payload instanceof TablePayload) {
                     final TablePayload tablePayload = (TablePayload) payload;
-
                     final TablePayloadHandler payloadHandler = handlerMap.get(payload.getKey());
-                    final List<Item> newQueue = tablePayload.getQueue();
-                    if (newQueue != null) {
-                        payloadHandler.addQueue(newQueue);
-                    }
+                    payloadHandler.process(tablePayload);
                 }
             }
         }
@@ -64,9 +75,9 @@ public class SearchResultHandler implements ResultHandler {
 
     @Override
     public Data getResultStore(final String componentId) {
-        final TablePayloadHandler tablePayloadHandler = componentMap.get(componentId);
-        if (tablePayloadHandler != null) {
-            return tablePayloadHandler.getData();
+        final TableDataFactory tableDataFactory = componentMap.get(componentId);
+        if (tableDataFactory != null) {
+            return tableDataFactory.getData();
         }
         return null;
     }

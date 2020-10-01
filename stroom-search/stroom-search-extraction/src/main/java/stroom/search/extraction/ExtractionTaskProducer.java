@@ -159,7 +159,7 @@ class ExtractionTaskProducer extends TaskProducer {
         // Tell the supplied executor that we are ready to deliver tasks.
         signalAvailable();
 
-        return new ReceiverImpl(topic, parentReceiver.getErrorConsumer(), parentReceiver.getCompletionCountConsumer(), parentReceiver.getFieldIndexMap());
+        return new ReceiverImpl(topic, parentReceiver.getErrorConsumer(), parentReceiver.getCompletionCountConsumer(), parentReceiver.getFields());
     }
 
     protected boolean isComplete() {

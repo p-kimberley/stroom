@@ -36,17 +36,17 @@ import stroom.pipeline.refdata.store.offheapstore.databases.ProcessingInfoDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.RangeStoreDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.ValueStoreDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.ValueStoreMetaDb;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.LmdbDb;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.LmdbUtils;
+import stroom.lmdb.LmdbDb;
+import stroom.lmdb.LmdbEnvFactory;
+import stroom.lmdb.LmdbUtils;
 import stroom.pipeline.refdata.store.offheapstore.serdes.RefDataProcessingInfoSerde;
-import stroom.pipeline.refdata.util.ByteBufferPool;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
-import stroom.pipeline.refdata.util.PooledByteBuffer;
-import stroom.pipeline.refdata.util.PooledByteBufferPair;
-import stroom.pipeline.writer.PathCreator;
+import stroom.lmdb.serdes.UID;
+import stroom.lmdb.bytebuffer.ByteBufferPool;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.PooledByteBuffer;
+import stroom.lmdb.bytebuffer.PooledByteBufferPair;
 import stroom.util.HasHealthCheck;
 import stroom.util.io.ByteSize;
-import stroom.util.io.TempDirProvider;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
@@ -60,9 +60,7 @@ import io.vavr.Tuple;
 import io.vavr.Tuple2;
 import io.vavr.Tuple3;
 import io.vavr.Tuple4;
-import org.apache.hadoop.hbase.util.Bytes;
 import org.lmdbjava.Env;
-import org.lmdbjava.EnvFlags;
 import org.lmdbjava.KeyRange;
 import org.lmdbjava.Txn;
 import org.slf4j.Logger;
@@ -70,12 +68,10 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -84,7 +80,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -100,16 +95,8 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
     private static final Logger LOGGER = LoggerFactory.getLogger(RefDataOffHeapStore.class);
     private static final LambdaLogger LAMBDA_LOGGER = LambdaLoggerFactory.getLogger(RefDataOffHeapStore.class);
 
-    private static final String DEFAULT_STORE_SUB_DIR_NAME = "refDataOffHeapStore";
-
     private static final long PROCESSING_INFO_UPDATE_DELAY_MS = Duration.of(1, ChronoUnit.HOURS).toMillis();
 
-    // These are dups of org.lmdbjava.Library.LMDB_* but that class is pkg private for some reason.
-    private static final String LMDB_EXTRACT_DIR_PROP = "lmdbjava.extract.dir";
-    private static final String LMDB_NATIVE_LIB_PROP = "lmdbjava.native.lib";
-
-    private final TempDirProvider tempDirProvider;
-    private final PathCreator pathCreator;
     private final Path dbDir;
     private final ByteSize maxSize;
     private final int maxReaders;
@@ -139,8 +126,6 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
 
     @Inject
     RefDataOffHeapStore(
-            final TempDirProvider tempDirProvider,
-            final PathCreator pathCreator,
             final ReferenceDataConfig referenceDataConfig,
             final ByteBufferPool byteBufferPool,
             final Factory keyValueStoreDbFactory,
@@ -150,18 +135,17 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
             final MapUidForwardDb.Factory mapUidForwardDbFactory,
             final MapUidReverseDb.Factory mapUidReverseDbFactory,
             final RefDataValueConverter refDataValueConverter,
-            final ProcessingInfoDb.Factory processingInfoDbFactory) {
+            final ProcessingInfoDb.Factory processingInfoDbFactory,
+            final LmdbEnvFactory lmdbEnvFactory) {
 
-        this.tempDirProvider = tempDirProvider;
-        this.pathCreator = pathCreator;
         this.referenceDataConfig = referenceDataConfig;
         this.refDataValueConverter = refDataValueConverter;
-        this.dbDir = getStoreDir();
-        this.maxSize = referenceDataConfig.getMaxStoreSize();
-        this.maxReaders = referenceDataConfig.getMaxReaders();
-        this.maxPutsBeforeCommit = referenceDataConfig.getMaxPutsBeforeCommit();
+        this.dbDir = lmdbEnvFactory.getStoreDir(referenceDataConfig.getLmdbConfig());
+        this.maxSize = referenceDataConfig.getLmdbConfig().getMaxStoreSize();
+        this.maxReaders = referenceDataConfig.getLmdbConfig().getMaxReaders();
+        this.maxPutsBeforeCommit = referenceDataConfig.getLmdbConfig().getMaxPutsBeforeCommit();
 
-        this.lmdbEnvironment = createEnvironment(referenceDataConfig);
+        this.lmdbEnvironment = lmdbEnvFactory.create(referenceDataConfig.getLmdbConfig());
 
         // create all the databases
         this.keyValueStoreDb = keyValueStoreDbFactory.create(lmdbEnvironment);
@@ -190,59 +174,59 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
         this.refStreamDefStripedReentrantLock = Striped.lazyWeakLock(100);
     }
 
-    private Env<ByteBuffer> createEnvironment(final ReferenceDataConfig referenceDataConfig) {
-        LOGGER.info(
-                "Creating RefDataOffHeapStore environment with [maxSize: {}, dbDir {}, maxReaders {}, " +
-                        "maxPutsBeforeCommit {}, isReadAheadEnabled {}]",
-                maxSize,
-                dbDir.toAbsolutePath().toString() + File.separatorChar,
-                maxReaders,
-                maxPutsBeforeCommit,
-                referenceDataConfig.isReadAheadEnabled());
-
-        // By default LMDB opens with readonly mmaps so you cannot mutate the bytebuffers inside a txn.
-        // Instead you need to create a new bytebuffer for the value and put that. If you want faster writes
-        // then you can use EnvFlags.MDB_WRITEMAP in the open() call to allow mutation inside a txn but that
-        // comes with greater risk of corruption.
-
-        // NOTE on setMapSize() from LMDB author found on https://groups.google.com/forum/#!topic/caffe-users/0RKsTTYRGpQ
-        // On Windows the OS sets the filesize equal to the mapsize. (MacOS requires that too, and allocates
-        // all of the physical space up front, it doesn't support sparse files.) The mapsize should not be
-        // hardcoded into software, it needs to be reconfigurable. On Windows and MacOS you really shouldn't
-        // set it larger than the amount of free space on the filesystem.
-
-        final EnvFlags[] envFlags;
-        if (referenceDataConfig.isReadAheadEnabled()) {
-            envFlags = new EnvFlags[0];
-        } else {
-            envFlags = new EnvFlags[]{EnvFlags.MDB_NORDAHEAD};
-        }
-
-        final String lmdbSystemLibraryPath = referenceDataConfig.getLmdbSystemLibraryPath();
-
-        if (lmdbSystemLibraryPath != null) {
-            // javax.validation should ensure the path is valid if set
-            System.setProperty(LMDB_NATIVE_LIB_PROP, lmdbSystemLibraryPath);
-            LOGGER.info("Using provided LMDB system library file " + lmdbSystemLibraryPath);
-        } else {
-            // Set the location to extract the bundled LMDB binary to
-            System.setProperty(LMDB_EXTRACT_DIR_PROP, dbDir.toAbsolutePath().toString());
-            LOGGER.info("Extracting bundled LMDB binary to " + dbDir);
-        }
-
-        final Env<ByteBuffer> env = Env.create()
-                .setMaxReaders(maxReaders)
-                .setMapSize(maxSize.getBytes())
-                .setMaxDbs(7) //should equal the number of DBs we create which is fixed at compile time
-                .open(dbDir.toFile(), envFlags);
-
-        LOGGER.info("Existing databases: [{}]",
-                env.getDbiNames()
-                        .stream()
-                        .map(Bytes::toString)
-                        .collect(Collectors.joining(",")));
-        return env;
-    }
+//    private Env<ByteBuffer> createEnvironment(final ReferenceDataConfig referenceDataConfig) {
+//        LOGGER.info(
+//                "Creating RefDataOffHeapStore environment with [maxSize: {}, dbDir {}, maxReaders {}, " +
+//                        "maxPutsBeforeCommit {}, isReadAheadEnabled {}]",
+//                maxSize,
+//                dbDir.toAbsolutePath().toString() + File.separatorChar,
+//                maxReaders,
+//                maxPutsBeforeCommit,
+//                referenceDataConfig.isReadAheadEnabled());
+//
+//        // By default LMDB opens with readonly mmaps so you cannot mutate the bytebuffers inside a txn.
+//        // Instead you need to create a new bytebuffer for the value and put that. If you want faster writes
+//        // then you can use EnvFlags.MDB_WRITEMAP in the open() call to allow mutation inside a txn but that
+//        // comes with greater risk of corruption.
+//
+//        // NOTE on setMapSize() from LMDB author found on https://groups.google.com/forum/#!topic/caffe-users/0RKsTTYRGpQ
+//        // On Windows the OS sets the filesize equal to the mapsize. (MacOS requires that too, and allocates
+//        // all of the physical space up front, it doesn't support sparse files.) The mapsize should not be
+//        // hardcoded into software, it needs to be reconfigurable. On Windows and MacOS you really shouldn't
+//        // set it larger than the amount of free space on the filesystem.
+//
+//        final EnvFlags[] envFlags;
+//        if (referenceDataConfig.isReadAheadEnabled()) {
+//            envFlags = new EnvFlags[0];
+//        } else {
+//            envFlags = new EnvFlags[]{EnvFlags.MDB_NORDAHEAD};
+//        }
+//
+//        final String lmdbSystemLibraryPath = referenceDataConfig.getLmdbSystemLibraryPath();
+//
+//        if (lmdbSystemLibraryPath != null) {
+//            // javax.validation should ensure the path is valid if set
+//            System.setProperty(LMDB_NATIVE_LIB_PROP, lmdbSystemLibraryPath);
+//            LOGGER.info("Using provided LMDB system library file " + lmdbSystemLibraryPath);
+//        } else {
+//            // Set the location to extract the bundled LMDB binary to
+//            System.setProperty(LMDB_EXTRACT_DIR_PROP, dbDir.toAbsolutePath().toString());
+//            LOGGER.info("Extracting bundled LMDB binary to " + dbDir);
+//        }
+//
+//        final Env<ByteBuffer> env = Env.create()
+//                .setMaxReaders(maxReaders)
+//                .setMapSize(maxSize.getBytes())
+//                .setMaxDbs(7) //should equal the number of DBs we create which is fixed at compile time
+//                .open(dbDir.toFile(), envFlags);
+//
+//        LOGGER.info("Existing databases: [{}]",
+//                env.getDbiNames()
+//                        .stream()
+//                        .map(Bytes::toString)
+//                        .collect(Collectors.joining(",")));
+//        return env;
+//    }
 
     @Override
     public StorageType getStorageType() {
@@ -819,7 +803,7 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
                     KeyRange.all(),
                     entryStream -> entryStream
                             .limit(rangeEntriesLimit)
-                            .map(entry-> {
+                            .map(entry -> {
                                 final RangeStoreKey rangeStoreKey = entry._1();
                                 final ValueStoreKey valueStoreKey = entry._2();
                                 final String keyStr = rangeStoreKey.getKeyRange().getFrom() + "-"
@@ -862,10 +846,10 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
 
     private PooledByteBuffer getAccessTimeCutOffBuffer(final Instant now) {
 
-        Instant purgeCutOff = TimeUtils.durationToThreshold(now, referenceDataConfig.getPurgeAge());
+        Instant purgeCutOff = TimeUtils.durationToThreshold(now, referenceDataConfig.getLmdbConfig().getPurgeAge());
 
         LOGGER.info("Using purge duration {}, cut off {}, now {}",
-                referenceDataConfig.getPurgeAge(),
+                referenceDataConfig.getLmdbConfig().getPurgeAge(),
                 purgeCutOff,
                 now);
 
@@ -884,10 +868,10 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
                     .withDetail("Path", dbDir.toAbsolutePath().toString())
                     .withDetail("Environment max size", maxSize)
                     .withDetail("Environment current size", ModelStringUtil.formatIECByteSizeString(getEnvironmentDiskUsage()))
-                    .withDetail("Purge age", referenceDataConfig.getPurgeAge())
-                    .withDetail("Purge cut off", TimeUtils.durationToThreshold(referenceDataConfig.getPurgeAge()).toString())
+                    .withDetail("Purge age", referenceDataConfig.getLmdbConfig().getPurgeAge())
+                    .withDetail("Purge cut off", TimeUtils.durationToThreshold(referenceDataConfig.getLmdbConfig().getPurgeAge()).toString())
                     .withDetail("Max readers", maxReaders)
-                    .withDetail("Read-ahead enabled", referenceDataConfig.isReadAheadEnabled())
+                    .withDetail("Read-ahead enabled", referenceDataConfig.getLmdbConfig().isReadAheadEnabled())
                     .withDetail("Current buffer pool size", byteBufferPool.getCurrentPoolSize())
                     .withDetail("Earliest lastAccessedTime", lastAccessedTimeRange._1()
                             .map(Instant::toString)
@@ -929,26 +913,26 @@ public class RefDataOffHeapStore extends AbstractRefDataStore implements RefData
         return totalSizeBytes;
     }
 
-    private Path getStoreDir() {
-        String storeDirStr = pathCreator.replaceSystemProperties(referenceDataConfig.getLocalDir());
-        Path storeDir;
-        if (storeDirStr == null) {
-            LOGGER.info("Off heap store dir is not set, falling back to {}", tempDirProvider.get());
-            storeDir = tempDirProvider.get();
-            Objects.requireNonNull(storeDir, "Temp dir is not set");
-            storeDir = storeDir.resolve(DEFAULT_STORE_SUB_DIR_NAME);
-        } else {
-            storeDirStr = pathCreator.replaceSystemProperties(storeDirStr);
-            storeDir = Paths.get(storeDirStr);
-        }
-
-        try {
-            LOGGER.debug("Ensuring directory {}", storeDir);
-            Files.createDirectories(storeDir);
-        } catch (IOException e) {
-            throw new RuntimeException(LogUtil.message("Error ensuring store directory {} exists", storeDirStr), e);
-        }
-
-        return storeDir;
-    }
+//    private Path getStoreDir() {
+//        String storeDirStr = pathCreator.replaceSystemProperties(referenceDataConfig.getLocalDir());
+//        Path storeDir;
+//        if (storeDirStr == null) {
+//            LOGGER.info("Off heap store dir is not set, falling back to {}", tempDirProvider.get());
+//            storeDir = tempDirProvider.get();
+//            Objects.requireNonNull(storeDir, "Temp dir is not set");
+//            storeDir = storeDir.resolve(DEFAULT_STORE_SUB_DIR_NAME);
+//        } else {
+//            storeDirStr = pathCreator.replaceSystemProperties(storeDirStr);
+//            storeDir = Paths.get(storeDirStr);
+//        }
+//
+//        try {
+//            LOGGER.debug("Ensuring directory {}", storeDir);
+//            Files.createDirectories(storeDir);
+//        } catch (IOException e) {
+//            throw new RuntimeException(LogUtil.message("Error ensuring store directory {} exists", storeDirStr), e);
+//        }
+//
+//        return storeDir;
+//    }
 }

@@ -20,6 +20,7 @@ import stroom.cluster.api.ClusterServiceBinder;
 import stroom.job.api.ScheduledJobsBinder;
 import stroom.lifecycle.api.LifecycleBinder;
 import stroom.query.common.v2.EventSearch;
+import stroom.query.common.v2.RawResultStoreDbFactory;
 import stroom.search.extraction.ExtractionModule;
 import stroom.util.RunnableWrapper;
 import stroom.util.guice.GuiceUtil;
@@ -38,6 +39,7 @@ public class SearchModule extends AbstractModule {
         install(new ExtractionModule());
 
         bind(EventSearch.class).to(EventSearchImpl.class);
+        bind(RawResultStoreDbFactory.class).to(RawResultStoreDbFactoryImpl.class);
         bind(RemoteSearchResource.class).to(RemoteSearchResourceImpl.class);
 
         GuiceUtil.buildMultiBinder(binder(), Clearable.class).addBinding(LuceneSearchResponseCreatorManager.class);

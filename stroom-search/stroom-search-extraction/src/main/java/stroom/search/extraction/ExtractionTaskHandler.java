@@ -159,7 +159,7 @@ class ExtractionTaskHandler {
             final AbstractSearchResultOutputFilter searchResultOutputFilter = getFilter(pipeline,
                     AbstractSearchResultOutputFilter.class);
 
-            searchResultOutputFilter.setup(task.getReceiver().getFieldIndexMap(), task.getReceiver().getValuesConsumer());
+            searchResultOutputFilter.setup(task.getReceiver().getFields(), task.getReceiver().getValuesConsumer());
 
             // Process the stream segments.
             processData(task.getStreamId(), task.getEventIds(), pipelineRef, pipeline);

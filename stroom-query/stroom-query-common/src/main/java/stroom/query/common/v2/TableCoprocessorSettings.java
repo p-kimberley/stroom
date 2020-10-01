@@ -16,7 +16,9 @@
 
 package stroom.query.common.v2;
 
+import stroom.datasource.api.v2.AbstractField;
 import stroom.docref.DocRef;
+import stroom.query.api.v2.QueryKey;
 import stroom.query.api.v2.TableSettings;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -29,24 +31,40 @@ import java.util.List;
 @JsonInclude(Include.NON_NULL)
 public class TableCoprocessorSettings implements CoprocessorSettings {
     @JsonProperty
-    private final String key;
+    private final QueryKey queryKey;
+    @JsonProperty
+    private final String coprocessorId;
     @JsonProperty
     private final List<String> componentIdList;
     @JsonProperty
     private final TableSettings tableSettings;
+    @JsonProperty
+    private final String[] fieldNames;
+    @JsonProperty
+    private final AbstractField[] fields;
 
     @JsonCreator
-    public TableCoprocessorSettings(@JsonProperty("key") final String key,
+    public TableCoprocessorSettings(@JsonProperty("queryKey") final QueryKey queryKey,
+                                    @JsonProperty("coprocessorId") final String coprocessorId,
                                     @JsonProperty("componentIdList") final List<String> componentIdList,
-                                    @JsonProperty("tableSettings") final TableSettings tableSettings) {
-        this.key = key;
+                                    @JsonProperty("tableSettings") final TableSettings tableSettings,
+                                    @JsonProperty("fieldNames") final String[] fieldNames,
+                                    @JsonProperty("fields") final AbstractField[] fields) {
+        this.queryKey = queryKey;
+        this.coprocessorId = coprocessorId;
         this.componentIdList = componentIdList;
         this.tableSettings = tableSettings;
+        this.fieldNames = fieldNames;
+        this.fields = fields;
+    }
+
+    public QueryKey getQueryKey() {
+        return queryKey;
     }
 
     @Override
-    public String getKey() {
-        return key;
+    public String getCoprocessorId() {
+        return coprocessorId;
     }
 
     public List<String> getComponentIdList() {
@@ -65,5 +83,15 @@ public class TableCoprocessorSettings implements CoprocessorSettings {
     @Override
     public DocRef getExtractionPipeline() {
         return tableSettings.getExtractionPipeline();
+    }
+
+    @Override
+    public String[] getFieldNames() {
+        return fieldNames;
+    }
+
+    @Override
+    public AbstractField[] getFields() {
+        return fields;
     }
 }

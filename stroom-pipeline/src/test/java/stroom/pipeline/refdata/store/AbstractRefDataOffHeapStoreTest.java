@@ -50,7 +50,7 @@ public abstract class AbstractRefDataOffHeapStoreTest extends AbstractLmdbDbTest
     void setup() {
         LOGGER.debug("Creating LMDB environment in dbDir {}", getDbDir().toAbsolutePath().toString());
 
-        referenceDataConfig.setLocalDir(getDbDir().toAbsolutePath().toString());
+        referenceDataConfig.getLmdbConfig().setLocalDir(getDbDir().toAbsolutePath().toString());
 
         setDbMaxSizeProperty();
 
@@ -72,11 +72,11 @@ public abstract class AbstractRefDataOffHeapStoreTest extends AbstractLmdbDbTest
     }
 
     protected void setDbMaxSizeProperty(final ByteSize sizeInBytes) {
-        referenceDataConfig.setMaxStoreSize(sizeInBytes);
+        referenceDataConfig.getLmdbConfig().setMaxStoreSize(sizeInBytes);
     }
 
     protected void setPurgeAgeProperty(final StroomDuration purgeAge) {
-        referenceDataConfig.setPurgeAge(purgeAge);
+        referenceDataConfig.getLmdbConfig().setPurgeAge(purgeAge);
     }
 
     protected void setDbMaxSizeProperty() {

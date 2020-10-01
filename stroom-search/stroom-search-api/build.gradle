@@ -1,7 +1,9 @@
 ext.moduleName = 'stroom.search.api'
 
 dependencies {
+    compile project(':stroom-query:stroom-query-api')
+
     compile libs.jackson_annotations
     compile libs.jaxb_api
-    compile libs.stroomQueryApi
+//    compile libs.stroomQueryApi
 }

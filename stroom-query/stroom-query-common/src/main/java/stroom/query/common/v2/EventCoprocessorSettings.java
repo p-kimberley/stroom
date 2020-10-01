@@ -16,6 +16,8 @@
 
 package stroom.query.common.v2;
 
+import stroom.datasource.api.v2.AbstractField;
+import stroom.datasource.api.v2.IdField;
 import stroom.docref.DocRef;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -27,8 +29,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class EventCoprocessorSettings implements CoprocessorSettings {
     private static final long serialVersionUID = -4916050910828000494L;
 
+    private static final String STREAM_ID = "StreamId";
+    private static final String EVENT_ID = "EventId";
+
     @JsonProperty
-    private final String key;
+    private final String coprocessorId;
     @JsonProperty
     private final EventRef minEvent;
     @JsonProperty
@@ -41,13 +46,13 @@ public class EventCoprocessorSettings implements CoprocessorSettings {
     private final long maxEventsPerStream;
 
     @JsonCreator
-    public EventCoprocessorSettings(@JsonProperty("key") final String key,
+    public EventCoprocessorSettings(@JsonProperty("coprocessorId") final String coprocessorId,
                                     @JsonProperty("minEvent") final EventRef minEvent,
                                     @JsonProperty("maxEvent") final EventRef maxEvent,
                                     @JsonProperty("maxStreams") final long maxStreams,
                                     @JsonProperty("maxEvents") final long maxEvents,
                                     @JsonProperty("maxEventsPerStream") final long maxEventsPerStream) {
-        this.key = key;
+        this.coprocessorId = coprocessorId;
         this.minEvent = minEvent;
         this.maxEvent = maxEvent;
         this.maxStreams = maxStreams;
@@ -56,8 +61,8 @@ public class EventCoprocessorSettings implements CoprocessorSettings {
     }
 
     @Override
-    public String getKey() {
-        return key;
+    public String getCoprocessorId() {
+        return coprocessorId;
     }
 
     public EventRef getMinEvent() {
@@ -88,5 +93,15 @@ public class EventCoprocessorSettings implements CoprocessorSettings {
     @Override
     public DocRef getExtractionPipeline() {
         return null;
+    }
+
+    @Override
+    public String[] getFieldNames() {
+        return new String[]{STREAM_ID, EVENT_ID};
+    }
+
+    @Override
+    public AbstractField[] getFields() {
+        return new AbstractField[]{new IdField(STREAM_ID), new IdField(EVENT_ID)};
     }
 }

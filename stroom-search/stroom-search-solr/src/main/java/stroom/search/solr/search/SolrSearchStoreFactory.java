@@ -17,7 +17,9 @@
 
 package stroom.search.solr.search;
 
+import stroom.datasource.api.v2.AbstractField;
 import stroom.dictionary.api.WordListProvider;
+import stroom.index.shared.IndexConstants;
 import stroom.query.api.v2.ExpressionOperator;
 import stroom.query.api.v2.ExpressionParamUtil;
 import stroom.query.api.v2.ExpressionUtil;
@@ -32,6 +34,7 @@ import stroom.query.common.v2.StoreFactory;
 import stroom.search.solr.CachedSolrIndex;
 import stroom.search.solr.SolrIndexCache;
 import stroom.search.solr.search.SearchExpressionQueryBuilder.SearchExpressionQuery;
+import stroom.search.solr.shared.SolrIndexDataSourceFieldUtil;
 import stroom.search.solr.shared.SolrIndexDoc;
 import stroom.search.solr.shared.SolrIndexField;
 import stroom.security.api.SecurityContext;
@@ -109,7 +112,10 @@ class SolrSearchStoreFactory implements StoreFactory {
         final Set<String> highlights = getHighlights(index, query.getExpression(), searchRequest.getDateTimeLocale(), nowEpochMilli);
 
         // Create a coprocessor settings list.
-        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
+        final List<AbstractField> availableFields = SolrIndexDataSourceFieldUtil.getAvailableFields(index.getIndex());
+        final List<AbstractField> storedFields = SolrIndexDataSourceFieldUtil.getStoredFields(index.getIndex());
+        final List<String> mandatoryFields = List.of(IndexConstants.STREAM_ID, IndexConstants.EVENT_ID);
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest, availableFields, storedFields, mandatoryFields);
 
         // Create an asynchronous search task.
         final String searchName = "Search '" + searchRequest.getKey().toString() + "'";
@@ -127,7 +133,8 @@ class SolrSearchStoreFactory implements StoreFactory {
         final SearchResultHandler resultHandler = new SearchResultHandler(
                 settingsList,
                 defaultMaxResultsSizes,
-                storeSize);
+                storeSize,
+                paramMap);
 
         // Create the search result collector.
         final SolrSearchResultCollector searchResultCollector = SolrSearchResultCollector.create(
@@ -198,5 +205,13 @@ class SolrSearchStoreFactory implements StoreFactory {
         }
 
         return highlights;
+    }
+
+    private String[] getStoredFields(final CachedSolrIndex index) {
+        return index.getFields()
+                .stream()
+                .filter(SolrIndexField::isStored)
+                .map(SolrIndexField::getFieldName)
+                .toArray(String[]::new);
     }
 }

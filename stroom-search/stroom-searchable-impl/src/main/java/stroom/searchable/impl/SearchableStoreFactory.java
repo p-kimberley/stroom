@@ -1,10 +1,8 @@
 package stroom.searchable.impl;
 
-import com.google.common.base.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.docref.DocRef;
 import stroom.query.api.v2.SearchRequest;
+import stroom.query.common.v2.CoprocessorFactory;
 import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
 import stroom.query.common.v2.StoreFactory;
@@ -15,6 +13,10 @@ import stroom.task.api.TaskContextFactory;
 import stroom.ui.config.shared.UiConfig;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+
+import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.Arrays;
@@ -32,18 +34,21 @@ class SearchableStoreFactory implements StoreFactory {
     private final SearchableConfig config;
     private final UiConfig clientConfig;
     private final SearchableProvider searchableProvider;
+    private final CoprocessorFactory coprocessorFactory;
 
     @Inject
     SearchableStoreFactory(final Executor executor,
                            final TaskContextFactory taskContextFactory,
                            final SearchableConfig config,
                            final UiConfig clientConfig,
-                           final SearchableProvider searchableProvider) {
+                           final SearchableProvider searchableProvider,
+                           final CoprocessorFactory coprocessorFactory) {
         this.executor = executor;
         this.taskContextFactory = taskContextFactory;
         this.config = config;
         this.clientConfig = clientConfig;
         this.searchableProvider = searchableProvider;
+        this.coprocessorFactory = coprocessorFactory;
     }
 
     @Override
@@ -86,7 +91,8 @@ class SearchableStoreFactory implements StoreFactory {
                 taskContextFactory,
                 taskContext,
                 searchRequest,
-                executor);
+                executor,
+                coprocessorFactory);
     }
 
     private Sizes getDefaultMaxResultsSizes() {

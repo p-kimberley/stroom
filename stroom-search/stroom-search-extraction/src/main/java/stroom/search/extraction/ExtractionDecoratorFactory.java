@@ -1,6 +1,6 @@
 package stroom.search.extraction;
 
-import stroom.dashboard.expression.v1.FieldIndexMap;
+import stroom.datasource.api.v2.AbstractField;
 import stroom.docref.DocRef;
 import stroom.meta.api.MetaService;
 import stroom.query.api.v2.Query;
@@ -81,19 +81,19 @@ public class ExtractionDecoratorFactory {
             Receiver receiver;
             if (coprocessorSet.size() == 1) {
                 final NewCoprocessor coprocessor = coprocessorSet.iterator().next();
-                final FieldIndexMap fieldIndexMap = coprocessor.getFieldIndexMap();
+                final AbstractField[] fields = coprocessor.getFields();
                 final Consumer<Values> valuesConsumer = coprocessor.getValuesConsumer();
                 final Consumer<Error> errorConsumer = coprocessor.getErrorConsumer();
                 final Consumer<Long> completionCountConsumer = coprocessor.getCompletionCountConsumer();
-                receiver = new ReceiverImpl(valuesConsumer, errorConsumer, completionCountConsumer, fieldIndexMap);
+                receiver = new ReceiverImpl(valuesConsumer, errorConsumer, completionCountConsumer, fields);
             } else {
                 // We assume all coprocessors for the same extraction use the same field index map.
                 // This is only the case at the moment as the CoprocessorsFactory creates field index maps this way.
-                final FieldIndexMap fieldIndexMap = coprocessorSet.iterator().next().getFieldIndexMap();
+                final AbstractField[] fields = coprocessorSet.iterator().next().getFields();
                 final Consumer<Values> valuesConsumer = values -> coprocessorSet.forEach(coprocessor -> coprocessor.getValuesConsumer().accept(values));
                 final Consumer<Error> errorConsumer = error -> coprocessorSet.forEach(coprocessor -> coprocessor.getErrorConsumer().accept(error));
                 final Consumer<Long> completionCountConsumer = delta -> coprocessorSet.forEach(coprocessor -> coprocessor.getCompletionCountConsumer().accept(delta));
-                receiver = new ReceiverImpl(valuesConsumer, errorConsumer, completionCountConsumer, fieldIndexMap);
+                receiver = new ReceiverImpl(valuesConsumer, errorConsumer, completionCountConsumer, fields);
             }
 
             // Decorate result with annotations.

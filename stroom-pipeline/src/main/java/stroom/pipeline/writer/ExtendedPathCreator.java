@@ -21,6 +21,7 @@ import stroom.pipeline.state.FeedHolder;
 import stroom.pipeline.state.MetaHolder;
 import stroom.pipeline.state.PipelineHolder;
 import stroom.pipeline.state.SearchIdHolder;
+import stroom.util.io.PathCreator;
 import stroom.util.io.TempDirProvider;
 
 import javax.inject.Inject;

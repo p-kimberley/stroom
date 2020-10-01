@@ -17,6 +17,7 @@
 package stroom.pipeline.writer;
 
 import stroom.test.common.util.test.StroomUnitTest;
+import stroom.util.io.PathCreator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.ContentSummary;

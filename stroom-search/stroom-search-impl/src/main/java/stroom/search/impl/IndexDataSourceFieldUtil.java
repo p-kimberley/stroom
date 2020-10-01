@@ -33,14 +33,17 @@ import stroom.security.api.SecurityContext;
 import stroom.security.shared.PermissionNames;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class IndexDataSourceFieldUtil {
-    public static List<AbstractField> getDataSourceFields(final IndexDoc index, final SecurityContext securityContext) {
+    public static List<AbstractField> getDataSourceFields(final IndexDoc index,
+                                                          final SecurityContext securityContext) {
         if (index == null || index.getFields() == null) {
-            return null;
+            return Collections.emptyList();
         }
 
         final List<IndexField> indexFields = index.getFields();
@@ -62,6 +65,56 @@ public final class IndexDataSourceFieldUtil {
         }
 
         return dataSourceFields;
+    }
+
+    public static List<AbstractField> getAvailableFields(final IndexDoc index) {
+        return Optional
+                .ofNullable(index)
+                .map(IndexDoc::getFields)
+                .map(fields ->
+                        fields.stream()
+                                .map(IndexDataSourceFieldUtil::convert)
+                                .collect(Collectors.toList()))
+                .orElse(Collections.emptyList());
+
+//        if (index == null || index.getFields() == null) {
+//            return Collections.emptyList();
+//        }
+//
+//        final List<IndexField> indexFields = index.getFields();
+//        final List<AbstractField> dataSourceFields = new ArrayList<>(indexFields.size());
+//        for (final IndexField indexField : indexFields) {
+//            // TODO should index fields include doc refs?
+//            dataSourceFields.add(convert(indexField));
+//        }
+//
+//        return dataSourceFields;
+    }
+
+    public static List<AbstractField> getStoredFields(final IndexDoc index) {
+        return Optional
+                .ofNullable(index)
+                .map(IndexDoc::getFields)
+                .map(fields ->
+                        fields.stream()
+                                .filter(IndexField::isStored)
+                                .map(IndexDataSourceFieldUtil::convert)
+                                .collect(Collectors.toList()))
+                .orElse(Collections.emptyList());
+
+//        if (index == null || index.getFields() == null) {
+//            return Collections.emptyList();
+//        }
+//
+//        final List<IndexField> indexFields = index.getFields();
+//        final List<AbstractField> dataSourceFields = new ArrayList<>(indexFields.size());
+//        for (final IndexField indexField : indexFields) {
+//            if (indexField.isStored()) {
+//                dataSourceFields.add(convert(indexField));
+//            }
+//        }
+//
+//        return dataSourceFields;
     }
 
     private static AbstractField convert(final IndexField field) {

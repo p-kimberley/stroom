@@ -21,20 +21,22 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.List;
-
 @JsonInclude(Include.NON_NULL)
 public class TablePayload implements Payload {
     @JsonProperty
     private final String key;
     @JsonProperty
-    private final List<Item> queue;
+    private final int size;
+    @JsonProperty
+    private final byte[] data;
 
     @JsonCreator
     public TablePayload(@JsonProperty("key") final String key,
-                        @JsonProperty("queue") final List<Item> queue) {
+                        @JsonProperty("size") final int size,
+                        @JsonProperty("data") final byte[] data) {
         this.key = key;
-        this.queue = queue;
+        this.size = size;
+        this.data = data;
     }
 
     @Override
@@ -42,7 +44,11 @@ public class TablePayload implements Payload {
         return key;
     }
 
-    public List<Item> getQueue() {
-        return queue;
+    public int getSize() {
+        return size;
+    }
+
+    public byte[] getData() {
+        return data;
     }
 }

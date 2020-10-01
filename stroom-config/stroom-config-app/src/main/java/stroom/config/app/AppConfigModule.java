@@ -113,6 +113,7 @@ public class AppConfigModule extends AbstractModule {
 
         bindConfig(AppConfig::getActivityConfig, AppConfig::setActivityConfig, stroom.activity.impl.db.ActivityConfig.class);
         bindConfig(AppConfig::getAnnotationConfig, AppConfig::setAnnotationConfig, stroom.annotation.impl.AnnotationConfig.class);
+        bindConfig(AppConfig::getByteBufferPoolConfig, AppConfig::setByteBufferPoolConfig, stroom.lmdb.bytebuffer.ByteBufferPoolConfig.class);
         bindConfig(AppConfig::getClusterConfig, AppConfig::setClusterConfig, ClusterConfig.class);
         bindConfig(AppConfig::getClusterLockConfig, AppConfig::setClusterLockConfig, ClusterLockConfig.class);
         bindConfig(AppConfig::getCommonDbConfig, AppConfig::setCommonDbConfig, CommonDbConfig.class);

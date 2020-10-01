@@ -1,19 +1,22 @@
 package stroom.statistics.impl.sql.search;
 
-import com.google.common.base.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.docref.DocRef;
 import stroom.query.api.v2.SearchRequest;
+import stroom.query.common.v2.CoprocessorFactory;
 import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
 import stroom.query.common.v2.StoreFactory;
+import stroom.statistics.impl.sql.Statistics;
 import stroom.statistics.impl.sql.entity.StatisticStoreCache;
 import stroom.statistics.impl.sql.shared.StatisticStoreDoc;
 import stroom.task.api.TaskContextFactory;
 import stroom.ui.config.shared.UiConfig;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+
+import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.Arrays;
@@ -27,24 +30,30 @@ public class SqlStatisticStoreFactory implements StoreFactory {
 
     private final StatisticStoreCache statisticStoreCache;
     private final StatisticsSearchService statisticsSearchService;
+    private final Statistics statistics;
     private final TaskContextFactory taskContextFactory;
     private final SearchConfig searchConfig;
     private final UiConfig clientConfig;
     private final Executor executor;
+    private final CoprocessorFactory coprocessorFactory;
 
     @Inject
     public SqlStatisticStoreFactory(final StatisticStoreCache statisticStoreCache,
                                     final StatisticsSearchService statisticsSearchService,
+                                    final Statistics statistics,
                                     final TaskContextFactory taskContextFactory,
                                     final Executor executor,
                                     final SearchConfig searchConfig,
-                                    final UiConfig clientConfig) {
+                                    final UiConfig clientConfig,
+                                    final CoprocessorFactory coprocessorFactory) {
         this.statisticStoreCache = statisticStoreCache;
         this.statisticsSearchService = statisticsSearchService;
+        this.statistics = statistics;
         this.taskContextFactory = taskContextFactory;
         this.searchConfig = searchConfig;
         this.clientConfig = clientConfig;
         this.executor = executor;
+        this.coprocessorFactory = coprocessorFactory;
     }
 
     @Override
@@ -81,12 +90,14 @@ public class SqlStatisticStoreFactory implements StoreFactory {
         return new SqlStatisticsStore(
                 searchRequest,
                 statisticStoreDoc,
+                statistics,
                 statisticsSearchService,
                 defaultMaxResultsSizes,
                 storeSize,
                 resultHandlerBatchSize,
                 executor,
-                taskContextFactory);
+                taskContextFactory,
+                coprocessorFactory);
     }
 
     private Sizes getDefaultMaxResultsSizes() {

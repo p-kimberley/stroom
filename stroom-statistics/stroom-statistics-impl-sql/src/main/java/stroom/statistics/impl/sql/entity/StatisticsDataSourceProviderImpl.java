@@ -52,48 +52,7 @@ class StatisticsDataSourceProviderImpl implements StatisticsDataSourceProvider {
             return null;
         }
 
-        final List<AbstractField> fields = buildFields(entity);
-
+        final List<AbstractField> fields = StatisticsDataSourceFieldUtil.getDataSourceFields(entity, statistics);
         return new DataSource(fields);
-    }
-
-    /**
-     * Turn the {@link StatisticStoreDoc} into an {@link List<AbstractField>} object
-     * <p>
-     * This builds the standard set of fields for a statistics store, which can
-     * be filtered by the relevant statistics store instance
-     */
-    private List<AbstractField> buildFields(final StatisticStoreDoc entity) {
-        List<AbstractField> fields = new ArrayList<>();
-
-        // TODO currently only BETWEEN is supported, but need to add support for
-        // more conditions like >, >=, <, <=, =
-        fields.add(new DateField(StatisticStoreDoc.FIELD_NAME_DATE_TIME, true, Collections.singletonList(Condition.BETWEEN)));
-
-        // one field per tag
-        if (entity.getConfig() != null) {
-            final List<Condition> supportedConditions = Arrays.asList(Condition.EQUALS, Condition.IN);
-
-            for (final StatisticField statisticField : entity.getStatisticFields()) {
-                // TODO currently only EQUALS is supported, but need to add
-                // support for more conditions like CONTAINS
-                fields.add(new TextField(statisticField.getFieldName(), true, supportedConditions));
-            }
-        }
-
-        fields.add(new LongField(StatisticStoreDoc.FIELD_NAME_COUNT, false, Collections.emptyList()));
-
-        if (entity.getStatisticType().equals(StatisticType.VALUE)) {
-            fields.add(new LongField(StatisticStoreDoc.FIELD_NAME_VALUE, false, Collections.emptyList()));
-        }
-
-        fields.add(new LongField(StatisticStoreDoc.FIELD_NAME_PRECISION_MS, false, Collections.emptyList()));
-
-        // Filter fields.
-        if (entity.getConfig() != null) {
-            fields = statistics.getSupportedFields(fields);
-        }
-
-        return fields;
     }
 }

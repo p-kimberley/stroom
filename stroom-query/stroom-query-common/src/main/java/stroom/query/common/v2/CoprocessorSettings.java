@@ -16,6 +16,7 @@
 
 package stroom.query.common.v2;
 
+import stroom.datasource.api.v2.AbstractField;
 import stroom.docref.DocRef;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -32,9 +33,13 @@ import java.io.Serializable;
         @JsonSubTypes.Type(value = EventCoprocessorSettings.class, name = "event")
 })
 public interface CoprocessorSettings extends Serializable {
-    String getKey();
+    String getCoprocessorId();
 
     boolean extractValues();
 
     DocRef getExtractionPipeline();
+
+    String[] getFieldNames();
+
+    AbstractField[] getFields();
 }

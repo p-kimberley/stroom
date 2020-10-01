@@ -45,9 +45,7 @@ public abstract class StroomIntegrationTest implements StroomTest {
     @Inject
     private SecurityContext securityContext;
     @Inject
-    private TempDirProviderImpl tempDirProvider;
-    @TempDir
-    static Path tempDir; // Static makes the temp dir remain constant for the life of the test class.
+    private TempDirProvider tempDirProvider;
 
     private static Class<?> currentTestClass;
 
@@ -59,11 +57,11 @@ public abstract class StroomIntegrationTest implements StroomTest {
         if (setupBetweenTests() || !Objects.equals(testInfo.getTestClass().orElse(null), currentTestClass)) {
             currentTestClass = testInfo.getTestClass().orElse(null);
 
+            final Path tempDir = tempDirProvider.get();
             if (tempDir == null) {
                 throw new NullPointerException("Temp dir is null");
             }
             this.testTempDir = tempDir;
-            tempDirProvider.setTempDir(tempDir);
             securityContext.asProcessingUser(() -> {
                 commonTestControl.cleanup();
                 commonTestControl.setup(tempDir);
@@ -76,6 +74,7 @@ public abstract class StroomIntegrationTest implements StroomTest {
         if (setupBetweenTests() || !Objects.equals(testInfo.getTestClass().orElse(null), currentTestClass)) {
             securityContext.asProcessingUser(() -> commonTestControl.cleanup());
             // We need to delete the contents of the temp dir here as it is the same for the whole of a test class.
+            final Path tempDir = tempDirProvider.get();
             FileUtil.deleteContents(tempDir);
         }
     }

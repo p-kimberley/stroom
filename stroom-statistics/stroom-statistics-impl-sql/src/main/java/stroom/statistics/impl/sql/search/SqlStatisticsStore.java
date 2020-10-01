@@ -1,11 +1,12 @@
 package stroom.statistics.impl.sql.search;
 
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Val;
+import stroom.datasource.api.v2.AbstractField;
 import stroom.query.api.v2.Param;
 import stroom.query.api.v2.SearchRequest;
 import stroom.query.common.v2.CompletionState;
 import stroom.query.common.v2.Coprocessor;
+import stroom.query.common.v2.CoprocessorFactory;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorSettingsFactory;
 import stroom.query.common.v2.Data;
@@ -15,9 +16,9 @@ import stroom.query.common.v2.ResultHandler;
 import stroom.query.common.v2.SearchResultHandler;
 import stroom.query.common.v2.Sizes;
 import stroom.query.common.v2.Store;
-import stroom.query.common.v2.TableCoprocessor;
-import stroom.query.common.v2.TableCoprocessorSettings;
 import stroom.query.common.v2.TablePayload;
+import stroom.statistics.impl.sql.Statistics;
+import stroom.statistics.impl.sql.entity.StatisticsDataSourceFieldUtil;
 import stroom.statistics.impl.sql.shared.StatisticStoreDoc;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
@@ -64,42 +65,45 @@ public class SqlStatisticsStore implements Store {
     private final List<String> errors = Collections.synchronizedList(new ArrayList<>());
     private final String searchKey;
     private final TaskContextFactory taskContextFactory;
+    private final CoprocessorFactory coprocessorFactory;
     private CompositeDisposable compositeDisposable;
 
     SqlStatisticsStore(final SearchRequest searchRequest,
                        final StatisticStoreDoc statisticStoreDoc,
+                       final Statistics statistics,
                        final StatisticsSearchService statisticsSearchService,
                        final Sizes defaultMaxResultsSizes,
                        final Sizes storeSize,
                        final int resultHandlerBatchSize,
                        final Executor executor,
-                       final TaskContextFactory taskContextFactory) {
+                       final TaskContextFactory taskContextFactory,
+                       final CoprocessorFactory coprocessorFactory) {
 
         this.defaultMaxResultsSizes = defaultMaxResultsSizes;
         this.storeSize = storeSize;
         this.searchKey = searchRequest.getKey().toString();
         this.taskContextFactory = taskContextFactory;
         this.resultHandlerBatchSize = resultHandlerBatchSize;
+        this.coprocessorFactory = coprocessorFactory;
 
-        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
+        final List<AbstractField> fields = StatisticsDataSourceFieldUtil.getDataSourceFields(statisticStoreDoc, statistics);
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest, fields, fields, Collections.emptyList());
         Preconditions.checkNotNull(settingsList);
 
-        final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
         final Map<String, String> paramMap = getParamMap(searchRequest);
 
-        final List<Coprocessor> coprocessors = getCoprocessors(
-                settingsList, fieldIndexMap, paramMap);
+        final List<Coprocessor> coprocessors = getCoprocessors(settingsList);
 
         // convert the search into something stats understands
         final FindEventCriteria criteria = StatStoreCriteriaBuilder.buildCriteria(searchRequest, statisticStoreDoc);
 
-        resultHandler = new SearchResultHandler(settingsList, defaultMaxResultsSizes, storeSize);
+        resultHandler = new SearchResultHandler(settingsList, defaultMaxResultsSizes, storeSize, paramMap);
 
         taskContextFactory.context(TASK_NAME, parentTaskContext -> {
 
             //get the flowable for the search results
             final Flowable<Val[]> searchResultsFlowable = statisticsSearchService.search(parentTaskContext,
-                    statisticStoreDoc, criteria, fieldIndexMap);
+                    statisticStoreDoc, criteria, fields.toArray(new AbstractField[0]));
 
             this.compositeDisposable = startAsyncSearch(parentTaskContext, searchResultsFlowable, coprocessors, executor);
 
@@ -268,14 +272,10 @@ public class SqlStatisticsStore implements Store {
         return compositeDisposable;
     }
 
-    private List<Coprocessor> getCoprocessors(
-            final List<CoprocessorSettings> settingsList,
-            final FieldIndexMap fieldIndexMap,
-            final Map<String, String> paramMap) {
-
+    private List<Coprocessor> getCoprocessors(final List<CoprocessorSettings> settingsList) {
         return settingsList
                 .stream()
-                .map(settings -> createCoprocessor(settings, fieldIndexMap, paramMap))
+                .map(coprocessorFactory::create)
                 .collect(Collectors.toList());
     }
 
@@ -305,8 +305,8 @@ public class SqlStatisticsStore implements Store {
                             // entry checked for null in stream above
                             if (payload instanceof TablePayload) {
                                 TablePayload tablePayload = (TablePayload) payload;
-                                if (tablePayload.getQueue() != null) {
-                                    size = Integer.toString(tablePayload.getQueue().size());
+                                if (tablePayload.getSize() > 0) {
+                                    size = Integer.toString(tablePayload.getSize());
                                 } else {
                                     size = "null";
                                 }
@@ -324,15 +324,5 @@ public class SqlStatisticsStore implements Store {
         } else {
             LOGGER.debug("Thread is interrupted, not processing payload");
         }
-    }
-
-    private static Coprocessor createCoprocessor(final CoprocessorSettings settings,
-                                                 final FieldIndexMap fieldIndexMap,
-                                                 final Map<String, String> paramMap) {
-        if (settings instanceof TableCoprocessorSettings) {
-            final TableCoprocessorSettings tableCoprocessorSettings = (TableCoprocessorSettings) settings;
-            return new TableCoprocessor(tableCoprocessorSettings, fieldIndexMap, paramMap);
-        }
-        return null;
     }
 }

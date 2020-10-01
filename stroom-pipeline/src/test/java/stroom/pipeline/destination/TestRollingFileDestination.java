@@ -16,9 +16,8 @@
 
 package stroom.pipeline.destination;
 
-
-import stroom.pipeline.writer.PathCreator;
 import stroom.util.date.DateUtil;
+import stroom.util.io.PathCreator;
 import stroom.util.scheduler.SimpleCron;
 
 import org.junit.jupiter.api.Test;

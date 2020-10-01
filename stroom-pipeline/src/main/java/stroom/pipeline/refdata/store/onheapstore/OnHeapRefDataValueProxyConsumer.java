@@ -25,7 +25,7 @@ import stroom.pipeline.refdata.store.StringValue;
 import stroom.pipeline.refdata.store.ValueConsumerId;
 import stroom.pipeline.refdata.store.offheapstore.FastInfosetByteBufferConsumer;
 import stroom.pipeline.refdata.store.offheapstore.RefDataValueProxyConsumer;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;

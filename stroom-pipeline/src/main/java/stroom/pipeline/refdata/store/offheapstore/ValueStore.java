@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import stroom.pipeline.refdata.store.RefDataValue;
 import stroom.pipeline.refdata.store.offheapstore.databases.ValueStoreDb;
 import stroom.pipeline.refdata.store.offheapstore.databases.ValueStoreMetaDb;
-import stroom.pipeline.refdata.util.PooledByteBuffer;
+import stroom.lmdb.bytebuffer.PooledByteBuffer;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;

@@ -8,6 +8,9 @@ import stroom.index.mock.MockIndexShardWriterExecutorModule;
 import stroom.meta.statistics.impl.MockMetaStatisticsModule;
 import stroom.resource.impl.ResourceModule;
 import stroom.security.mock.MockSecurityContextModule;
+import stroom.util.io.RandomTempDirProvider;
+import stroom.util.io.TempDirProvider;
+import stroom.util.io.TempDirProviderImpl;
 
 import com.google.inject.AbstractModule;
 
@@ -25,5 +28,8 @@ public class CoreTestModule extends AbstractModule {
         install(new stroom.test.DatabaseTestControlModule());
         install(new JerseyModule());
         install(new MockIndexShardWriterExecutorModule());
+
+        // Bind the temporary directory provider.
+        bind(TempDirProvider.class).to(RandomTempDirProvider.class);
     }
 }

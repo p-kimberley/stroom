@@ -19,7 +19,7 @@ package stroom.pipeline.refdata.store.offheapstore.serdes;
 
 import stroom.pipeline.refdata.store.FastInfosetValue;
 import stroom.pipeline.refdata.store.RefDataValue;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 import stroom.util.logging.LogUtil;
 
 import java.nio.ByteBuffer;

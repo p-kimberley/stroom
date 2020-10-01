@@ -41,9 +41,9 @@ import stroom.pipeline.shared.data.PipelineReference;
 import stroom.pipeline.state.FeedHolder;
 import stroom.pipeline.state.PipelineContext;
 import stroom.pipeline.state.PipelineHolder;
-import stroom.pipeline.writer.PathCreator;
 import stroom.pipeline.xslt.XsltStore;
 import stroom.util.CharBuffer;
+import stroom.util.io.PathCreator;
 import stroom.util.shared.Location;
 import stroom.util.shared.Severity;
 

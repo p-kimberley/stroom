@@ -3,7 +3,7 @@ package stroom.pipeline.refdata.store.offheapstore.serdes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import stroom.pipeline.refdata.store.offheapstore.ValueStoreMeta;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.serde.Serde;
+import stroom.lmdb.serde.Serde;
 
 import java.nio.ByteBuffer;
 

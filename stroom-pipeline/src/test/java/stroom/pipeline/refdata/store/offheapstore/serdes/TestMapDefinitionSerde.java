@@ -21,7 +21,7 @@ package stroom.pipeline.refdata.store.offheapstore.serdes;
 import org.junit.jupiter.api.Test;
 import stroom.pipeline.refdata.store.MapDefinition;
 import stroom.pipeline.refdata.store.RefStreamDefinition;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;

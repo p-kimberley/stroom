@@ -2,6 +2,8 @@ package stroom.search.impl;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
+import stroom.lmdb.LmdbConfig;
 import stroom.search.extraction.ExtractionConfig;
 import stroom.search.impl.shard.IndexShardSearchConfig;
 import stroom.util.cache.CacheConfig;
@@ -25,6 +27,7 @@ public class SearchConfig extends AbstractConfig {
     private String storeSize = "1000000,100,10,1";
     private ExtractionConfig extractionConfig = new ExtractionConfig();
     private IndexShardSearchConfig shardConfig = new IndexShardSearchConfig();
+    private LmdbConfig lmdbConfig;
     private CacheConfig remoteSearchResultCache = new CacheConfig.Builder()
             .maximumSize(100L)
             .expireAfterAccess(StroomDuration.ofMinutes(1))
@@ -33,6 +36,11 @@ public class SearchConfig extends AbstractConfig {
             .maximumSize(1000000L)
             .expireAfterAccess(StroomDuration.ofMinutes(1))
             .build();
+
+    public SearchConfig() {
+        lmdbConfig = new LmdbConfig();
+        lmdbConfig.setLocalDir("${stroom.temp}/lmdb/search");
+    }
 
     @JsonPropertyDescription("The maximum number documents that will have stored data retrieved from the index shard and queued prior to further processing")
     public int getMaxStoredDataQueueSize() {
@@ -68,6 +76,15 @@ public class SearchConfig extends AbstractConfig {
 
     public void setExtractionConfig(final ExtractionConfig extractionConfig) {
         this.extractionConfig = extractionConfig;
+    }
+
+    @JsonProperty("lmdb")
+    public LmdbConfig getLmdbConfig() {
+        return lmdbConfig;
+    }
+
+    public void setLmdbConfig(final LmdbConfig lmdbConfig) {
+        this.lmdbConfig = lmdbConfig;
     }
 
     @JsonProperty("shard")

@@ -23,7 +23,6 @@ import stroom.query.common.v2.CoprocessorSettings;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
-import java.util.Map;
 
 public class AsyncSearchTask {
     private final QueryKey key;

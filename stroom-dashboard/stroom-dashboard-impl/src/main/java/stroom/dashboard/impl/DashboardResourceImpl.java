@@ -18,7 +18,6 @@ package stroom.dashboard.impl;
 
 import stroom.dashboard.expression.v1.Expression;
 import stroom.dashboard.expression.v1.ExpressionParser;
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.FunctionFactory;
 import stroom.dashboard.expression.v1.ParamFactory;
 import stroom.dashboard.impl.datasource.DataSourceProvider;
@@ -130,9 +129,8 @@ class DashboardResourceImpl implements DashboardResource {
     @Override
     public ValidateExpressionResult validateExpression(final String expressionString) {
         try {
-            final FieldIndexMap fieldIndexMap = new FieldIndexMap(true);
             final ExpressionParser expressionParser = new ExpressionParser(new FunctionFactory(), new ParamFactory());
-            final Expression expression = expressionParser.parse(fieldIndexMap, expressionString);
+            final Expression expression = expressionParser.parse(new String[0], expressionString);
             String correctedExpression = "";
             if (expression != null) {
                 correctedExpression = expression.toString();

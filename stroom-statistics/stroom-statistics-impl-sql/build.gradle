@@ -16,12 +16,14 @@ dependencies {
     compile project(':stroom-task:stroom-task-api')
     compile project(':stroom-job:stroom-job-api')
     compile project(':stroom-cluster:stroom-cluster-lock-api')
+    compile project(':stroom-query:stroom-expression')
+    compile project(':stroom-query:stroom-query-api')
     compile project(':stroom-util')
     compile project(':stroom-util-shared')
     
     compile libs.stroomDocRef
-    compile libs.stroomExpression
-    compile libs.stroomQueryApi
+//    compile libs.stroomExpression
+//    compile libs.stroomQueryApi
 //    compile libs.stroomQueryCommon
 
     compile libs.commons_pool2

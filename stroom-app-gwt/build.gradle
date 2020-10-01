@@ -32,12 +32,13 @@ dependencies {
     compile project(':stroom-core-client')
     compile project(':stroom-core-client-widget')
     compile project(':stroom-dashboard:stroom-dashboard-client')
+    compile project(':stroom-query:stroom-query-api')
     compile project(':stroom-security:stroom-security-client')
     compile project(':stroom-statistics:stroom-statistics-client')
 
     // These source deps are all needed for the GWT transpiling to javascript
     compile libs.stroomDocRef
-    compile libs.stroomQueryApi
+//    compile libs.stroomQueryApi
 
     compile libs.gin
     compile libs.guice3
@@ -59,8 +60,8 @@ dependencies {
 
     gwtSourceCompile libs.stroomDocRef
     gwtSourceCompile "${libs.stroomDocRef}:sources"
-    gwtSourceCompile libs.stroomQueryApi
-    gwtSourceCompile "${libs.stroomQueryApi}:sources"
+//    gwtSourceCompile libs.stroomQueryApi
+//    gwtSourceCompile "${libs.stroomQueryApi}:sources"
 //    gwtSourceCompile libs.stroomQueryCommon
 //    gwtSourceCompile "${libs.stroomQueryCommon}:sources"
 }

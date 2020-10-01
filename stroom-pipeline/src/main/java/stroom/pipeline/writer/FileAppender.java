@@ -16,8 +16,6 @@
 
 package stroom.pipeline.writer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
 import stroom.pipeline.errorhandler.ProcessException;
 import stroom.pipeline.factory.ConfigurableElement;
@@ -27,6 +25,10 @@ import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
 import stroom.util.io.ByteCountOutputStream;
 import stroom.util.io.FileUtil;
+import stroom.util.io.PathCreator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.BufferedOutputStream;

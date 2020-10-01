@@ -17,9 +17,11 @@
 
 package stroom.search.impl;
 
+import stroom.datasource.api.v2.AbstractField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.index.impl.IndexStore;
 import stroom.index.impl.LuceneVersionUtil;
+import stroom.index.shared.IndexConstants;
 import stroom.index.shared.IndexDoc;
 import stroom.index.shared.IndexFieldsMap;
 import stroom.node.api.NodeInfo;
@@ -96,11 +98,21 @@ public class LuceneSearchStoreFactory implements StoreFactory {
         // Load the index.
         final IndexDoc index = securityContext.useAsReadResult(() -> indexStore.readDocument(query.getDataSource()));
 
+//        // Get an array of stored index fields that will be used for
+//        // getting stored data.
+//        // TODO : Specify stored fields based on the fields that all
+//        // coprocessors will require. Also
+//        // batch search only needs stream and event id stored fields.
+//        final String[] storedFields = getStoredFields(index);
+
         // Extract highlights.
         final Set<String> highlights = getHighlights(index, query.getExpression(), searchRequest.getDateTimeLocale(), nowEpochMilli);
 
         // Create a coprocessor settings list.
-        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest);
+        final List<AbstractField> availableFields = IndexDataSourceFieldUtil.getAvailableFields(index);
+        final List<AbstractField> storedFields = IndexDataSourceFieldUtil.getStoredFields(index);
+        final List<String> mandatoryFields = Collections.emptyList();//List.of(IndexConstants.STREAM_ID, IndexConstants.EVENT_ID);
+        final List<CoprocessorSettings> settingsList = CoprocessorSettingsFactory.create(searchRequest, availableFields, storedFields, mandatoryFields);
 
         // Create an asynchronous search task.
         final String searchName = "Search '" + searchRequest.getKey().toString() + "'";
@@ -119,7 +131,8 @@ public class LuceneSearchStoreFactory implements StoreFactory {
         final SearchResultHandler resultHandler = new SearchResultHandler(
                 settingsList,
                 defaultMaxResultsSizes,
-                storeSize);
+                storeSize,
+                paramMap);
 
         // Create the search result collector.
         final ClusterResultCollector searchResultCollector = clusterSearchResultCollectorFactory.create(
@@ -186,4 +199,12 @@ public class LuceneSearchStoreFactory implements StoreFactory {
 
         return highlights;
     }
+
+//    private String[] getStoredFields(final IndexDoc index) {
+//        return index.getFields()
+//                .stream()
+//                .filter(IndexField::isStored)
+//                .map(IndexField::getFieldName)
+//                .toArray(String[]::new);
+//    }
 }

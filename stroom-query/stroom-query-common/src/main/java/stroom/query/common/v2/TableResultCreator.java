@@ -16,8 +16,6 @@
 
 package stroom.query.common.v2;
 
-import stroom.dashboard.expression.v1.Generator;
-import stroom.dashboard.expression.v1.Selector;
 import stroom.dashboard.expression.v1.Val;
 import stroom.query.api.v2.Field;
 import stroom.query.api.v2.OffsetRange;
@@ -107,49 +105,51 @@ public class TableResultCreator implements ResultCreator {
         int pos = position;
         int resultCountAtThisLevel = 0;
 
-        for (final Item item : items) {
+        for (final DataItem item : items) {
             final GroupKey groupKey = item.getKey();
 
             // If the result is within the requested window (offset + length) then add it.
             if (pos >= offset &&
                     resultList.size() < length) {
                 // Convert all list into fully resolved objects evaluating functions where necessary.
-                final List<String> values = new ArrayList<>(item.getGenerators().length);
+                final List<String> values = new ArrayList<>(item.getValues().length);
                 int i = 0;
 
                 for (final Field field : fields) {
                     String string = null;
 
-                    if (item.getGenerators().length > i) {
-                        final Generator generator = item.getGenerators()[i];
-                        if (generator != null) {
-                            Val val;
-
-                            if (groupKey != null && generator instanceof Selector) {
-                                // If the generator is a selector then select a child row.
-                                final DataItems childItems = data.get(groupKey);
-                                if (childItems.size() > 0) {
-                                    // Create a list of child generators.
-                                    final List<Generator> childGenerators = new ArrayList<>(childItems.size());
-                                    for (final Item childItem : childItems) {
-                                        final Generator childGenerator = childItem.getGenerators()[i];
-                                        childGenerators.add(childGenerator);
-                                    }
-
-                                    // Make the selector select from the list of child generators.
-                                    final Selector selector = (Selector) generator;
-                                    val = selector.select(childGenerators.toArray(new Generator[0]));
-
-                                } else {
-                                    // If there are are no child items then just evaluate the inner expression
-                                    // provided to the selector function.
-                                    val = generator.eval();
-                                }
-                            } else {
-                                // Convert all list into fully resolved objects evaluating functions where
-                                // necessary.
-                                val = generator.eval();
-                            }
+                    if (item.getValues().length > i) {
+                        final Val val = item.getValues()[i];
+                        if (val != null) {
+//                        final Generator generator = item.getGenerators()[i];
+//                        if (generator != null) {
+//                            Val val;
+//
+//                            if (groupKey != null && generator instanceof Selector) {
+//                                // If the generator is a selector then select a child row.
+//                                final DataItems childItems = data.get(groupKey);
+//                                if (childItems.size() > 0) {
+//                                    // Create a list of child generators.
+//                                    final List<Generator> childGenerators = new ArrayList<>(childItems.size());
+//                                    for (final Item childItem : childItems) {
+//                                        final Generator childGenerator = childItem.getGenerators()[i];
+//                                        childGenerators.add(childGenerator);
+//                                    }
+//
+//                                    // Make the selector select from the list of child generators.
+//                                    final Selector selector = (Selector) generator;
+//                                    val = selector.select(childGenerators.toArray(new Generator[0]));
+//
+//                                } else {
+//                                    // If there are are no child items then just evaluate the inner expression
+//                                    // provided to the selector function.
+//                                    val = generator.eval();
+//                                }
+//                            } else {
+//                                // Convert all list into fully resolved objects evaluating functions where
+//                                // necessary.
+//                                val = generator.eval();
+//                            }
 
                             string = fieldFormatter.format(field, val);
                         }

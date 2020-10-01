@@ -18,11 +18,13 @@
 package stroom.pipeline.refdata.store.offheapstore.lmdb;
 
 
-import stroom.pipeline.refdata.store.ByteBufferPoolFactory;
+import stroom.lmdb.BasicLmdbDb;
+import stroom.lmdb.LmdbUtils;
+import stroom.lmdb.bytebuffer.ByteBufferPoolFactory;
 import stroom.pipeline.refdata.store.offheapstore.databases.AbstractLmdbDbTest;
-import stroom.pipeline.refdata.store.offheapstore.serdes.StringSerde;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
-import stroom.pipeline.refdata.util.PooledByteBuffer;
+import stroom.lmdb.serdes.StringSerde;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.PooledByteBuffer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;

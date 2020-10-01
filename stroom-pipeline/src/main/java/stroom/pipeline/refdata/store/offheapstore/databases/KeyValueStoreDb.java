@@ -18,14 +18,14 @@
 package stroom.pipeline.refdata.store.offheapstore.databases;
 
 import stroom.pipeline.refdata.store.offheapstore.KeyValueStoreKey;
-import stroom.pipeline.refdata.store.offheapstore.UID;
+import stroom.lmdb.serdes.UID;
 import stroom.pipeline.refdata.store.offheapstore.ValueStoreKey;
-import stroom.pipeline.refdata.store.offheapstore.lmdb.AbstractLmdbDb;
+import stroom.lmdb.AbstractLmdbDb;
 import stroom.pipeline.refdata.store.offheapstore.serdes.KeyValueStoreKeySerde;
 import stroom.pipeline.refdata.store.offheapstore.serdes.ValueStoreKeySerde;
-import stroom.pipeline.refdata.util.ByteBufferPool;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
-import stroom.pipeline.refdata.util.PooledByteBuffer;
+import stroom.lmdb.bytebuffer.ByteBufferPool;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.PooledByteBuffer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;

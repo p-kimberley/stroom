@@ -17,6 +17,8 @@
 
 package stroom.pipeline.refdata.store.offheapstore;
 
+import stroom.lmdb.serdes.UID;
+
 import java.util.Objects;
 
 public class KeyValueStoreKey {

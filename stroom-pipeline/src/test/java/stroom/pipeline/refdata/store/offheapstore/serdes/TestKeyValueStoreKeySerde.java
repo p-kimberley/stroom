@@ -24,9 +24,10 @@ import com.esotericsoftware.kryo.io.Output;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import stroom.lmdb.serdes.UID;
 import stroom.pipeline.refdata.store.offheapstore.KeyValueStoreKey;
-import stroom.pipeline.refdata.store.offheapstore.UID;
-import stroom.pipeline.refdata.util.ByteBufferUtils;
+import stroom.lmdb.bytebuffer.ByteBufferUtils;
 
 import java.nio.ByteBuffer;
 

@@ -2,17 +2,18 @@ package stroom.annotation.impl;
 
 import stroom.annotation.api.AnnotationFields;
 import stroom.annotation.shared.Annotation;
-import stroom.dashboard.expression.v1.FieldIndexMap;
 import stroom.dashboard.expression.v1.Val;
 import stroom.dashboard.expression.v1.ValLong;
 import stroom.dashboard.expression.v1.ValNull;
 import stroom.dashboard.expression.v1.ValString;
+import stroom.datasource.api.v2.AbstractField;
 import stroom.expression.matcher.ExpressionMatcher;
 import stroom.expression.matcher.ExpressionMatcherFactory;
 import stroom.index.shared.IndexConstants;
 import stroom.query.api.v2.ExpressionOperator;
 import stroom.query.api.v2.ExpressionUtil;
 import stroom.query.api.v2.Query;
+import stroom.search.coprocessor.FieldUtil;
 import stroom.search.coprocessor.Receiver;
 import stroom.search.coprocessor.ReceiverImpl;
 import stroom.search.coprocessor.Values;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(AnnotationReceiverDecoratorFactory.class);
@@ -86,20 +88,22 @@ class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory 
 
     @Override
     public Receiver create(final Receiver receiver, final Query query) {
-        final FieldIndexMap fieldIndexMap = receiver.getFieldIndexMap();
-        final Integer annotationIdIndex = fieldIndexMap.getMap().get(AnnotationFields.ID);
-        final Integer streamIdIndex = fieldIndexMap.getMap().get(IndexConstants.STREAM_ID);
-        final Integer eventIdIndex = fieldIndexMap.getMap().get(IndexConstants.EVENT_ID);
+        final AbstractField[] fields = receiver.getFields();
+        final int annotationIdIndex = FieldUtil.getFieldIndex(fields, AnnotationFields.ID);
+        final int streamIdIndex = FieldUtil.getFieldIndex(fields, IndexConstants.STREAM_ID);
+        final int eventIdIndex = FieldUtil.getFieldIndex(fields, IndexConstants.EVENT_ID);
 
-        if (annotationIdIndex == null && (streamIdIndex == null || eventIdIndex == null)) {
+        if (annotationIdIndex == -1 && (streamIdIndex == -1 || eventIdIndex == -1)) {
             return receiver;
         }
 
         // Do we need to filter based on annotation attributes.
         final Function<Annotation, Boolean> filter = createFilter(query.getExpression());
 
-        final Set<String> usedFields = new HashSet<>(fieldIndexMap.getMap().keySet());
-        usedFields.retainAll(AnnotationFields.FIELD_MAP.keySet());
+        final Set<String> usedFields = Arrays.stream(fields)
+                .map(AbstractField::getName)
+                .filter(AnnotationFields.FIELD_MAP::containsKey)
+                .collect(Collectors.toSet());
 
         if (filter == null && usedFields.size() == 0) {
             return receiver;
@@ -109,7 +113,7 @@ class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory 
 
         final Consumer<Values> valuesConsumer = v -> {
             final List<Annotation> annotations = new ArrayList<>();
-            if (annotationIdIndex != null) {
+            if (annotationIdIndex != -1) {
                 final Long annotationId = getLong(v.getValues(), annotationIdIndex);
                 if (annotationId != null) {
                     annotations.add(annotationDao.get(annotationId));
@@ -141,7 +145,7 @@ class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory 
                         }
 
                         for (final String field : usedFields) {
-                            setValue(values.getValues(), fieldIndexMap, field, annotation);
+                            setValue(values.getValues(), fields, field, annotation);
                         }
 
                         receiver.getValuesConsumer().accept(values);
@@ -154,7 +158,7 @@ class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory 
 
         // TODO : At present we are just going to do this synchronously but in future we may do asynchronously in which
         // case we would increment the completion count after providing values.
-        return new ReceiverImpl(valuesConsumer, receiver.getErrorConsumer(), receiver.getCompletionCountConsumer(), fieldIndexMap);
+        return new ReceiverImpl(valuesConsumer, receiver.getErrorConsumer(), receiver.getCompletionCountConsumer(), fields);
     }
 
     private Annotation createDefaultAnnotation() {
@@ -199,8 +203,8 @@ class AnnotationReceiverDecoratorFactory implements AnnotationsDecoratorFactory 
         return val.toLong();
     }
 
-    private void setValue(final Val[] values, final FieldIndexMap fieldIndexMap, final String field, final Annotation annotation) {
-        final int index = fieldIndexMap.get(field);
+    private void setValue(final Val[] values, final AbstractField[] fields, final String field, final Annotation annotation) {
+        final int index = FieldUtil.getFieldIndex(fields, field);
         if (index != -1) {
             // Only add values that are missing.
             if (values[index] == null) {

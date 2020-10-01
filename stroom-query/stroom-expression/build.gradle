@@ -1,0 +1,198 @@
+buildscript {
+    repositories {
+        jcenter()
+        maven { url "https://dl.bintray.com/stroom/stroom" }
+    }
+    dependencies {
+        // A fork of https://github.com/wfhartford/gradle-dependency-analyze that works with Java 10
+        classpath 'stroom:gradle-dependency-analyze:v2.2.6'
+
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.8.4'
+    }
+}
+
+apply plugin: 'java-library'
+apply plugin: 'idea'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'ca.cutterslade.analyze'
+
+//if the project has a value for the passed property (i.e from the cmd line via -PpropName=xxx)
+//use that, else use a default value
+ext.getPropertyOrDefault = { propName, defaultValue ->
+    def val;
+    if (project.hasProperty(propName) && project.getProperty(propName) != "unspecified" && project.getProperty(propName) != "") {
+        val = project.getProperty(propName)
+        println "Using property [$propName] with value [$val]"
+    } else {
+        val = defaultValue
+        println "Property [$propName] has no value, using default value [$val]"
+    }
+    return val;
+}
+
+ext.versions = [
+        stroomExpression: getPropertyOrDefault('version', 'SNAPSHOT'),
+        zzDUMMYzz       : 'makes sorting this list easier'
+]
+
+ext.moduleName = 'stroom.expression'
+
+group = 'stroom'
+version = versions.stroomExpression
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+repositories {
+    mavenLocal()
+    jcenter()
+    maven {
+        url "https://dl.bintray.com/stroom/stroom"
+    }
+}
+
+dependencies {
+    implementation "com.esotericsoftware:kryo-shaded:4.0.0"
+    implementation "org.slf4j:slf4j-api:1.7.25"
+
+    testCompileOnly "org.junit.jupiter:junit-jupiter-api:5.3.2"
+    testImplementation "org.assertj:assertj-core:3.10.0"
+    testImplementation "com.caucho:hessian:4.0.51"
+
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.3.2"
+    testRuntimeOnly "org.slf4j:slf4j-nop:1.7.25"
+}
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    scm {
+        url "https://github.com/stroom/stroom-expression"
+    }
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('name', project.name)
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+//configuration for the bintray plugin for uploading maven artefacts to bintray
+//see https://github.com/bintray/gradle-bintray-plugin
+//run task bintrayUpload to push the files, assuming BINTRAY_USER/KEY are set as env vars
+bintray {
+    //Must never write these to log or system out
+    user = System.getenv('BINTRAY_USER') //set in Travis UI
+    key = System.getenv('BINTRAY_KEY') //set in Travis UI
+
+    //The maven plugin publications to push to bintray
+    publications = ['mavenJava']
+
+    publish = true
+
+    pkg {
+        repo = 'stroom'
+        name = 'stroom-expression'
+        userOrg = 'stroom'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/gchq/stroom-expression.git'
+        version {
+            name = "${versions.stroomExpression}"
+            desc = "stroom-expression-${versions.stroomExpression}"
+            released = new Date()
+            vcsTag = "${versions.stroomExpression}"
+            gpg {
+                //Bintray will self-sign the files
+                sign = true //Determines whether to GPG sign the files. The default is false
+            }
+        }
+    }
+}
+
+afterEvaluate {
+    repositories {
+        jcenter()
+    }
+
+//    compileJava {
+//        inputs.property("moduleName", moduleName)
+//        doFirst {
+//            options.compilerArgs = [
+//                    '--module-path', classpath.asPath,
+//            ]
+//            classpath = files()
+//        }
+//    }
+//
+//    compileTestJava {
+//        inputs.property("moduleName", moduleName)
+//        doFirst {
+//            options.compilerArgs = [
+//                    '--module-path', classpath.asPath,
+//                    '--patch-module', "$moduleName=" + files(sourceSets.test.java.srcDirs).asPath,
+//            ]
+//            classpath = files()
+//        }
+//    }
+//
+//    test {
+//        useJUnitPlatform()
+//
+//        inputs.property("moduleName", moduleName)
+//        doFirst {
+//            jvmArgs = [
+//                    '--module-path', classpath.asPath,
+//                    '--add-modules', 'ALL-MODULE-PATH',
+//                    '--patch-module', "$moduleName=" + files(sourceSets.test.java.outputDir).asPath,
+////                    '--add-opens', 'java.base/java.net=ALL-UNNAMED', // add the following VM parameters to the run configuration to avoid problems with the reflection restrictions in Java 9
+////                    '--add-opens', 'stroom.expression/stroom.dashboard.expression.v1=org.junit.platform.commons',
+//            ]
+//            classpath = files()
+//        }
+//    }
+//
+//    javadoc {
+//        options.addStringOption('-module-path', classpath.asPath)
+//        options.addStringOption('Xdoclint:all,-missing', '-html5')
+//    }
+
+    jar {
+        inputs.property("moduleName", moduleName)
+        manifest {
+            attributes(
+                    "Automatic-Module-Name": moduleName,
+            )
+        }
+    }
+}

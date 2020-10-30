@@ -75,7 +75,6 @@ jobs:
         --scan \
         --stacktrace \
         -PdumpFailedTestXml=true \
-        -Dorg.gradle.parallel=true \
         -Pversion="${{ steps.set_env_var.outputs.version }}" \
         build \
         -x shadowJar \
@@ -83,6 +82,8 @@ jobs:
         -x copyFilesForStroomDockerBuild \
         -x copyFilesForProxyDockerBuild \
         -x buildDistribution
+
+      #      -Dorg.gradle.parallel=true \
 
       # Build the REACT UI
     - name: Build the REACT UI

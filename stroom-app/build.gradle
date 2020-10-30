@@ -247,7 +247,7 @@ jar {
 
 shadowJar {
     // We want to run the tests before we build the fat jar.
-    dependsOn test
+//    dependsOn test
     // We want to compile all GWT and React content before we build the fat jar.
     dependsOn ":stroom-ui:copyYarnBuild"
     dependsOn ":stroom-app-gwt:gwtCompile"
@@ -529,20 +529,20 @@ task buildDistribution(type: Zip) {
     from releaseBuildDir
 }
 
-// Ensure that the test task for this project runs after all other test tasks as
-// this project has all the lengthy int tests so we want it to fail fast
-def thisProject = project;
-rootProject.subprojects { subProj ->
-    //println "subProj ${subProj.name} project ${thisProject.name}"
-    if (!subProj.name.equals(thisProject.name)) {
-        subProj.tasks.withType(Test) { otherTestTask ->
-            //println "subProj ${subProj}, task ${it.name} thisProject.tasks.test ${thisProject.tasks.test}"
-            thisProject.tasks.test.mustRunAfter otherTestTask.path
-            thisProject.tasks.jar.mustRunAfter otherTestTask.path
-            thisProject.tasks.shadowJar.mustRunAfter otherTestTask.path
-        }
-    }
-}
+//// Ensure that the test task for this project runs after all other test tasks as
+//// this project has all the lengthy int tests so we want it to fail fast
+//def thisProject = project;
+//rootProject.subprojects { subProj ->
+//    //println "subProj ${subProj.name} project ${thisProject.name}"
+//    if (!subProj.name.equals(thisProject.name)) {
+////        subProj.tasks.withType(Test) { otherTestTask ->
+//            //println "subProj ${subProj}, task ${it.name} thisProject.tasks.test ${thisProject.tasks.test}"
+////            thisProject.tasks.test.mustRunAfter otherTestTask.path
+////            thisProject.tasks.jar.mustRunAfter otherTestTask.path
+////            thisProject.tasks.shadowJar.mustRunAfter otherTestTask.path
+////        }
+//    }
+//}
 
 // Ensure all projects have built their jars so swagger can see them
 tasks.prepareSwaggerClasses.dependsOn rootProject.getTasksByName('jar', true)
@@ -603,13 +603,9 @@ tasks.getByPath(':stroom-dashboard-gwt:gwtClean').mustRunAfter processResources
 tasks.getByPath(':stroom-ui:removeYarnBuild').mustRunAfter processResources
 
 // We often run out of memory when running the UI builds in parallel so create tasks that will build them one after another.
-tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter test
-//tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter analyzeClassesDependencies
-//tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter analyzeTestClassesDependencies
-//tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter generateConfigDefaultsYamlFile
-//tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter makeSendExecutable
-tasks.getByPath(':stroom-app-gwt:gwtCompile').mustRunAfter ':stroom-ui:yarnBuild'
-tasks.getByPath(':stroom-dashboard-gwt:gwtCompile').mustRunAfter ':stroom-app-gwt:gwtCompile'
+//tasks.getByPath(':stroom-ui:yarnBuild').mustRunAfter test
+//tasks.getByPath(':stroom-app-gwt:gwtCompile').mustRunAfter test
+//tasks.getByPath(':stroom-dashboard-gwt:gwtCompile').mustRunAfter test
 
 // Make the build command create the full distribution
 tasks.build.dependsOn generateSwaggerDocumentation

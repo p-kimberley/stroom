@@ -5,9 +5,9 @@ name: Java CI with Gradle
 
 on:
   push:
-    branches: [ github-actions2 ]
+    branches: [ github-actions2-build-performance ]
   pull_request:
-    branches: [ github-actions2 ]
+    branches: [ github-actions2-build-performance ]
 
 jobs:
   build:
@@ -75,6 +75,7 @@ jobs:
         --scan \
         --stacktrace \
         -PdumpFailedTestXml=true \
+        -Dorg.gradle.parallel=true \
         -Pversion="${{ steps.set_env_var.outputs.version }}" \
         build \
         -x shadowJar \
@@ -82,8 +83,6 @@ jobs:
         -x copyFilesForStroomDockerBuild \
         -x copyFilesForProxyDockerBuild \
         -x buildDistribution
-
-      #      -Dorg.gradle.parallel=true \
 
       # Build the REACT UI
     - name: Build the REACT UI

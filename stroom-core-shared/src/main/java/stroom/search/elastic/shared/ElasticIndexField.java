@@ -40,7 +40,9 @@ import java.util.Objects;
         "indexed"
 })
 public class ElasticIndexField implements HasDisplayValue, Comparable<ElasticIndexField>, Serializable {
-    private static final long serialVersionUID = 3100770758821157580L;
+    // Built-in document `_id` field
+    public static ElasticIndexField ID = new ElasticIndexField(
+            ElasticIndexFieldType.TEXT, "_id", "string", true, true);
 
     private ElasticIndexFieldType fieldUse = ElasticIndexFieldType.TEXT;
     private String fieldName;

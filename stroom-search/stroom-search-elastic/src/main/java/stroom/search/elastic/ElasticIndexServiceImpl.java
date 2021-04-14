@@ -61,8 +61,19 @@ public class ElasticIndexServiceImpl implements ElasticIndexService {
 
     public List<DataSourceField> getDataSourceFields(ElasticIndex index) {
         final Map<String, FieldMappingMetadata> fieldMappings = getFieldMappings(index);
+        final List<DataSourceField> dataSourceFields = new ArrayList<>();
 
-        return fieldMappings.entrySet().stream()
+        // Insert the document `_id` field, as it's not returned by the API
+        DataSourceField idField = new DataSourceField.Builder()
+                .type(ElasticIndexFieldType.TEXT.getDataSourceFieldType())
+                .name("_id")
+                .queryable(true)
+                .addConditions(ElasticIndexFieldType.TEXT.getSupportedConditions().toArray(new Condition[0]))
+                .build();
+
+        dataSourceFields.add(idField);
+
+        dataSourceFields.addAll(fieldMappings.entrySet().stream()
                 .map(field -> {
                     final Object properties = field.getValue().sourceAsMap().get(field.getKey());
 
@@ -91,7 +102,9 @@ public class ElasticIndexServiceImpl implements ElasticIndexService {
                     }
                 })
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+
+        return dataSourceFields;
     }
 
     @Override
@@ -103,6 +116,9 @@ public class ElasticIndexServiceImpl implements ElasticIndexService {
     public Map<String, ElasticIndexField> getFieldsMap(final ElasticIndex index) {
         final Map<String, FieldMappingMetadata> fieldMappings = getFieldMappings(index);
         final Map<String, ElasticIndexField> fieldsMap = new HashMap<>();
+
+        // Include the doc `_id` field, so it may be searched
+        fieldsMap.put(ElasticIndexField.ID.getFieldName(), ElasticIndexField.ID);
 
         fieldMappings.forEach((key, value) -> {
             final Object properties = value.sourceAsMap().get(key);
@@ -143,11 +159,16 @@ public class ElasticIndexServiceImpl implements ElasticIndexService {
     public List<String> getStoredFields(final ElasticIndex index) {
         final Map<String, FieldMappingMetadata> fieldMappings = getFieldMappings(index);
         final boolean sourceFieldEnabled = sourceFieldIsEnabled(fieldMappings);
+        final List<String> storedFields = new ArrayList<>();
 
-        return fieldMappings.entrySet().stream()
+        storedFields.add("_id");
+
+        storedFields.addAll(fieldMappings.entrySet().stream()
                 .filter(mapping -> sourceFieldEnabled || fieldIsStored(mapping.getKey(), mapping.getValue()))
                 .map(mapping -> mapping.getValue().fullName())
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+
+        return storedFields;
     }
 
     /**

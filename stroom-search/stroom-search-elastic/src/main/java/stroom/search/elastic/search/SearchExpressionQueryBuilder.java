@@ -237,6 +237,18 @@ public class SearchExpressionQueryBuilder {
                     throw new RuntimeException("Unexpected condition '" + condition.getDisplayValue() + "' for "
                             + indexField.getFieldUse().getDisplayValue() + " field type");
             }
+        } else if (indexField.equals(ElasticIndexField.ID)) {
+            switch (condition) {
+                case EQUALS:
+                    return QueryBuilders.termQuery(fieldName, value);
+                case IN:
+                    return QueryBuilders.termsQuery(fieldName, tokenizeExpression(value));
+                case IN_DICTIONARY:
+                    return buildDictionaryQuery(fieldName, docRef, indexField);
+                default:
+                    throw new RuntimeException("Unexpected condition '" + condition.getDisplayValue() + "' for "
+                            + indexField.getFieldUse().getDisplayValue() + " field type");
+            }
         } else {
             switch (condition) {
                 case EQUALS:

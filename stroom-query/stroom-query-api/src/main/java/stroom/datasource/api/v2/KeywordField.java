@@ -24,47 +24,62 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @JsonInclude(Include.NON_NULL)
-public class IpV4AddressField extends AbstractNumericField {
+public class KeywordField extends AbstractField {
 
     private static final long serialVersionUID = 1272545271946712570L;
 
-    public IpV4AddressField(final String name) {
-        super(name);
+    private static final List<Condition> DEFAULT_CONDITIONS = new ArrayList<>();
+
+    static {
+        DEFAULT_CONDITIONS.add(Condition.CONTAINS);
+        DEFAULT_CONDITIONS.add(Condition.EQUALS);
+        DEFAULT_CONDITIONS.add(Condition.IN);
+        DEFAULT_CONDITIONS.add(Condition.IN_DICTIONARY);
     }
 
-    public IpV4AddressField(final String name, final Boolean queryable) {
-        super(name, queryable);
+    public KeywordField(final String name) {
+        super(name, Boolean.TRUE, DEFAULT_CONDITIONS);
+    }
+
+    public KeywordField(final String name,
+                        final Boolean queryable) {
+        super(name, queryable, DEFAULT_CONDITIONS);
     }
 
     @JsonCreator
-    public IpV4AddressField(@JsonProperty("name") final String name,
-                            @JsonProperty("queryable") final Boolean queryable,
-                            @JsonProperty("conditions") final List<Condition> conditions) {
+    public KeywordField(@JsonProperty("name") final String name,
+                        @JsonProperty("queryable") final Boolean queryable,
+                        @JsonProperty("conditions") final List<Condition> conditions) {
         super(name, queryable, conditions);
     }
 
     @JsonIgnore
     @Override
     public String getType() {
-        return FieldTypes.IPV4_ADDRESS;
+        return FieldTypes.KEYWORD;
     }
 
     @Override
     public String getShortTypeName() {
-        return "ip";
+        return "keyword";
     }
 
     @Override
     public String getTypeDescription() {
-        return "IPv4 address field type\n" +
+        return "Keyword field type\n" +
                "\n" +
-               "Supports equality or range queries.\n" +
+               " * Supports exact matches, wildcards (*, ?) and dictionary lookups\n" +
+               " * Case and whitespace sensitive\n" +
                "\n" +
                "Examples (omit quotes):\n" +
-               " * Exact match: '192.168.1.2'\n" +
-               " * CIDR comparison: '192.168.1.0/24'";
+               " * Exact match: 'Joe.Bloggs1' or '12345'\n" +
+               " * Starts with: 'the quick brown *'\n" +
+               " * Ends with: '* lazy dog'\n" +
+               " * Contains: '*cat sat*'\n" +
+               " * Substitute a single character: 'Joe.?loggs1'";
     }
 }

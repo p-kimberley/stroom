@@ -16,6 +16,7 @@
 
 package stroom.pipeline.reader;
 
+import stroom.pipeline.LocationFactory;
 import stroom.pipeline.errorhandler.ErrorReceiver;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
 import stroom.pipeline.factory.ConfigurableElement;
@@ -23,6 +24,7 @@ import stroom.pipeline.factory.PipelineProperty;
 import stroom.pipeline.shared.ElementIcons;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
+import stroom.util.shared.Location;
 import stroom.util.shared.Severity;
 
 import java.io.Reader;
@@ -43,26 +45,36 @@ public class InvalidCharFilterReaderElement extends AbstractReaderElement {
     private static final Xml11Chars XML_11_CHARS = new Xml11Chars();
 
     private final ErrorReceiver errorReceiver;
+    private LocationFactory locationFactory;
 
     private InvalidXmlCharFilter invalidXmlCharFilter;
     private XmlChars validChars = XML_11_CHARS;
+    private boolean showReplacementCount = true;
 
     @Inject
-    public InvalidCharFilterReaderElement(final ErrorReceiverProxy errorReceiver) {
+    public InvalidCharFilterReaderElement(
+            final ErrorReceiverProxy errorReceiver,
+            final LocationFactory locationFactory) {
         this.errorReceiver = errorReceiver;
+        this.locationFactory = locationFactory;
     }
 
     @Override
     protected Reader insertFilter(final Reader reader) {
-        invalidXmlCharFilter = new InvalidXmlCharFilter(reader, validChars);
+        invalidXmlCharFilter = new InvalidXmlCharFilter(reader, validChars, true, REPLACEMENT_CHAR, locationFactory);
         return invalidXmlCharFilter;
     }
 
     @Override
     public void endStream() {
-        if (invalidXmlCharFilter.hasModifiedContent()) {
-            errorReceiver.log(Severity.WARNING, null, getElementId(),
-                    "Some illegal characters were removed from the input stream", null);
+        if (invalidXmlCharFilter.hasModifiedContent() && showReplacementCount) {
+            String message = "Removed " + invalidXmlCharFilter.getReplacementCount() + " invalid XML characters";
+            final String charsReplaced = invalidXmlCharFilter.getReplacedCharactersAsString();
+            if (charsReplaced.length() > 0) {
+                message += " (" + charsReplaced + ")";
+            }
+            final Location location = locationFactory != null ? locationFactory.create() : null;
+            errorReceiver.log(Severity.WARNING, location, getElementId(), message, null);
         }
         super.endStream();
     }
@@ -75,5 +87,13 @@ public class InvalidCharFilterReaderElement extends AbstractReaderElement {
         if ("1.0".equals(xmlMode)) {
             validChars = XML_10_CHARS;
         }
+    }
+
+    @PipelineProperty(
+            description = "Raise a warning when a character replacement is performed",
+            defaultValue = "true",
+            displayPriority = 2)
+    public void setShowReplacementCount(final boolean showReplacementCount) {
+        this.showReplacementCount = showReplacementCount;
     }
 }

@@ -23,6 +23,7 @@ import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
 import stroom.feed.shared.FeedDoc;
 import stroom.meta.api.MetaProperties;
+import stroom.meta.api.MetaService;
 import stroom.meta.shared.Meta;
 import stroom.node.api.NodeInfo;
 import stroom.pipeline.destination.RollingDestination;
@@ -38,6 +39,7 @@ import stroom.pipeline.shared.ElementIcons;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
 import stroom.pipeline.state.MetaHolder;
+import stroom.pipeline.state.StreamProcessorHolder;
 
 import com.google.common.base.Strings;
 
@@ -63,6 +65,8 @@ public class RollingStreamAppender extends AbstractRollingAppender implements Ro
 
     private final Store streamStore;
     private final MetaHolder metaHolder;
+    private final MetaService metaService;
+    private final StreamProcessorHolder streamProcessorHolder;
     private final NodeInfo nodeInfo;
     private final DocRefInfoService docRefInfoService;
 
@@ -77,11 +81,15 @@ public class RollingStreamAppender extends AbstractRollingAppender implements Ro
     RollingStreamAppender(final RollingDestinations destinations,
                           final Store streamStore,
                           final MetaHolder metaHolder,
+                          final MetaService metaService,
                           final NodeInfo nodeInfo,
-                          final DocRefInfoService docRefInfoService) {
+                          final DocRefInfoService docRefInfoService,
+                          final StreamProcessorHolder streamProcessorHolder) {
         super(destinations);
         this.streamStore = streamStore;
         this.metaHolder = metaHolder;
+        this.metaService = metaService;
+        this.streamProcessorHolder = streamProcessorHolder;
         this.nodeInfo = nodeInfo;
         this.docRefInfoService = docRefInfoService;
     }
@@ -98,6 +106,8 @@ public class RollingStreamAppender extends AbstractRollingAppender implements Ro
                 .feedName(key.getFeed())
                 .typeName(key.getStreamType())
                 .parent(metaHolder.getMeta())
+                .reprocessedStreamId(metaService.findReprocessedStreamId(metaHolder.getMeta(), key.getStreamType(),
+                        streamProcessorHolder.getStreamTask()))
                 .build();
 
         final String nodeName = nodeInfo.getThisNodeName();

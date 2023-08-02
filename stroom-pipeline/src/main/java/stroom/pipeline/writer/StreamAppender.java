@@ -24,6 +24,7 @@ import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
 import stroom.feed.shared.FeedDoc;
 import stroom.meta.api.MetaProperties;
+import stroom.meta.api.MetaService;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.MetaFields;
 import stroom.pipeline.destination.Destination;
@@ -65,6 +66,7 @@ public class StreamAppender extends AbstractAppender {
     private final ErrorReceiverProxy errorReceiverProxy;
     private final Store streamStore;
     private final MetaHolder metaHolder;
+    private final MetaService metaService;
     private final StreamProcessorHolder streamProcessorHolder;
     private final MetaData metaData;
     private final RecordCount recordCount;
@@ -83,6 +85,7 @@ public class StreamAppender extends AbstractAppender {
     public StreamAppender(final ErrorReceiverProxy errorReceiverProxy,
                           final Store streamStore,
                           final MetaHolder metaHolder,
+                          final MetaService metaService,
                           final StreamProcessorHolder streamProcessorHolder,
                           final MetaData metaData,
                           final RecordCount recordCount,
@@ -91,6 +94,7 @@ public class StreamAppender extends AbstractAppender {
         this.errorReceiverProxy = errorReceiverProxy;
         this.streamStore = streamStore;
         this.metaHolder = metaHolder;
+        this.metaService = metaService;
         this.streamProcessorHolder = streamProcessorHolder;
         this.metaData = metaData;
         this.recordCount = recordCount;
@@ -151,6 +155,8 @@ public class StreamAppender extends AbstractAppender {
                 .pipelineUuid(pipelineUuid)
                 .processorFilterId(processorFilterId)
                 .processorTaskId(processorTaskId)
+                .reprocessedStreamId(metaService.findReprocessedStreamId(metaHolder.getMeta(), streamType,
+                        processorTask))
                 .build();
 
         streamTarget = streamStore.openTarget(metaProperties);

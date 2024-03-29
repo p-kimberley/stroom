@@ -144,6 +144,7 @@ public class MetaDaoImpl implements MetaDao {
             .pipelineUuid(record.get(metaProcessor.PIPELINE_UUID))
             .processorFilterId(record.get(meta.PROCESSOR_FILTER_ID))
             .processorTaskId(record.get(meta.PROCESSOR_TASK_ID))
+            .reprocessedStreamId(record.get(meta.REPROCESSED_STREAM_ID))
             .parentDataId(record.get(meta.PARENT_ID))
             .status(MetaStatusId.getStatus(record.get(meta.STATUS)))
             .statusMs(record.get(meta.STATUS_TIME))
@@ -159,6 +160,7 @@ public class MetaDaoImpl implements MetaDao {
             .pipelineUuid(record.get(parentProcessor.PIPELINE_UUID))
             .processorFilterId(record.get(parent.PROCESSOR_FILTER_ID))
             .processorTaskId(record.get(parent.PROCESSOR_TASK_ID))
+            .reprocessedStreamId(record.get(parent.REPROCESSED_STREAM_ID))
             .parentDataId(record.get(parent.PARENT_ID))
             .status(MetaStatusId.getStatus(record.get(parent.STATUS)))
             .statusMs(record.get(parent.STATUS_TIME))
@@ -240,6 +242,9 @@ public class MetaDaoImpl implements MetaDao {
         expressionMapper.map(MetaFields.PARENT_CREATE_TIME, parent.CREATE_TIME, value ->
                 DateExpressionParser.getMs(MetaFields.PARENT_CREATE_TIME.getFldName(), value));
         expressionMapper.multiMap(MetaFields.PARENT_FEED, parent.FEED_ID, this::getFeedIds);
+
+        // Reprocessed stream ID.
+        expressionMapper.map(MetaFields.META_REPROCESSED_STREAM_ID, meta.REPROCESSED_STREAM_ID, Long::valueOf);
 
         valueMapper = new ValueMapper();
         valueMapper.map(MetaFields.ID, meta.ID, ValLong::create);
@@ -327,7 +332,8 @@ public class MetaDaoImpl implements MetaDao {
                                 META.TYPE_ID,
                                 META.PROCESSOR_ID,
                                 META.PROCESSOR_FILTER_ID,
-                                META.PROCESSOR_TASK_ID)
+                                META.PROCESSOR_TASK_ID,
+                                META.REPROCESSED_STREAM_ID)
                         .values(
                                 metaProperties.getCreateMs(),
                                 metaProperties.getEffectiveMs(),
@@ -338,7 +344,8 @@ public class MetaDaoImpl implements MetaDao {
                                 typeId,
                                 processorId,
                                 metaProperties.getProcessorFilterId(),
-                                metaProperties.getProcessorTaskId())
+                                metaProperties.getProcessorTaskId(),
+                                metaProperties.getReprocessedStreamId())
                         .returning(META.ID)
                         .fetchOne())
                 .getId();
@@ -352,6 +359,7 @@ public class MetaDaoImpl implements MetaDao {
                 .pipelineUuid(metaProperties.getPipelineUuid())
                 .processorFilterId((metaProperties.getProcessorFilterId()))
                 .processorTaskId(metaProperties.getProcessorTaskId())
+                .reprocessedStreamId(metaProperties.getReprocessedStreamId())
                 .parentDataId(metaProperties.getParentId())
                 .status(Status.LOCKED)
                 .statusMs(metaProperties.getStatusMs())
@@ -408,7 +416,8 @@ public class MetaDaoImpl implements MetaDao {
                                                     META.TYPE_ID,
                                                     META.PROCESSOR_ID,
                                                     META.PROCESSOR_FILTER_ID,
-                                                    META.PROCESSOR_TASK_ID);
+                                                    META.PROCESSOR_TASK_ID,
+                                                    META.REPROCESSED_STREAM_ID);
 
                                     metaPropertiesBatch.forEach(metaProperties ->
                                             insertStep.values(
@@ -427,7 +436,8 @@ public class MetaDaoImpl implements MetaDao {
                                                             ? null
                                                             : processorIds.get(metaProperties.getProcessorUuid()),
                                                     metaProperties.getProcessorFilterId(),
-                                                    metaProperties.getProcessorTaskId()));
+                                                    metaProperties.getProcessorTaskId(),
+                                                    metaProperties.getReprocessedStreamId()));
                                     return insertStep;
                                 })
                                 .collect(Collectors.toList()))
@@ -1443,7 +1453,8 @@ public class MetaDaoImpl implements MetaDao {
                                                             meta.CREATE_TIME,
                                                             meta.EFFECTIVE_TIME,
                                                             meta.PROCESSOR_FILTER_ID,
-                                                            meta.PROCESSOR_TASK_ID
+                                                            meta.PROCESSOR_TASK_ID,
+                                                            meta.REPROCESSED_STREAM_ID
                                                     )
                                                     .from(meta)
                                                     .straightJoin(metaFeed).on(meta.FEED_ID.eq(metaFeed.ID))
@@ -1502,7 +1513,8 @@ public class MetaDaoImpl implements MetaDao {
                                                         parent.CREATE_TIME,
                                                         parent.EFFECTIVE_TIME,
                                                         parent.PROCESSOR_FILTER_ID,
-                                                        parent.PROCESSOR_TASK_ID
+                                                        parent.PROCESSOR_TASK_ID,
+                                                        parent.REPROCESSED_STREAM_ID
                                                 )
                                                 .from(meta)
                                                 .straightJoin(metaFeed).on(meta.FEED_ID.eq(metaFeed.ID))

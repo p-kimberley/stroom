@@ -201,7 +201,7 @@ class ElasticIndexingFilter extends AbstractXMLFilter {
                     // `Reprocessed Stream Id`.
                     if (purgeOnReprocess) {
                         final Long reprocessStreamId = getReprocessStreamId();
-                        if (!purgeDocumentsForStream(elasticClient, reprocessStreamId)) {
+                        if (reprocessStreamId != null && !purgeDocumentsForStream(elasticClient, reprocessStreamId)) {
                             throw new RuntimeException("Failed to purge existing documents for StreamId: " +
                                     reprocessStreamId);
                         }

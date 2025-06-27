@@ -52,6 +52,7 @@ public class MetaFields {
     public static final QueryField META_INTERNAL_PROCESSOR_ID = QueryField.createId("Processor Id");
     public static final QueryField META_PROCESSOR_FILTER_ID = QueryField.createId("Processor Filter Id");
     public static final QueryField META_PROCESSOR_TASK_ID = QueryField.createId("Processor Task Id");
+    public static final QueryField META_REPROCESSED_STREAM_ID = QueryField.createId("Reprocessed Stream Id");
 
     // Times
     public static final QueryField CREATE_TIME = QueryField.createDate("Create Time");
@@ -90,6 +91,7 @@ public class MetaFields {
         FIELDS.add(META_INTERNAL_PROCESSOR_ID);
         FIELDS.add(META_PROCESSOR_FILTER_ID);
         FIELDS.add(META_PROCESSOR_TASK_ID);
+        FIELDS.add(META_REPROCESSED_STREAM_ID);
 
         // Times
         FIELDS.add(CREATE_TIME);

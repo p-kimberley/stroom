@@ -13,6 +13,28 @@ DO NOT ADD CHANGES HERE - ADD THEM USING log_change.sh
 ~~~
 
 
+## [v7.8.5] - 2025-07-15
+
+* Issue **#5025** : Fix parsing of hyperlinks in dashboard cells.
+
+* Add in validation of the Conditional Formatting custom style colours to ensure the user can only enter valid colours and nothing else.
+
+* Replace incorrect uses of `appendHtmlConstant` with SafeHtmlTemplate.
+
+
+## [v7.8.4] - 2025-07-03
+
+* Fix primitive value conversion of query field types.
+
+* Issue **#4940** : Fix duplicate store error log.
+
+* Issue **#5012** : Fix errors when trying to use `lookup()` with a Context stream.
+
+* Fix bug in reference data loading when the reference data value is XML that includes an element called `<value>`.
+
+* Fix behaviour in reference data loading of XML values where attributes with no explicit namespace would be given the unnamed namespace of the parent `referenceData` document, i.e. `<ci:data xmlns="reference-data:2" name="name" value="001" />`.
+
+
 ## [v7.8.3] - 2025-05-06
 
 * Issue **#4929** : Improve Plan B merge performance.
@@ -1365,7 +1387,9 @@ DO NOT ADD CHANGES HERE - ADD THEM USING log_change.sh
 * Issue **#3830** : Add S3 data storage option.
 
 
-[Unreleased]: https://github.com/gchq/stroom/compare/v7.8.3...HEAD
+[Unreleased]: https://github.com/gchq/stroom/compare/v7.8.5...HEAD
+[v7.8.5]: https://github.com/gchq/stroom/compare/v7.8.4...v7.8.5
+[v7.8.4]: https://github.com/gchq/stroom/compare/v7.8.3...v7.8.4
 [v7.8.3]: https://github.com/gchq/stroom/compare/v7.8.2...v7.8.3
 [v7.8.2]: https://github.com/gchq/stroom/compare/v7.8.1...v7.8.2
 [v7.8.1]: https://github.com/gchq/stroom/compare/v7.8.0...v7.8.1

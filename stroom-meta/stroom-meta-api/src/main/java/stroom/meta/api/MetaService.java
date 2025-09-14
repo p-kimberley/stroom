@@ -27,8 +27,8 @@ import stroom.meta.shared.MetaRow;
 import stroom.meta.shared.SelectionSummary;
 import stroom.meta.shared.SimpleMeta;
 import stroom.meta.shared.Status;
-import stroom.security.shared.DocumentPermission;
 import stroom.processor.shared.ProcessorTask;
+import stroom.security.shared.DocumentPermission;
 import stroom.util.shared.ResultPage;
 import stroom.util.time.TimePeriod;
 

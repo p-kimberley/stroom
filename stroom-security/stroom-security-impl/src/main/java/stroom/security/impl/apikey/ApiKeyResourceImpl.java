@@ -6,10 +6,10 @@ import stroom.security.shared.CreateHashedApiKeyRequest;
 import stroom.security.shared.CreateHashedApiKeyResponse;
 import stroom.security.shared.FindApiKeyCriteria;
 import stroom.security.shared.HashedApiKey;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.StringUtil;
 
@@ -55,7 +55,7 @@ public class ApiKeyResourceImpl implements ApiKeyResource {
                 throw new RuntimeException("No API Key found with ID " + id);
             }
             return didDelete;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug(() -> LogUtil.message("Error deleting API key with ID {}: {}",
                     id, LogUtil.exceptionMessage(e)));
             throw e;

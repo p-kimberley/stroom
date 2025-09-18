@@ -1,6 +1,6 @@
 package stroom.widget.util.client;
 
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.safecss.shared.SafeStyles;
@@ -39,7 +39,7 @@ public class SafeHtmlUtil {
      * Null safe way to escape string and return {@link SafeHtml}
      */
     public static SafeHtml getSafeHtml(final String string) {
-        if (GwtNullSafe.isBlankString(string)) {
+        if (NullSafe.isBlankString(string)) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         } else {
             return SafeHtmlUtils.fromString(string);
@@ -50,7 +50,7 @@ public class SafeHtmlUtil {
      * Null safe way to escape string and return {@link SafeHtml}
      */
     public static SafeHtml getSafeHtmlFromSafeConstant(final String string) {
-        if (GwtNullSafe.isBlankString(string)) {
+        if (NullSafe.isBlankString(string)) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         } else {
             return SafeHtmlUtils.fromSafeConstant(string);
@@ -61,7 +61,7 @@ public class SafeHtmlUtil {
      * Null safe way to escape string and return {@link SafeHtml}
      */
     public static SafeHtml getSafeHtmlFromTrustedString(final String string) {
-        if (GwtNullSafe.isBlankString(string)) {
+        if (NullSafe.isBlankString(string)) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         } else {
             return SafeHtmlUtils.fromTrustedString(string);
@@ -182,7 +182,7 @@ public class SafeHtmlUtil {
      * @return Text coloured grey if enabled is false
      */
     public static SafeHtml getColouredText(final String text, final String trustedColour) {
-        if (GwtNullSafe.isEmptyString(trustedColour)) {
+        if (NullSafe.isEmptyString(trustedColour)) {
             return getSafeHtml(text);
         } else {
             return getTemplate().spanWithStyle(
@@ -201,84 +201,84 @@ public class SafeHtmlUtil {
         }
     }
 
-    public static SafeHtml from(boolean b) {
+    public static SafeHtml from(final boolean b) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(b));
     }
 
-    public static SafeHtml from(byte num) {
+    public static SafeHtml from(final byte num) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(char c) {
+    public static SafeHtml from(final char c) {
         return SafeHtmlUtils.fromTrustedString(SafeHtmlUtils.htmlEscape(c));
     }
 
-    public static SafeHtml from(double num) {
+    public static SafeHtml from(final double num) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(float num) {
+    public static SafeHtml from(final float num) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(int num) {
+    public static SafeHtml from(final int num) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(long num) {
+    public static SafeHtml from(final long num) {
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(Boolean b) {
+    public static SafeHtml from(final Boolean b) {
         if (b == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(b));
     }
 
-    public static SafeHtml from(Byte num) {
+    public static SafeHtml from(final Byte num) {
         if (num == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(Character c) {
+    public static SafeHtml from(final Character c) {
         if (c == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(SafeHtmlUtils.htmlEscape(c));
     }
 
-    public static SafeHtml from(Double num) {
+    public static SafeHtml from(final Double num) {
         if (num == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(Float num) {
+    public static SafeHtml from(final Float num) {
         if (num == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(Integer num) {
+    public static SafeHtml from(final Integer num) {
         if (num == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(Long num) {
+    public static SafeHtml from(final Long num) {
         if (num == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
         return SafeHtmlUtils.fromTrustedString(String.valueOf(num));
     }
 
-    public static SafeHtml from(String string) {
+    public static SafeHtml from(final String string) {
         if (string == null) {
             return SafeHtmlUtils.EMPTY_SAFE_HTML;
         }
@@ -294,7 +294,7 @@ public class SafeHtmlUtil {
      * @return A trusted colour value.
      */
     public static Optional<String> asTrustedColour(final String untrustedColour) {
-        if (GwtNullSafe.isNonBlankString(untrustedColour)) {
+        if (NullSafe.isNonBlankString(untrustedColour)) {
             final String escaped = SafeHtmlUtils.htmlEscape(untrustedColour.trim());
             if (nativeIsValidHtmlColour(escaped)
                 && !"unset".equalsIgnoreCase(escaped)

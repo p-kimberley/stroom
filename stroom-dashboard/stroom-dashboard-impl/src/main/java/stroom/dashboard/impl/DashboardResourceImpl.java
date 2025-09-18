@@ -16,6 +16,8 @@
 
 package stroom.dashboard.impl;
 
+import stroom.dashboard.shared.ColumnValues;
+import stroom.dashboard.shared.ColumnValuesRequest;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.dashboard.shared.DashboardResource;
 import stroom.dashboard.shared.DashboardSearchRequest;
@@ -88,18 +90,19 @@ class DashboardResourceImpl implements DashboardResource {
                                                     final DownloadSearchResultsRequest request) {
         try {
             // If the client doesn't specify a node then execute locally.
-            if (nodeName == null || nodeName.equals("null")) {
+            final String node = dashboardServiceProvider.get().getBestNode(nodeName, request.getSearchRequest());
+            if (node == null) {
                 return dashboardServiceProvider.get().downloadSearchResults(request);
             }
 
             return nodeServiceProvider.get()
                     .remoteRestResult(
-                            nodeName,
+                            node,
                             ResourceGeneration.class,
                             () -> ResourcePaths.buildAuthenticatedApiPath(
                                     DashboardResource.BASE_PATH,
-                                    DashboardResource.DOWNLOAD_SEARCH_RESULTS_PATH_PATH,
-                                    nodeName),
+                                    DashboardResource.DOWNLOAD_SEARCH_RESULTS_PATH_PART,
+                                    node),
                             () -> dashboardServiceProvider.get().downloadSearchResults(request),
                             builder -> builder.post(Entity.json(request)));
         } catch (final RuntimeException e) {
@@ -113,19 +116,47 @@ class DashboardResourceImpl implements DashboardResource {
     public DashboardSearchResponse search(final String nodeName, final DashboardSearchRequest request) {
         try {
             // If the client doesn't specify a node then execute locally.
-            if (nodeName == null || nodeName.equals("null")) {
+            final String node = dashboardServiceProvider.get().getBestNode(nodeName, request);
+            if (node == null) {
                 return dashboardServiceProvider.get().search(request);
             }
 
             return nodeServiceProvider.get()
                     .remoteRestResult(
-                            nodeName,
+                            node,
                             DashboardSearchResponse.class,
                             () -> ResourcePaths.buildAuthenticatedApiPath(
                                     DashboardResource.BASE_PATH,
                                     DashboardResource.SEARCH_PATH_PART,
-                                    nodeName),
+                                    node),
                             () -> dashboardServiceProvider.get().search(request),
+                            builder -> builder.post(Entity.json(request)));
+        } catch (final RuntimeException e) {
+            LOGGER.debug(e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @AutoLogged(OperationType.UNLOGGED)
+    @Override
+    public ColumnValues getColumnValues(final String nodeName,
+                                        final ColumnValuesRequest request) {
+        try {
+            // If the client doesn't specify a node then execute locally.
+            final String node = dashboardServiceProvider.get().getBestNode(nodeName, request.getSearchRequest());
+            if (node == null) {
+                return dashboardServiceProvider.get().getColumnValues(request);
+            }
+
+            return nodeServiceProvider.get()
+                    .remoteRestResult(
+                            node,
+                            ColumnValues.class,
+                            () -> ResourcePaths.buildAuthenticatedApiPath(
+                                    DashboardResource.BASE_PATH,
+                                    DashboardResource.COLUMN_VALUES_PATH_PART,
+                                    node),
+                            () -> dashboardServiceProvider.get().getColumnValues(request),
                             builder -> builder.post(Entity.json(request)));
         } catch (final RuntimeException e) {
             LOGGER.debug(e.getMessage(), e);

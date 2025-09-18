@@ -19,14 +19,14 @@ package stroom.security.client.presenter;
 import stroom.cell.info.client.ActionMenuCell;
 import stroom.cell.info.client.CommandLink;
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.DataGridSelectionEventManager;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.client.UsersAndGroupsPlugin;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.security.client.event.OpenUsersAndGroupsScreenEvent;
@@ -40,7 +40,7 @@ import stroom.security.shared.UserFields;
 import stroom.svg.client.Preset;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 import stroom.util.shared.UserRef.DisplayType;
@@ -80,7 +80,6 @@ public class AppUserPermissionsListPresenter
     private final ClientSecurityContext securityContext;
     private RestDataProvider<AppUserPermissions, ResultPage<AppUserPermissions>> dataProvider;
     private final MultiSelectionModelImpl<AppUserPermissions> selectionModel;
-    private ResultPage<AppUserPermissions> currentData = null;
     private boolean isExternalIdp = false;
     private boolean resetSelection = false;
 
@@ -98,11 +97,12 @@ public class AppUserPermissionsListPresenter
         this.securityContext = securityContext;
 
         dataGrid = new MyDataGrid<>();
-        selectionModel = new MultiSelectionModelImpl<>(dataGrid);
-        DataGridSelectionEventManager<AppUserPermissions> selectionEventManager = new DataGridSelectionEventManager<>(
-                dataGrid,
-                selectionModel,
-                false);
+        selectionModel = new MultiSelectionModelImpl<>();
+        final DataGridSelectionEventManager<AppUserPermissions> selectionEventManager =
+                new DataGridSelectionEventManager<>(
+                        dataGrid,
+                        selectionModel,
+                        false);
         dataGrid.setSelectionModel(selectionModel, selectionEventManager);
         pagerView.setDataWidget(dataGrid);
 
@@ -121,6 +121,12 @@ public class AppUserPermissionsListPresenter
         view.setUiHandlers(this);
 
         setupColumns();
+    }
+
+    @Override
+    protected void onBind() {
+        super.onBind();
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
     }
 
     @Override
@@ -175,7 +181,8 @@ public class AppUserPermissionsListPresenter
                     protected void exec(final Range range,
                                         final Consumer<ResultPage<AppUserPermissions>> dataConsumer,
                                         final RestErrorHandler errorHandler) {
-                        requestBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+                        requestBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+                        requestBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
                         restFactory
                                 .create(APP_PERMISSION_RESOURCE)
                                 .method(res -> res.fetchAppUserPermissions(requestBuilder.build()))
@@ -188,7 +195,6 @@ public class AppUserPermissionsListPresenter
                     @Override
                     protected void changeData(final ResultPage<AppUserPermissions> data) {
                         super.changeData(data);
-                        currentData = data;
                         if (!data.isEmpty()) {
                             if (resetSelection) {
                                 selectionModel.setSelected(data.getFirst());
@@ -203,9 +209,6 @@ public class AppUserPermissionsListPresenter
     }
 
     private void setupColumns() {
-
-        DataGridUtil.addColumnSortHandler(dataGrid, requestBuilder, this::refresh);
-
         // Permissions col contains a lot of text, so we need multiline rows
         dataGrid.setMultiLine(true);
 
@@ -243,7 +246,7 @@ public class AppUserPermissionsListPresenter
                 ColumnSizeConstants.USER_DISPLAY_NAME_COL);
 
         // Show it as the default sort
-        dataGrid.getColumnSortList().push(displayNameCol);
+        dataGrid.sort(displayNameCol);
 
         // Permissions
         dataGrid.addAutoResizableColumn(
@@ -283,20 +286,20 @@ public class AppUserPermissionsListPresenter
         final DescriptionBuilder sb = new DescriptionBuilder();
         boolean notEmpty = false;
         boolean lastIsInherited = false;
-        SafeHtml delimiter = new SafeHtmlBuilder()
+        final SafeHtml delimiter = new SafeHtmlBuilder()
                 .append(SafeHtmlUtil.ENSP)
                 .appendEscaped("|")
                 .append(SafeHtmlUtil.ENSP)
                 .toSafeHtml();
         for (final AppPermission permission : AppPermission.LIST) {
-            if (GwtNullSafe.collectionContains(appUserPermissions.getPermissions(), permission)) {
+            if (NullSafe.collectionContains(appUserPermissions.getPermissions(), permission)) {
                 if (notEmpty) {
                     sb.addLine(false, lastIsInherited, true, delimiter);
                 }
                 sb.addLine(permission.getDisplayValue());
                 notEmpty = true;
                 lastIsInherited = false;
-            } else if (GwtNullSafe.collectionContains(appUserPermissions.getInherited(), permission)) {
+            } else if (NullSafe.collectionContains(appUserPermissions.getInherited(), permission)) {
                 if (notEmpty) {
                     sb.addLine(false, lastIsInherited, true, delimiter);
                 }
@@ -309,12 +312,12 @@ public class AppUserPermissionsListPresenter
     }
 
     private boolean isUserEnabled(final AppUserPermissions appUserPermissions) {
-        return GwtNullSafe.get(appUserPermissions, AppUserPermissions::getUserRef, UserRef::isEnabled);
+        return NullSafe.get(appUserPermissions, AppUserPermissions::getUserRef, UserRef::isEnabled);
     }
 
     private Function<AppUserPermissions, CommandLink> buildOpenAppPermissionsCommandLink() {
-        return (AppUserPermissions appUserPermissions) -> {
-            final UserRef userRef = GwtNullSafe.get(appUserPermissions, AppUserPermissions::getUserRef);
+        return (final AppUserPermissions appUserPermissions) -> {
+            final UserRef userRef = NullSafe.get(appUserPermissions, AppUserPermissions::getUserRef);
             if (userRef != null) {
                 final String displayName = userRef.getDisplayName();
                 return new CommandLink(

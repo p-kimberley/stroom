@@ -3,6 +3,7 @@ ext.moduleName = 'stroom.receive.common'
 dependencies {
     implementation project(':stroom-core-shared')
     implementation project(':stroom-docref')
+    implementation project(':stroom-cache:stroom-cache-api')
     implementation project(':stroom-data:stroom-data-store-api')
     implementation project(':stroom-data:stroom-data-zip')
     implementation project(':stroom-event-logging-rs:stroom-event-logging-rs-api')
@@ -14,36 +15,30 @@ dependencies {
     implementation project(':stroom-util-shared')
     implementation project(':stroom-util')
 
+    implementation libs.bcrypt
+    implementation libs.bouncy.castle
     implementation libs.commons.compress
+    implementation libs.dropwizard.lifecycle
     implementation libs.dropwizard.metrics.annotation
     implementation libs.dropwizard.metrics.healthchecks
     implementation libs.dropwizard.validation
     implementation libs.guice
     implementation libs.hessian
     implementation libs.jackson.annotations
+    implementation libs.jackson.core
+    implementation libs.jackson.databind
     implementation libs.jakarta.servlet.api
     implementation libs.jakarta.inject
-    implementation libs.jaxb.api
     implementation libs.slf4j.api
     implementation libs.swagger.annotations
     implementation libs.ws.rs.api
 
+    testImplementation project(':stroom-cache:stroom-cache-impl')
     testImplementation project(':stroom-test-common')
 
-    testImplementation libs.assertj.core
     testImplementation libs.commons.lang
-    testImplementation libs.junit.jupiter.api
-    testImplementation libs.mockito.core
-    testImplementation libs.mockito.junit.jupiter
     testImplementation libs.vavr
 
-    // The following logging libs are needed when running junits outside dropwizard
-    testRuntimeOnly libs.jakarta.activation
-    testRuntimeOnly libs.jaxb.impl
-    testRuntimeOnly libs.jcl.over.slf4j
-    testRuntimeOnly libs.jul.to.slf4j
-    testRuntimeOnly libs.junit.jupiter.engine
-    testRuntimeOnly libs.log4j.over.slf4j
-    testRuntimeOnly libs.logback.classic
-    testRuntimeOnly libs.logback.core
+    testImplementation libs.bundles.common.test.implementation
+    testRuntimeOnly libs.bundles.common.test.runtime
 }

@@ -20,7 +20,7 @@
 
 package stroom.ui.config.shared;
 
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -127,7 +127,7 @@ public enum AceEditorTheme {
     private final String name;
     private final ThemeType themeType;
 
-    AceEditorTheme(String name, final ThemeType themeType) {
+    AceEditorTheme(final String name, final ThemeType themeType) {
         this.name = Objects.requireNonNull(name);
         this.themeType = Objects.requireNonNull(themeType);
     }
@@ -159,7 +159,7 @@ public enum AceEditorTheme {
         }
     }
 
-    public static boolean matchesThemeType(final String themeName, ThemeType themeType) {
+    public static boolean matchesThemeType(final String themeName, final ThemeType themeType) {
         Objects.requireNonNull(themeName);
         Objects.requireNonNull(themeType);
         return TYPE_TO_THEME_MAP.get(themeType)
@@ -179,6 +179,6 @@ public enum AceEditorTheme {
 
     public static AceEditorTheme getDefaultEditorTheme(final ThemeType themeType) {
         return TYPE_TO_DEFAULT_THEME_MAP.get(
-                GwtNullSafe.requireNonNullElse(themeType, Theme.DEFAULT_THEME_TYPE));
+                NullSafe.requireNonNullElse(themeType, Theme.DEFAULT_THEME_TYPE));
     }
 }

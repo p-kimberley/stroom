@@ -1,14 +1,14 @@
 package stroom.query.client;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.datasource.shared.DataSourceResource;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch;
 import stroom.docstore.shared.Documentation;
+import stroom.query.api.StringExpressionUtil;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
 import stroom.task.client.TaskMonitorFactory;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 
@@ -48,9 +48,9 @@ public class DataSourceClient {
         if (dataSourceRef != null) {
             final FindFieldCriteria findFieldInfoCriteria = new FindFieldCriteria(
                     PageRequest.oneRow(),
-                    null,
+                    FindFieldCriteria.DEFAULT_SORT_LIST,
                     dataSourceRef,
-                    StringMatch.equals(fieldName, true),
+                    StringExpressionUtil.equalsCaseSensitive(fieldName),
                     queryable);
             restFactory
                     .create(DATA_SOURCE_RESOURCE)
@@ -74,7 +74,7 @@ public class DataSourceClient {
                     .create(DATA_SOURCE_RESOURCE)
                     .method(res -> res.fetchDocumentation(dataSourceDocRef))
                     .onSuccess(documentation -> {
-                        final Optional<String> optMarkDown = GwtNullSafe.getAsOptional(documentation,
+                        final Optional<String> optMarkDown = NullSafe.getAsOptional(documentation,
                                 Documentation::getMarkdown);
                         if (descriptionConsumer != null) {
                             descriptionConsumer.accept(optMarkDown);

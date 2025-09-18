@@ -1,7 +1,6 @@
 package stroom.meta.api;
 
 import stroom.test.common.TestUtil;
-import stroom.util.NullSafe;
 import stroom.util.cert.CertificateExtractor;
 import stroom.util.concurrent.ThreadUtil;
 import stroom.util.concurrent.UniqueId;
@@ -10,6 +9,7 @@ import stroom.util.concurrent.UniqueIdGenerator;
 import stroom.util.date.DateUtil;
 import stroom.util.exception.ThrowingFunction;
 import stroom.util.net.HostNameUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.inject.TypeLiteral;
 import io.vavr.Tuple;
@@ -203,7 +203,7 @@ class TestAttributeMapUtil {
     }
 
     @Test
-    void testRead_path(@TempDir Path tempDir) throws IOException {
+    void testRead_path(@TempDir final Path tempDir) throws IOException {
         final String data = """
                 three:four
 
@@ -231,7 +231,7 @@ class TestAttributeMapUtil {
     }
 
     @Test
-    void testRead_inputStream(@TempDir Path tempDir) throws IOException {
+    void testRead_inputStream(@TempDir final Path tempDir) throws IOException {
         final String data = """
                 three:four
 
@@ -245,7 +245,7 @@ class TestAttributeMapUtil {
 
         Files.writeString(file, data, AttributeMapUtil.DEFAULT_CHARSET, StandardOpenOption.CREATE);
 
-        try (InputStream inputStream = Files.newInputStream(file)) {
+        try (final InputStream inputStream = Files.newInputStream(file)) {
             final AttributeMap attributeMap = new AttributeMap();
             AttributeMapUtil.read(inputStream, attributeMap);
 
@@ -287,7 +287,7 @@ class TestAttributeMapUtil {
     @Test
     void testMergeAttributeMaps1() {
 
-        UniqueIdGenerator uniqueIdGenerator = new UniqueIdGenerator(NodeType.STROOM, "node1");
+        final UniqueIdGenerator uniqueIdGenerator = new UniqueIdGenerator(NodeType.STROOM, "node1");
         final String receiptId = uniqueIdGenerator.generateId().toString();
         final String receiptTime = DateUtil.createNormalDateTimeString();
 

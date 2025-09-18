@@ -23,6 +23,7 @@ import stroom.dictionary.mock.MockWordListProviderModule;
 import stroom.docrefinfo.mock.MockDocRefInfoModule;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -69,6 +70,7 @@ class TestMetaFeedDaoImpl {
                             new MockCollectionModule(),
                             new MockDocRefInfoModule(),
                             new MockWordListProviderModule(),
+                            new MockMetricsModule(),
                             new CacheModule(),
                             new DbTestModule())
                     .injectMembers(this);
@@ -98,7 +100,7 @@ class TestMetaFeedDaoImpl {
 
     @Test
     void testDuplicateCreate() {
-        String feedName = "TEST";
+        final String feedName = "TEST";
         final Optional<Integer> id1 = feedDao.get(feedName);
         final Optional<Integer> id2 = feedDao.tryCreate(feedName);
         final Optional<Integer> id3 = feedDao.tryCreate(feedName);
@@ -117,13 +119,13 @@ class TestMetaFeedDaoImpl {
 
     @Test
     void testGet() {
-        String feedName = "FOO";
+        final String feedName = "FOO";
         Optional<Integer> optId = feedDao.get(feedName);
 
         assertThat(optId)
                 .isEmpty();
 
-        Integer id = feedDao.getOrCreate(feedName);
+        final Integer id = feedDao.getOrCreate(feedName);
 
         assertThat(id)
                 .isNotNull();

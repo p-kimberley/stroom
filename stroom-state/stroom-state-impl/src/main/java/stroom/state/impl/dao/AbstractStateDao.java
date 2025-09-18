@@ -1,7 +1,7 @@
 package stroom.state.impl.dao;
 
 import stroom.entity.shared.ExpressionCriteria;
-import stroom.expression.api.DateTimeSettings;
+import stroom.query.api.DateTimeSettings;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ValuesConsumer;
 import stroom.util.logging.LambdaLogger;
@@ -76,7 +76,7 @@ public abstract class AbstractStateDao<T> {
         return sessionProvider.get().execute(statement).one().getLong(0);
     }
 
-    public void condense(Instant oldest) {
+    public void condense(final Instant oldest) {
         // Not all implementations condense data.
     }
 

@@ -1,6 +1,6 @@
 package stroom.query.common.v2;
 
-import stroom.query.api.v2.Column;
+import stroom.query.api.Column;
 import stroom.query.common.v2.ExpressionPredicateFactory.ValueFunctionFactories;
 import stroom.query.common.v2.ExpressionPredicateFactory.ValueFunctionFactory;
 import stroom.query.common.v2.format.Formatter;
@@ -70,7 +70,7 @@ public class RowUtil {
             for (int i = 0; i < newColumns.size(); i++) {
                 final Column column = newColumns.get(i);
                 if (column.getName() != null) {
-                    Integer index = originalColumnIndex.get(column.getName());
+                    final Integer index = originalColumnIndex.get(column.getName());
                     if (index == null) {
                         arr[i] = -1;
                     } else {
@@ -94,12 +94,12 @@ public class RowUtil {
         return formatters;
     }
 
-    static ValueFunctionFactories<Val[]> createColumnIdValExtractors(final List<Column> newColumns) {
+    public static ValueFunctionFactories<Val[]> createColumnIdValExtractors(final List<Column> newColumns) {
         // Create the field position map for the new columns.
         final Map<String, ValueFunctionFactory<Val[]>> fieldPositionMap = new HashMap<>();
         for (int i = 0; i < newColumns.size(); i++) {
             final Column column = newColumns.get(i);
-            fieldPositionMap.put(column.getId(), new ValFunctionFactory(column, i));
+            fieldPositionMap.put(column.getId(), new ValArrayFunctionFactory(column, i));
         }
         return fieldPositionMap::get;
     }
@@ -109,7 +109,7 @@ public class RowUtil {
         final Map<String, ValueFunctionFactory<Val[]>> fieldPositionMap = new HashMap<>();
         for (int i = 0; i < newColumns.size(); i++) {
             final Column column = newColumns.get(i);
-            fieldPositionMap.put(column.getName(), new ValFunctionFactory(column, i));
+            fieldPositionMap.put(column.getName(), new ValArrayFunctionFactory(column, i));
         }
         return fieldPositionMap::get;
     }

@@ -22,21 +22,21 @@ import stroom.analytics.shared.ExecutionSchedule;
 import stroom.analytics.shared.ExecutionTracker;
 import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
-import stroom.expression.api.DateTimeSettings;
 import stroom.index.shared.IndexConstants;
 import stroom.node.api.NodeInfo;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.DestroyReason;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.ParamUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.DestroyReason;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.ParamUtil;
+import stroom.query.api.Query;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TableSettings;
 import stroom.query.common.v2.CompiledColumns;
 import stroom.query.common.v2.DataStore;
 import stroom.query.common.v2.ErrorConsumerImpl;
@@ -48,7 +48,7 @@ import stroom.query.common.v2.KeyFactory;
 import stroom.query.common.v2.OpenGroups;
 import stroom.query.common.v2.ResultStoreManager;
 import stroom.query.common.v2.ResultStoreManager.RequestAndStore;
-import stroom.query.common.v2.SimpleRowCreator;
+import stroom.query.common.v2.RowValueFilter;
 import stroom.query.common.v2.ValFilter;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.language.SearchRequestFactory;
@@ -59,12 +59,13 @@ import stroom.security.api.SecurityContext;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
 import stroom.ui.config.shared.AnalyticUiDefaultConfig;
-import stroom.util.NullSafe;
+import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.date.DateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.scheduler.Trigger;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import jakarta.inject.Inject;
@@ -74,7 +75,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -172,7 +172,7 @@ public class ScheduledQueryAnalyticExecutor extends AbstractScheduledQueryExecut
                     DateTimeSettings.builder().referenceTime(effectiveExecutionTime.toEpochMilli()).build(),
                     false);
             final ExpressionContext expressionContext = expressionContextFactory.createContext(sampleRequest);
-            SearchRequest mappedRequest = searchRequestFactory.create(query, sampleRequest, expressionContext);
+            final SearchRequest mappedRequest = searchRequestFactory.create(query, sampleRequest, expressionContext);
 
             // Fix table result requests.
             final List<ResultRequest> resultRequests = mappedRequest.getResultRequests();
@@ -275,37 +275,28 @@ public class ScheduledQueryAnalyticExecutor extends AbstractScheduledQueryExecut
                         final FormatterFactory formatterFactory =
                                 new FormatterFactory(sampleRequest.getDateTimeSettings());
 
-                        // Create the row creator.
-                        Optional<ItemMapper<Row>> optionalRowCreator = FilteredRowCreator.create(
-                                dataStore.getColumns(),
-                                columns,
-                                false,
-                                formatterFactory,
-                                keyFactory,
-                                tableSettings.getAggregateFilter(),
-                                expressionContext.getDateTimeSettings(),
-                                errorConsumer,
-                                expressionPredicateFactory);
-
-                        if (optionalRowCreator.isEmpty()) {
-                            optionalRowCreator = SimpleRowCreator.create(
+                        if (RowValueFilter.matches(columns)) {
+                            // Create the row creator.
+                            final ItemMapper<Row> rowCreator = FilteredRowCreator.create(
                                     dataStore.getColumns(),
                                     columns,
+                                    false,
                                     formatterFactory,
                                     keyFactory,
-                                    errorConsumer);
+                                    tableSettings.getAggregateFilter(),
+                                    expressionContext.getDateTimeSettings(),
+                                    errorConsumer,
+                                    expressionPredicateFactory);
+
+                            dataStore.fetch(
+                                    columns,
+                                    OffsetRange.UNBOUNDED,
+                                    OpenGroups.NONE,
+                                    resultRequest.getTimeFilter(),
+                                    rowCreator,
+                                    itemConsumer,
+                                    countConsumer);
                         }
-
-                        final ItemMapper<Row> rowCreator = optionalRowCreator.orElse(null);
-
-                        dataStore.fetch(
-                                columns,
-                                OffsetRange.UNBOUNDED,
-                                OpenGroups.NONE,
-                                resultRequest.getTimeFilter(),
-                                rowCreator,
-                                itemConsumer,
-                                countConsumer);
 
                     } finally {
                         final List<String> errors = errorConsumer.getErrors();
@@ -366,9 +357,13 @@ public class ScheduledQueryAnalyticExecutor extends AbstractScheduledQueryExecut
                 LOGGER.error(e2::getMessage, e2);
             }
 
-            // Disable future execution.
-            LOGGER.info(() -> LogUtil.message("Disabling: {}", RuleUtil.getRuleIdentity(analytic)));
-            executionScheduleDao.updateExecutionSchedule(executionSchedule.copy().enabled(false).build());
+            // Disable future execution if the error was not an interrupted exception.
+            if (!(e instanceof InterruptedException) &&
+                !(e instanceof UncheckedInterruptedException)) {
+                // Disable future execution.
+                LOGGER.info(() -> LogUtil.message("Disabling: {}", RuleUtil.getRuleIdentity(analytic)));
+                executionScheduleDao.updateExecutionSchedule(executionSchedule.copy().enabled(false).build());
+            }
 
         } finally {
             // Record the execution.
@@ -404,7 +399,7 @@ public class ScheduledQueryAnalyticExecutor extends AbstractScheduledQueryExecut
         //  we can pass some kind of json path query to the persistence layer that the DBPersistence
         //  can translate to a MySQL json path query.
         final List<AnalyticRuleDoc> currentRules = new ArrayList<>();
-        List<DocRef> docRefs = analyticRuleStore.list();
+        final List<DocRef> docRefs = analyticRuleStore.list();
         for (final DocRef docRef : docRefs) {
             try {
                 final AnalyticRuleDoc analyticRuleDoc = analyticRuleStore.readDocument(docRef);

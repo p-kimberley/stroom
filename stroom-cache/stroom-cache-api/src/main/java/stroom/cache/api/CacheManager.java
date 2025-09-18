@@ -18,6 +18,7 @@ package stroom.cache.api;
 
 import stroom.util.cache.CacheConfig;
 
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -101,7 +102,7 @@ public interface CacheManager extends AutoCloseable {
      */
     default <K, V> LoadingStroomCache<K, V> createLoadingCache(
             final String name,
-            final Supplier<CacheConfig> cacheConfigSupplier, Function<K, V> loadFunction) {
+            final Supplier<CacheConfig> cacheConfigSupplier, final Function<K, V> loadFunction) {
 
         return createLoadingCache(
                 name,
@@ -120,4 +121,6 @@ public interface CacheManager extends AutoCloseable {
      * Clears down all caches registered with {@link CacheManager}.
      */
     void close();
+
+    Set<String> getCacheNames();
 }

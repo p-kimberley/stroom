@@ -3,12 +3,12 @@ package stroom.query.common.v2;
 import stroom.bytebuffer.impl6.ByteBufferFactory;
 import stroom.lmdb2.LmdbDb;
 import stroom.lmdb2.WriteTxn;
-import stroom.query.api.v2.QueryKey;
+import stroom.query.api.QueryKey;
 import stroom.query.common.v2.SearchProgressLog.SearchPhase;
 import stroom.util.concurrent.CompleteException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
-import stroom.util.logging.Metrics;
+import stroom.util.logging.SimpleMetrics;
 
 import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
@@ -51,7 +51,7 @@ public class LmdbPayloadCreator {
      */
     void readPayload(final Input input) {
         SearchProgressLog.increment(queryKey, SearchPhase.LMDB_DATA_STORE_READ_PAYLOAD);
-        Metrics.measure("readPayload", () -> {
+        SimpleMetrics.measure("readPayload", () -> {
             // Determine how many bytes the payload contains.
             final int length = input.readInt();
             if (length > 0) {
@@ -61,13 +61,13 @@ public class LmdbPayloadCreator {
                     while (!in.end()) {
                         final int rowKeyLength = in.readInt();
                         final byte[] key = in.readBytes(rowKeyLength);
-                        ByteBuffer keyBuffer = bufferFactory.acquire(key.length);
+                        final ByteBuffer keyBuffer = bufferFactory.acquire(key.length);
                         keyBuffer.put(key, 0, key.length);
                         keyBuffer.flip();
 
                         final int valueLength = in.readInt();
                         final byte[] value = in.readBytes(valueLength);
-                        ByteBuffer valueBuffer = bufferFactory.acquire(value.length);
+                        final ByteBuffer valueBuffer = bufferFactory.acquire(value.length);
                         valueBuffer.put(value, 0, value.length);
                         valueBuffer.flip();
 
@@ -91,7 +91,7 @@ public class LmdbPayloadCreator {
     void writePayload(final Output output) {
         try {
             SearchProgressLog.increment(queryKey, SearchPhase.LMDB_DATA_STORE_WRITE_PAYLOAD);
-            Metrics.measure("writePayload", () -> {
+            SimpleMetrics.measure("writePayload", () -> {
                 try {
                     // Get the current payload.
                     final LmdbPayload payload = currentPayload.poll();
@@ -158,7 +158,7 @@ public class LmdbPayloadCreator {
                                       final LmdbDb db,
                                       final boolean complete) {
         SearchProgressLog.increment(queryKey, SearchPhase.LMDB_DATA_STORE_CREATE_PAYLOAD);
-        return Metrics.measure("createPayload", () -> {
+        return SimpleMetrics.measure("createPayload", () -> {
             if (maxPayloadSize > 0) {
                 final PayloadOutput payloadOutput = new PayloadOutput(minPayloadSize);
                 final AtomicBoolean finalPayload = new AtomicBoolean(complete);

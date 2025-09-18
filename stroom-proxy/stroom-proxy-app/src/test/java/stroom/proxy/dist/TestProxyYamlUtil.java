@@ -5,8 +5,8 @@ import stroom.proxy.app.ProxyYamlUtil;
 import stroom.proxy.app.SqsConnectorConfig;
 import stroom.proxy.app.handler.ForwardFileConfig;
 import stroom.proxy.app.handler.ForwardHttpPostConfig;
-import stroom.util.NullSafe;
 import stroom.util.io.DiffUtil;
+import stroom.util.shared.NullSafe;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -49,7 +49,7 @@ class TestProxyYamlUtil {
         final String actual;
         try {
             actual = getYamlFromJavaModel();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException("Error getting actual", e);
         }
         if (NullSafe.isBlankString(actual)) {
@@ -144,7 +144,7 @@ class TestProxyYamlUtil {
 
 
     private static ProxyConfig loadYamlFile(final String filename) throws FileNotFoundException {
-        Path path = getStroomProxyAppFile(filename);
+        final Path path = getStroomProxyAppFile(filename);
 
         try {
             return ProxyYamlUtil.readProxyConfig(path);

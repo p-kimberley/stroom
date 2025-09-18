@@ -5,15 +5,13 @@ import stroom.db.util.AbstractFlyWayDbModule;
 import stroom.db.util.DataSourceFactory;
 import stroom.db.util.JooqUtil;
 import stroom.util.ConsoleColour;
-import stroom.util.NullSafe;
-import stroom.util.db.ForceLegacyMigration;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.base.Strings;
-import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import jakarta.inject.Inject;
@@ -102,7 +100,7 @@ public abstract class AbstractSingleFlywayMigrationTest<
     protected abstract Class<T_CONN_PROV> getConnectionProviderType();
 
     @BeforeEach
-    void beforeEach(@TempDir Path tempDir) {
+    void beforeEach(@TempDir final Path tempDir) {
         LOGGER.info("Running all migrations up to and including {}, using test data {}",
                 getTargetVersion(), getTestDataVersion());
         this.testDataDir = tempDir;
@@ -112,18 +110,10 @@ public abstract class AbstractSingleFlywayMigrationTest<
         try {
             injector = Guice.createInjector(
                     new UniqueDbTestModule(),
-                    getDatasourceModule(),
-                    new AbstractModule() {
-                        @Override
-                        protected void configure() {
-                            bind(ForceLegacyMigration.class)
-                                    .toInstance(new ForceLegacyMigration() {
-                                    });
-                        }
-                    }
+                    getDatasourceModule()
             );
             injector.injectMembers(this);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             if (ExceptionUtils.getRootCause(e) instanceof SQLException) {
                 throw new RuntimeException("There is an error in the migrations or in the test data script", e);
             } else {
@@ -173,17 +163,17 @@ public abstract class AbstractSingleFlywayMigrationTest<
             final MigrationVersion testDataVersion = getTestDataVersion();
             final MigrationVersion targetVersion = getTargetVersion();
             final String filename = "V"
-                    + testDataVersion.getVersion()
-                    + "__test_data_for_"
-                    + targetVersion.getVersion()
-                    + ".sql";
+                                    + testDataVersion.getVersion()
+                                    + "__test_data_for_"
+                                    + targetVersion.getVersion()
+                                    + ".sql";
             final Path testDataFile = tempDir.resolve(filename);
 
             LOGGER.debug("Writing test data script to temporary file {}",
                     testDataFile.normalize().toAbsolutePath());
             try {
                 Files.writeString(testDataFile, testDataScriptContent);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException(e);
             }
         }
@@ -217,7 +207,7 @@ public abstract class AbstractSingleFlywayMigrationTest<
         if (lastPart == 1) {
             throw new RuntimeException(LogUtil.message(
                     "Can't work with a part number of 1. targetVersionStr: '{}'. " +
-                            "Make the last three digits of the script name a multiple of 5",
+                    "Make the last three digits of the script name a multiple of 5",
                     targetVersionStr));
         }
         final StringBuilder sb = new StringBuilder();

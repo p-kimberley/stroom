@@ -175,7 +175,7 @@ public class TabManager {
         menuItems.add(createHideMenu(tabLayoutConfig, tabConfig));
 
         // Create show menu.
-        Item showMenu = createShowMenu(tabLayoutConfig);
+        final Item showMenu = createShowMenu(tabLayoutConfig);
         if (showMenu != null) {
             menuItems.add(showMenu);
         }
@@ -202,7 +202,7 @@ public class TabManager {
 
             final EmbeddedQueryComponentSettings embeddedQueryComponentSettings =
                     (EmbeddedQueryComponentSettings) embeddedQueryPresenter.getSettings();
-            if (embeddedQueryComponentSettings.getQueryRef() != null) {
+            if (embeddedQueryComponentSettings.getQueryRef() != null || !embeddedQueryComponentSettings.reference()) {
                 menuItems.add(createEditQuery(embeddedQueryPresenter));
                 menuItems.add(createRunQuery(embeddedQueryPresenter));
             }

@@ -26,7 +26,7 @@ import java.util.Objects;
 
 @JsonPropertyOrder({"severity", "location", "elementId", "message"})
 @JsonInclude(Include.NON_NULL)
-public class StoredError implements Marker, Comparable<StoredError> {
+public final class StoredError implements Marker, Comparable<StoredError> {
 
     public static final String MESSAGE_CAUSE_DELIMITER = " > ";
     private static final String SPACE = " ";
@@ -63,7 +63,7 @@ public class StoredError implements Marker, Comparable<StoredError> {
         this.location = location;
         this.elementId = elementId;
         this.message = message;
-        this.errorType = GwtNullSafe.requireNonNullElse(errorType, ErrorType.UNKNOWN);
+        this.errorType = NullSafe.requireNonNullElse(errorType, ErrorType.UNKNOWN);
     }
 
     @Override

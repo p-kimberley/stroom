@@ -1,7 +1,7 @@
 package stroom.hyperlink.client;
 
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.gwt.http.client.URL;
 
@@ -40,7 +40,7 @@ public class Hyperlink {
         this.href = href;
         this.type = type;
         this.icon = icon;
-        this.urlDecoder = GwtNullSafe.requireNonNullElse(urlDecoder, DEFAULT_URL_DECODER);
+        this.urlDecoder = NullSafe.requireNonNullElse(urlDecoder, DEFAULT_URL_DECODER);
     }
 
     /**
@@ -99,7 +99,6 @@ public class Hyperlink {
         }
 
         final StringBuilder sb = new StringBuilder();
-        boolean foundEndChar = false;
         for (int i = pos + 1; i < value.length(); i++) {
             final char c = value.charAt(i);
             if (c == endChar) {

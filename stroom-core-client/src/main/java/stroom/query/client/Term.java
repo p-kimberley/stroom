@@ -17,7 +17,7 @@
 package stroom.query.client;
 
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionTerm.Condition;
 
 public final class Term extends Item {
 
@@ -58,7 +58,7 @@ public final class Term extends Item {
         return docRef;
     }
 
-    public void setDocRef(DocRef docRef) {
+    public void setDocRef(final DocRef docRef) {
         this.docRef = docRef;
     }
 

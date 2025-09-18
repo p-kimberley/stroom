@@ -22,7 +22,6 @@ import stroom.dashboard.impl.vis.VisSettings.Tab;
 import stroom.dashboard.impl.visualisation.VisualisationDocCache;
 import stroom.dashboard.impl.visualisation.VisualisationStore;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch.MatchType;
 import stroom.query.shared.CompletionItem;
 import stroom.query.shared.CompletionSnippet;
 import stroom.query.shared.CompletionsRequest;
@@ -31,17 +30,16 @@ import stroom.query.shared.QueryHelpDetail;
 import stroom.query.shared.QueryHelpDocument;
 import stroom.query.shared.QueryHelpRow;
 import stroom.query.shared.QueryHelpType;
-import stroom.util.NullSafe;
+import stroom.util.collections.TrimmedSortedList;
 import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.resultpage.ResultPageBuilder;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.string.AceStringMatcher;
 import stroom.util.string.AceStringMatcher.AceMatchResult;
-import stroom.util.string.StringMatcher;
 import stroom.visualisation.shared.VisualisationDoc;
 
 import jakarta.inject.Inject;
@@ -51,6 +49,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 @Singleton
 public class Visualisations {
@@ -80,24 +79,22 @@ public class Visualisations {
     private List<VisualisationDoc> getVisualisationDocs() {
         // TODO not ideal having to hit the DB to list all the docRefs then load
         //  each doc (albeit the load will probably be a cache hit)
-        final List<VisualisationDoc> list = visualisationStore.list()
+        return visualisationStore.list()
                 .stream()
                 .filter(Objects::nonNull)
                 .map(visualisationDocCache::get)
                 .toList();
-        return list;
     }
 
     public void addRows(final PageRequest pageRequest,
                         final String parentPath,
-                        final StringMatcher stringMatcher,
+                        final Predicate<String> predicate,
                         final ResultPageBuilder<QueryHelpRow> resultPageBuilder) {
         final List<VisualisationDoc> docs = getVisualisationDocs();
         if (parentPath.isBlank()) {
-            final boolean hasChildren = hasChildren(docs, stringMatcher);
+            final boolean hasChildren = hasChildren(docs, predicate);
             if (hasChildren ||
-                MatchType.ANY.equals(stringMatcher.getMatchType()) ||
-                stringMatcher.match(ROOT.getTitle()).isPresent()) {
+                predicate.test(ROOT.getTitle())) {
                 resultPageBuilder.add(ROOT.copy().hasChildren(hasChildren).build());
             }
         } else if (parentPath.startsWith(VISUALISATION_ID + ".")) {
@@ -106,7 +103,7 @@ public class Visualisations {
 
             for (final VisualisationDoc doc : docs) {
                 final DocRef docRef = doc.asDocRef();
-                if (stringMatcher.match(docRef.getDisplayValue()).isPresent()) {
+                if (predicate.test(docRef.getDisplayValue())) {
                     final QueryHelpRow row = QueryHelpRow
                             .builder()
                             .type(QueryHelpType.VISUALISATION)
@@ -160,7 +157,7 @@ public class Visualisations {
                         .map(matchResult -> createCompletionSnippet(matchResult.item(), matchResult.score()))
                         .forEach(resultList::add);
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error adding visualisation completions: {}", e.getMessage(), e);
         }
     }
@@ -187,10 +184,10 @@ public class Visualisations {
         return Optional.empty();
     }
 
-    private boolean hasChildren(final List<VisualisationDoc> docs, final StringMatcher stringMatcher) {
+    private boolean hasChildren(final List<VisualisationDoc> docs, final Predicate<String> predicate) {
         return docs.stream()
                 .map(VisualisationDoc::asDocRef)
-                .anyMatch(docRef -> stringMatcher.match(docRef.getDisplayValue()).isPresent());
+                .anyMatch(docRef -> predicate.test(docRef.getDisplayValue()));
     }
 
     private CompletionItem createCompletionSnippet(final VisualisationDoc doc, final int score) {
@@ -199,7 +196,7 @@ public class Visualisations {
         String snippetText;
         try {
             snippetText = getSnippetText(doc);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug(() -> "Error getting vis settings: " + e.getMessage(), e);
             // Fall back to a CompletionValue
             snippetText = getInsertText(doc.asDocRef());
@@ -226,14 +223,14 @@ public class Visualisations {
                 ? "\"" + doc.getName() + "\""
                 : doc.getName();
         final VisSettings visSettings = JsonUtil.readValue(doc.getSettings(), VisSettings.class);
-        final Tab dataTab = GwtNullSafe.stream(visSettings.getTabs())
+        final Tab dataTab = NullSafe.stream(visSettings.getTabs())
                 .filter(tab -> "data".equalsIgnoreCase(tab.getName()))
                 .findFirst()
                 .orElse(null);
-        final List<Control> dataControls = GwtNullSafe.asList(
-                GwtNullSafe.get(dataTab, Tab::getControls));
+        final List<Control> dataControls = NullSafe.asList(
+                NullSafe.get(dataTab, Tab::getControls));
 
-        StringBuilder sb = new StringBuilder(visName)
+        final StringBuilder sb = new StringBuilder(visName)
                 .append("(");
 
         int tabStop = 1;

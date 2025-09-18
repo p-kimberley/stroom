@@ -18,14 +18,16 @@
 package stroom.storedquery.impl.db;
 
 
+import stroom.cluster.lock.mock.MockClusterLockService;
 import stroom.dashboard.shared.FindStoredQueryCriteria;
 import stroom.dashboard.shared.StoredQuery;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.Query;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.Query;
 import stroom.security.api.SecurityContext;
+import stroom.security.shared.FindUserContext;
 import stroom.security.user.api.UserRefLookup;
 import stroom.storedquery.impl.StoredQueryConfig;
 import stroom.storedquery.impl.StoredQueryConfig.StoredQueryDbConfig;
@@ -87,10 +89,11 @@ class TestStoredQueryDao {
                 .uuid(UUID.randomUUID().toString())
                 .subjectId("owner")
                 .build();
-        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner.getUuid())))
+        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner.getUuid()), Mockito.eq(FindUserContext.RUN_AS)))
                 .thenReturn(Optional.of(owner));
 
         storedQueryDao = new StoredQueryDaoImpl(
+                new MockClusterLockService(),
                 storedQueryDbConnProvider,
                 new QueryJsonSerialiser(),
                 () -> userRefLookup);
@@ -191,7 +194,7 @@ class TestStoredQueryDao {
         ResultPage<StoredQuery> list = storedQueryDao.find(criteria);
         assertThat(list.size()).isEqualTo(2);
 
-        StoredQuery query = list.getFirst();
+        final StoredQuery query = list.getFirst();
 
         // Now insert the same query over 100 times.
         for (int i = 0; i < 120; i++) {
@@ -206,11 +209,11 @@ class TestStoredQueryDao {
             storedQueryDao.create(newQuery);
         }
 
-        UserRef owner2 = UserRef.builder()
+        final UserRef owner2 = UserRef.builder()
                 .uuid(UUID.randomUUID().toString())
                 .subjectId("owner2")
                 .build();
-        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner2.getUuid())))
+        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner2.getUuid()), Mockito.eq(FindUserContext.RUN_AS)))
                 .thenReturn(Optional.of(owner2));
 
         // Add in 10 for a different user
@@ -247,7 +250,7 @@ class TestStoredQueryDao {
         ResultPage<StoredQuery> list = storedQueryDao.find(criteria);
         assertThat(list.size()).isEqualTo(2);
 
-        StoredQuery query = list.getFirst();
+        final StoredQuery query = list.getFirst();
 
         // Add 10 more for owner with OLD create time
         // These will be deleted
@@ -278,11 +281,11 @@ class TestStoredQueryDao {
             storedQueryDao.create(newQuery);
         }
 
-        UserRef owner2 = UserRef.builder()
+        final UserRef owner2 = UserRef.builder()
                 .uuid(UUID.randomUUID().toString())
                 .subjectId("owner2")
                 .build();
-        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner2.getUuid())))
+        Mockito.when(userRefLookup.getByUuid(Mockito.eq(owner2.getUuid()), Mockito.eq(FindUserContext.RUN_AS)))
                 .thenReturn(Optional.of(owner2));
 
         // Add 10 more for owner2 with recent create time
@@ -311,7 +314,7 @@ class TestStoredQueryDao {
 
     @Test
     void testLoad() {
-        StoredQuery query = storedQueryDao.fetch(testQuery.getId()).orElse(null);
+        final StoredQuery query = storedQueryDao.fetch(testQuery.getId()).orElse(null);
 
         assertThat(query).isNotNull();
         assertThat(query.getName()).isEqualTo("Test query");

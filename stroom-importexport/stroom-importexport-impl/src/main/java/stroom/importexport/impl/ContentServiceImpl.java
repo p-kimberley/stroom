@@ -33,12 +33,13 @@ import stroom.util.logging.AsciiTable;
 import stroom.util.logging.AsciiTable.Column;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.logging.LogUtil;
 import stroom.util.shared.DocRefs;
 import stroom.util.shared.Message;
 import stroom.util.shared.PermissionException;
-import stroom.util.shared.QuickFilterResultPage;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
+import stroom.util.shared.ResultPage;
 
 import io.vavr.Tuple;
 import io.vavr.Tuple3;
@@ -113,6 +114,18 @@ class ContentServiceImpl implements ContentService {
         });
     }
 
+    @Override
+    public void abortImport(final ResourceKey resourceKey) {
+        if (resourceKey != null) {
+            try {
+                resourceStore.deleteTempFile(resourceKey);
+            } catch (final Exception e) {
+                // Just log and swallow as it is only a temp file
+                LOGGER.error("Unable to delete resourceKey {}: {}", resourceKey, LogUtil.exceptionMessage(e), e);
+            }
+        }
+    }
+
 //    @Override
 //    public List<ImportState> confirmImport(final ResourceKey resourceKey,
 //                                           final ImportSettings importSettings,
@@ -145,7 +158,7 @@ class ContentServiceImpl implements ContentService {
     }
 
     @Override
-    public QuickFilterResultPage<Dependency> fetchDependencies(final DependencyCriteria criteria) {
+    public ResultPage<Dependency> fetchDependencies(final DependencyCriteria criteria) {
         return securityContext.secureResult(() -> dependencyService.getDependencies(criteria));
     }
 
@@ -201,7 +214,7 @@ class ContentServiceImpl implements ContentService {
                 .map(docType -> Tuple.of(docType,
                         Objects.requireNonNullElse(exportSummary.getSuccessCountsByType().get(docType), 0),
                         Objects.requireNonNullElse(exportSummary.getFailedCountsByType().get(docType), 0)))
-                .collect(Collectors.toList());
+                .toList();
 
         final String typeCountsText = AsciiTable.builder(tableData)
                 .withColumn(Column.of("Type", Tuple3::_1))

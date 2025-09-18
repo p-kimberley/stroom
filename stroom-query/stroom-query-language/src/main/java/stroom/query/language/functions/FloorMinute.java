@@ -16,43 +16,37 @@
 
 package stroom.query.language.functions;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.ZonedDateTime;
 
 @SuppressWarnings("unused") //Used by FunctionFactory
 @FunctionDef(
         name = FloorMinute.NAME,
         commonCategory = FunctionCategory.DATE,
-        commonSubCategories = RoundDate.FLOOR_SUB_CATEGORY,
-        commonReturnType = ValLong.class,
-        commonReturnDescription = "The time as milliseconds since the epoch (1st Jan 1970).",
+        commonSubCategories = AbstractRoundDateTime.FLOOR_SUB_CATEGORY,
+        commonReturnType = ValDate.class,
+        commonReturnDescription = "The result date and time.",
         signatures = @FunctionSignature(
                 description = "Rounds the supplied time down to the start of the current minute.",
                 args = @FunctionArg(
                         name = "time",
-                        description = "The time to round in milliseconds since the epoch or as a string " +
-                                "formatted using the default date format.",
+                        description = "The time to round.",
                         argType = Val.class)))
-class FloorMinute extends RoundDate {
+class FloorMinute extends AbstractRoundDateTime {
 
     static final String NAME = "floorMinute";
-    private static final Calc CALC = new Calc();
 
-    public FloorMinute(final String name) {
-        super(name);
+    public FloorMinute(final ExpressionContext expressionContext, final String name) {
+        super(expressionContext, name);
     }
 
     @Override
-    protected RoundCalculator getCalculator() {
-        return CALC;
+    protected DateTimeAdjuster getAdjuster() {
+        return FloorMinute::floor;
     }
 
-    static class Calc extends RoundDateCalculator {
-
-
-        @Override
-        protected LocalDateTime adjust(final LocalDateTime dateTime) {
-            return dateTime.truncatedTo(ChronoUnit.MINUTES);
-        }
+    public static ZonedDateTime floor(final ZonedDateTime zonedDateTime) {
+        return zonedDateTime
+                .withSecond(0)
+                .withNano(0);
     }
 }

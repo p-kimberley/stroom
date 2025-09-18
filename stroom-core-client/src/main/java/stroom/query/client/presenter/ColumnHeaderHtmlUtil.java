@@ -1,14 +1,14 @@
 package stroom.query.client.presenter;
 
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.IncludeExcludeFilter;
-import stroom.query.api.v2.Sort;
+import stroom.query.api.Column;
+import stroom.query.api.IncludeExcludeFilter;
+import stroom.query.api.Sort;
 import stroom.svg.shared.SvgImage;
 import stroom.widget.util.client.SvgImageUtil;
 
 import com.google.gwt.safehtml.shared.SafeHtml;
 import com.google.gwt.safehtml.shared.SafeHtmlBuilder;
-import com.google.gwt.safehtml.shared.SafeHtmlUtils;
+import com.google.gwt.user.cellview.client.SortIcon;
 
 public class ColumnHeaderHtmlUtil {
 
@@ -18,6 +18,12 @@ public class ColumnHeaderHtmlUtil {
 
     public static SafeHtml getSafeHtml(final Column column) {
         final SafeHtmlBuilder sb = new SafeHtmlBuilder();
+        write(column, sb);
+        return sb.toSafeHtml();
+    }
+
+    public static void write(final Column column,
+                             final SafeHtmlBuilder sb) {
         sb.appendHtmlConstant("<div class=\"column-top\">");
 
         // Output name.
@@ -27,29 +33,17 @@ public class ColumnHeaderHtmlUtil {
 
         // Show group icon.
         if (column.getGroup() != null) {
-            // Show group icon.
-            sb.append(getSafeHtml(SvgImage.FIELDS_GROUP));
-
-            // Show group depth.
-            sb.append(SafeHtmlUtils
-                    .fromTrustedString("<div class=\"column-sortOrder\">" +
-                                       (column.getGroup() + 1) +
-                                       "</div>"));
+            SortIcon.append(sb,
+                    SvgImage.FIELDS_GROUP,
+                    "Group Level " + (column.getGroup() + 1),
+                    column.getGroup() + 1);
         }
 
         // Add sort icon.
         if (column.getSort() != null) {
-            if (Sort.SortDirection.ASCENDING == column.getSort().getDirection()) {
-                sb.append(getSafeHtml(SvgImage.FIELDS_SORTAZ));
-            } else {
-                sb.append(getSafeHtml(SvgImage.FIELDS_SORTZA));
-            }
-
-            // Add sort order.
-            sb.append(SafeHtmlUtils
-                    .fromTrustedString("<div class=\"column-sortOrder\">" +
-                                       (column.getSort().getOrder() + 1) +
-                                       "</div>"));
+            SortIcon.append(sb,
+                    Sort.SortDirection.ASCENDING == column.getSort().getDirection(),
+                    column.getSort().getOrder() + 1);
         }
 
         // Add filter icon.
@@ -62,8 +56,6 @@ public class ColumnHeaderHtmlUtil {
         }
 
         sb.appendHtmlConstant("</div>");
-
-        return sb.toSafeHtml();
     }
 
     private static SafeHtml getSafeHtml(final SvgImage svgImage) {

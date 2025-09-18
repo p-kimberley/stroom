@@ -2,6 +2,7 @@ package stroom.docstore.shared;
 
 import stroom.explorer.shared.ExplorerConstants;
 import stroom.svg.shared.SvgImage;
+import stroom.util.shared.NullSafe;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -146,6 +147,11 @@ public class DocumentTypeRegistry {
             "S3Config",
             "S3 Configuration",
             SvgImage.DOCUMENT_S3);
+    public static final DocumentType GIT_REPO_DOCUMENT_TYPE = new DocumentType(
+            DocumentTypeGroup.CONFIGURATION,
+            "GitRepo",
+            "GIT Repo",
+            SvgImage.DOCUMENT_GIT_REPO);
     public static final DocumentType SCRIPT_DOCUMENT_TYPE = new DocumentType(
             DocumentTypeGroup.CONFIGURATION,
             "Script",
@@ -193,6 +199,16 @@ public class DocumentTypeRegistry {
             "Annotations",
             "Annotations",
             SvgImage.DOCUMENT_SEARCHABLE);
+    public static final DocumentType ANNOTATION_DOCUMENT_TYPE = new DocumentType(
+            DocumentTypeGroup.SEARCH,
+            "Annotation",
+            "Annotation",
+            SvgImage.EDIT);
+    public static final DocumentType ANNOTATION_TAG_DOCUMENT_TYPE = new DocumentType(
+            DocumentTypeGroup.SEARCH,
+            "AnnotationGroup",
+            "Annotation Group",
+            SvgImage.EDIT);
     public static final DocumentType STREAM_STORE_DOCUMENT_TYPE = new DocumentType(
             DocumentTypeGroup.SEARCH,
             "StreamStore",
@@ -208,11 +224,17 @@ public class DocumentTypeRegistry {
             "ProcessorTasks",
             "Processor Tasks",
             SvgImage.DOCUMENT_SEARCHABLE);
+    public static final DocumentType PLAN_B_SHARD_INFO_DOCUMENT_TYPE = new DocumentType(
+            DocumentTypeGroup.SEARCH,
+            "PlanBShards",
+            "Plan B Shards",
+            SvgImage.DOCUMENT_SEARCHABLE);
 
 
     static {
         put(ANALYTICS_STORE_DOCUMENT_TYPE);
         put(ANALYTIC_RULE_DOCUMENT_TYPE);
+        put(ANNOTATION_DOCUMENT_TYPE);
         put(DASHBOARD_DOCUMENT_TYPE);
         put(DICTIONARY_DOCUMENT_TYPE);
         put(DOCUMENTATION_DOCUMENT_TYPE);
@@ -231,6 +253,7 @@ public class DocumentTypeRegistry {
         put(REPORT_DOCUMENT_TYPE);
         put(S3_CONFIG_DOCUMENT_TYPE);
         put(SCRIPT_DOCUMENT_TYPE);
+        put(GIT_REPO_DOCUMENT_TYPE);
         put(SCYLLA_DB_DOCUMENT_TYPE);
         put(SOLR_INDEX_DOCUMENT_TYPE);
         put(STATE_STORE_DOCUMENT_TYPE);
@@ -252,6 +275,7 @@ public class DocumentTypeRegistry {
         put(STREAM_STORE_DOCUMENT_TYPE);
         put(INDEX_SHARDS_DOCUMENT_TYPE);
         put(PROCESSOR_TASK_DOCUMENT_TYPE);
+        put(PLAN_B_SHARD_INFO_DOCUMENT_TYPE);
     }
 
     private static void put(final DocumentType documentType) {
@@ -266,11 +290,7 @@ public class DocumentTypeRegistry {
     }
 
     public static SvgImage getIcon(final String type) {
-        final DocumentType documentType = MAP.get(type);
-        if (documentType == null) {
-            return SvgImage.DOCUMENT_SEARCHABLE;
-        }
-        return documentType.getIcon();
+        return NullSafe.get(MAP.get(type), DocumentType::getIcon);
     }
 
     public static Collection<DocumentType> getTypes() {

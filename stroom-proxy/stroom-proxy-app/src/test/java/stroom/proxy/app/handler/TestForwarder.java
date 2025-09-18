@@ -5,9 +5,9 @@ import stroom.meta.api.AttributeMapUtil;
 import stroom.proxy.app.ProxyConfig;
 import stroom.test.common.DirectorySnapshot;
 import stroom.test.common.DirectorySnapshot.Snapshot;
-import stroom.util.NullSafe;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.FileUtil;
+import stroom.util.shared.NullSafe;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,13 +42,13 @@ class TestForwarder {
     private Path sourcesDir = null;
 
     @BeforeEach
-    void setUp(@TempDir Path dataDir) {
+    void setUp(@TempDir final Path dataDir) {
         this.dataDir = dataDir;
         this.sourcesDir = dataDir.resolve("sources");
     }
 
     @Test
-    void testAdd_singleFileForwarder(@TempDir Path dataDir) {
+    void testAdd_singleFileForwarder(@TempDir final Path dataDir) {
         final ProxyConfig proxyConfig = ProxyConfig.builder()
                 .forwardFileDestinations(List.of(buildForwardFileConfig(dataDir, 1)))
                 .forwardHttpDestinations(Collections.emptyList())
@@ -81,7 +81,7 @@ class TestForwarder {
     }
 
     @Test
-    void testAdd_multipleFileForwarders(@TempDir Path dataDir) {
+    void testAdd_multipleFileForwarders(@TempDir final Path dataDir) {
         final ProxyConfig proxyConfig = ProxyConfig.builder()
                 .forwardFileDestinations(List.of(
                         buildForwardFileConfig(dataDir, 1),
@@ -166,7 +166,7 @@ class TestForwarder {
                 final AttributeMap attributeMap = new AttributeMap(attrs);
                 AttributeMapUtil.write(attributeMap, meta);
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
         return sourceDir;

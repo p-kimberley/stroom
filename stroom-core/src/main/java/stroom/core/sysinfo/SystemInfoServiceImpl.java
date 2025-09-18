@@ -2,10 +2,10 @@ package stroom.core.sysinfo;
 
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.sysinfo.HasSystemInfo;
 import stroom.util.sysinfo.HasSystemInfo.ParamInfo;
@@ -80,7 +80,7 @@ public class SystemInfoServiceImpl implements SystemInfoService {
             return NullSafe.getAsOptional(
                     systemInfoSupplier,
                     supplier -> supplier.getSystemInfo(params));
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error getting system info for {} with params {}: {}",
                     providerName, params, e.getMessage(), e);
             throw e;

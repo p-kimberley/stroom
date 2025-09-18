@@ -1,10 +1,10 @@
 package stroom.query.language.functions;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
@@ -129,7 +129,7 @@ public class ValDurationUtil {
     }
 
     private static ValErr exceptionToValErr(final Exception e) {
-        if (e instanceof DateTimeParseException dtpe) {
+        if (e instanceof final DateTimeParseException dtpe) {
             String msg = e.getMessage().stripTrailing();
             msg = msg.endsWith(".")
                     ? e.getMessage()
@@ -158,9 +158,9 @@ public class ValDurationUtil {
             }
             // Not ISO 8601 so have a go with our ModelStringUtil format
             return ModelStringUtil.parseDurationString(value);
-        } catch (DateTimeParseException e) {
+        } catch (final DateTimeParseException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new DateTimeParseException(PARSE_ERROR_MESSAGE, value, 0);
         }
     }

@@ -28,7 +28,7 @@ import stroom.explorer.shared.ExplorerResource;
 import stroom.explorer.shared.NodeFlag;
 import stroom.explorer.shared.StandardExplorerTags;
 import stroom.security.shared.DocumentPermission;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.dropdowntree.client.view.DropDownUiHandlers;
 import stroom.widget.dropdowntree.client.view.DropDownView;
 
@@ -105,7 +105,7 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
     }
 
     public void setIncludedTypes(final Collection<String> includedTypes) {
-        explorerPopupPresenter.setIncludedTypes(GwtNullSafe.stream(includedTypes)
+        explorerPopupPresenter.setIncludedTypes(NullSafe.stream(includedTypes)
                 .toArray(String[]::new));
     }
 
@@ -114,12 +114,12 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
     }
 
     public void setTags(final Collection<String> tags) {
-        explorerPopupPresenter.setTags(GwtNullSafe.stream(tags)
+        explorerPopupPresenter.setTags(NullSafe.stream(tags)
                 .toArray(String[]::new));
     }
 
     public void setTags(final StandardExplorerTags... tags) {
-        explorerPopupPresenter.setTags(GwtNullSafe.stream(tags)
+        explorerPopupPresenter.setTags(NullSafe.stream(tags)
                 .map(StandardExplorerTags::getTagName)
                 .toArray(String[]::new));
     }
@@ -129,12 +129,12 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
     }
 
     public void setNodeFlags(final Collection<NodeFlag> nodeFlags) {
-        explorerPopupPresenter.setNodeFlags(GwtNullSafe.stream(nodeFlags)
+        explorerPopupPresenter.setNodeFlags(NullSafe.stream(nodeFlags)
                 .toArray(NodeFlag[]::new));
     }
 
     public void setRequiredPermissions(final DocumentPermission... requiredPermissions) {
-        this.requiredPermissions = GwtNullSafe.asSet(requiredPermissions);
+        this.requiredPermissions = NullSafe.asSet(requiredPermissions);
         explorerPopupPresenter.setRequiredPermissions(requiredPermissions);
 
         // In case this is called after setSelectedEntityReference, call that again to
@@ -231,15 +231,15 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
         errorMsg = buildNotFoundMessage(docRef);
         setFieldValue(docRef, errorMsg);
 
-        GwtNullSafe.run(onDocRefNotFound);
+        NullSafe.run(onDocRefNotFound);
     }
 
     public String buildNotFoundMessage(final DocRef docRef) {
         if (docRef != null) {
-            final String type = GwtNullSafe.requireNonNullElseGet(this.itemType, () ->
-                    GwtNullSafe.requireNonNullElse(docRef.getType(), "Document"));
+            final String type = NullSafe.requireNonNullElseGet(this.itemType, () ->
+                    NullSafe.requireNonNullElse(docRef.getType(), "Document"));
             final String uuid = docRef.getUuid();
-            final String displayName = GwtNullSafe.getOrElse(
+            final String displayName = NullSafe.getOrElse(
                     docRef.getName(),
                     name -> "'" + name + "' (" + uuid + ")",
                     uuid);
@@ -278,7 +278,7 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
     }
 
     private void changeSelection(final ExplorerNode selection) {
-        setFieldValue(GwtNullSafe.get(selection, ExplorerNode::getDocRef));
+        setFieldValue(NullSafe.get(selection, ExplorerNode::getDocRef));
     }
 
     private void setFieldValue(final DocRef value) {
@@ -289,8 +289,8 @@ public class DocSelectionBoxPresenter extends MyPresenterWidget<DropDownView>
         this.value = value;
         this.errorMsg = errorMsg;
         getView().setText(
-                GwtNullSafe.getOrElse(value, DocRef::getDisplayValue, NONE_DISPLAY_VALUE),
-                GwtNullSafe.isNonBlankString(errorMsg));
+                NullSafe.getOrElse(value, DocRef::getDisplayValue, NONE_DISPLAY_VALUE),
+                NullSafe.isNonBlankString(errorMsg));
     }
 
     public void setEnabled(final boolean enabled) {

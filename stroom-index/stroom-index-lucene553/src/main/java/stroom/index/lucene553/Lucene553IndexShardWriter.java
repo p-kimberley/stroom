@@ -16,8 +16,6 @@
 
 package stroom.index.lucene553;
 
-import stroom.datasource.api.v2.AnalyzerType;
-import stroom.datasource.api.v2.IndexField;
 import stroom.index.impl.IndexConfig;
 import stroom.index.impl.IndexDocument;
 import stroom.index.impl.IndexShardDao;
@@ -28,8 +26,9 @@ import stroom.index.impl.UncheckedLockObtainException;
 import stroom.index.lucene553.analyser.AnalyzerFactory;
 import stroom.index.shared.IndexException;
 import stroom.index.shared.IndexShard;
+import stroom.query.api.datasource.AnalyzerType;
+import stroom.query.api.datasource.IndexField;
 import stroom.search.extraction.FieldValue;
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathCreator;
 import stroom.util.logging.LambdaLogger;
@@ -37,6 +36,7 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.logging.LoggerPrintStream;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.time.StroomDuration;
 
 import org.apache.lucene553.analysis.Analyzer;
@@ -145,7 +145,7 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
             dir = IndexShardUtil.getIndexPath(indexShard, pathCreator);
             LOGGER.debug(() -> LogUtil.message("Creating index shard writer for dir {} {}", dir, this));
 
-            Directory directory;
+            final Directory directory;
 
             // Open the index writer.
             // If we already have a directory then this is an existing index.
@@ -216,11 +216,11 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
             if (indexShard.getDocumentCount() != numDocs) {
                 LOGGER.error(() ->
                         "Mismatch document count. Index says "
-                                + numDocs
-                                + " DB says "
-                                + indexShard.getDocumentCount()
-                                + " "
-                                + this);
+                        + numDocs
+                        + " DB says "
+                        + indexShard.getDocumentCount()
+                        + " "
+                        + this);
             }
 
             this.directory = directory;
@@ -250,7 +250,7 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
                 fieldAnalyzers.put(indexField.getFldName(), analyzer);
             }
 
-            org.apache.lucene553.document.Field field = FieldFactory.create(fieldValue);
+            final org.apache.lucene553.document.Field field = FieldFactory.create(fieldValue);
 
             // Add the current field to the document if it is not null.
             if (field != null) {
@@ -283,13 +283,13 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
                     if (duration.compareTo(slowIndexWriteWarningThreshold.getDuration()) > 0) {
                         LOGGER.warn(() ->
                                 "addDocument() - "
-                                        + this
-                                        + " took "
-                                        + duration
-                                        + " (Warning threshold: "
-                                        + slowIndexWriteWarningThreshold
-                                        + ". Configure this with property"
-                                        + " stroom.index.writer.slowIndexWriteWarningThreshold)");
+                                + this
+                                + " took "
+                                + duration
+                                + " (Warning threshold: "
+                                + slowIndexWriteWarningThreshold
+                                + ". Configure this with property"
+                                + " stroom.index.writer.slowIndexWriteWarningThreshold)");
                     }
                 }
             } catch (final RuntimeException e) {
@@ -330,8 +330,8 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
 
             LOGGER.debug(() ->
                     "Finished flush in " +
-                            ModelStringUtil.formatDurationString(System.currentTimeMillis() - startTime) +
-                            ") " + this);
+                    ModelStringUtil.formatDurationString(System.currentTimeMillis() - startTime) +
+                    ") " + this);
         }
     }
 
@@ -348,7 +348,7 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
                 try {
                     while (adding.get() > 0) {
                         LOGGER.debug(() -> "Waiting for " + adding.get() +
-                                " docs to finish being added before we can close this shard");
+                                           " docs to finish being added before we can close this shard");
                         Thread.sleep(1000);
                     }
                 } catch (final InterruptedException e) {
@@ -381,7 +381,9 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
             }
 
             LOGGER.debug(() -> "Finished close in " +
-                    ModelStringUtil.formatDurationString((System.currentTimeMillis() - startTime)) + ") " + this);
+                               ModelStringUtil.formatDurationString((System.currentTimeMillis() - startTime))
+                               + ") "
+                               + this);
         }
     }
 
@@ -473,9 +475,9 @@ class Lucene553IndexShardWriter implements IndexShardWriter {
     private String buildErrorMessage(final String message,
                                      final Throwable throwable) {
         return message
-                + " "
-                + NullSafe.getOrElse(throwable, Throwable::getMessage, "null")
-                + " "
-                + this;
+               + " "
+               + NullSafe.getOrElse(throwable, Throwable::getMessage, "null")
+               + " "
+               + this;
     }
 }

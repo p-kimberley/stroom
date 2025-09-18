@@ -4,9 +4,9 @@ import stroom.meta.api.AttributeMap;
 import stroom.meta.api.AttributeMapUtil;
 import stroom.test.common.DirectorySnapshot;
 import stroom.test.common.DirectorySnapshot.Snapshot;
-import stroom.util.NullSafe;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.FileUtil;
+import stroom.util.shared.NullSafe;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +50,7 @@ class TestMultiForwardDestination {
 
 
     @BeforeEach
-    void setUp(@TempDir Path tempDir) {
+    void setUp(@TempDir final Path tempDir) {
         baseDir = tempDir;
         copiesDir = baseDir.resolve("copies");
         FileUtil.ensureDirExists(copiesDir);
@@ -192,7 +192,7 @@ class TestMultiForwardDestination {
                 final AttributeMap attributeMap = new AttributeMap(attrs);
                 AttributeMapUtil.write(attributeMap, meta);
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
         return sourceDir;

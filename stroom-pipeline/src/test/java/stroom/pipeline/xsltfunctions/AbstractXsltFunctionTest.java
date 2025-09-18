@@ -3,12 +3,12 @@ package stroom.pipeline.xsltfunctions;
 import stroom.pipeline.LocationFactory;
 import stroom.pipeline.errorhandler.ErrorReceiver;
 import stroom.pipeline.shared.data.PipelineReference;
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Location;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import net.sf.saxon.expr.XPathContext;
@@ -19,6 +19,7 @@ import net.sf.saxon.om.Sequence;
 import net.sf.saxon.query.QueryResult;
 import net.sf.saxon.trans.XPathException;
 import net.sf.saxon.value.BooleanValue;
+import net.sf.saxon.value.DateTimeValue;
 import net.sf.saxon.value.DoubleValue;
 import net.sf.saxon.value.Int64Value;
 import net.sf.saxon.value.StringValue;
@@ -86,7 +87,7 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
         final Sequence sequence;
         try {
             sequence = xsltFunction.call(functionName, mockXPathContext, args);
-        } catch (XPathException e) {
+        } catch (final XPathException e) {
             throw new RuntimeException(
                     "Error calling function " + functionName + ": " + e.getMessage(), e);
         }
@@ -116,10 +117,10 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
                     NullSafe.getOrElse(
                             throwable,
                             t -> " - ("
-                                    + t.getClass().getSimpleName()
-                                    + ": "
-                                    + t.getMessage()
-                                    + ")",
+                                 + t.getClass().getSimpleName()
+                                 + ": "
+                                 + t.getMessage()
+                                 + ")",
                             ""));
 
             LOGGER.debug("Call to mock ErrorReceiver.log():\n{}", box);
@@ -206,6 +207,21 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
                 });
     }
 
+    protected static Optional<String> getAsDateTimeValue(final Sequence sequence) {
+        return Optional.ofNullable(sequence)
+                .map(sequence2 -> {
+                    if (sequence2 instanceof EmptyAtomicSequence) {
+                        return null;
+                    } else if (sequence2 instanceof DateTimeValue) {
+                        final String str = ((DateTimeValue) sequence2).getStringValue();
+                        LOGGER.debug("Got dateTime value:\n{}", str);
+                        return str;
+                    } else {
+                        return sequence.toString();
+                    }
+                });
+    }
+
     protected static Optional<Long> getAsLongValue(final Sequence sequence) {
         return Optional.ofNullable(sequence)
                 .map(sequence2 -> {
@@ -266,9 +282,9 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
                             final String xml = QueryResult.serialize((NodeInfo) sequence2);
                             LOGGER.debug("Got XML value:\n{}", xml);
                             return xml;
-                        } catch (XPathException e) {
+                        } catch (final XPathException e) {
                             throw new RuntimeException("Error serialising nodeInfo - "
-                                    + e.getMessage(), e);
+                                                       + e.getMessage(), e);
                         }
                     } else {
                         return sequence.toString();
@@ -329,7 +345,7 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
      */
     static Sequence[] buildFunctionArguments(final List<Object> args) {
         if (NullSafe.hasItems(args)) {
-            Sequence[] seqArr = new Sequence[args.size()];
+            final Sequence[] seqArr = new Sequence[args.size()];
             for (int i = 0; i < args.size(); i++) {
                 final Object val = args.get(i);
                 final Item item;
@@ -340,6 +356,8 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
                     item = BooleanValue.get((Boolean) val);
                 } else if (val instanceof Instant) {
                     item = convertInstantArg((Instant) val);
+                } else if (val instanceof DateTimeValue) {
+                    item = (DateTimeValue) val;
                 } else {
                     item = StringValue.makeStringValue(val.toString());
                 }
@@ -401,12 +419,12 @@ public abstract class AbstractXsltFunctionTest<T extends StroomExtensionFunction
         @Override
         public String toString() {
             return "LogArgs{" +
-                    "severity=" + severity +
-                    ", msg='" + message + '\'' +
-                    ", location=" + location +
-                    ", elementId='" + elementId + '\'' +
-                    ", throwable=" + throwable +
-                    '}';
+                   "severity=" + severity +
+                   ", msg='" + message + '\'' +
+                   ", location=" + location +
+                   ", elementId='" + elementId + '\'' +
+                   ", throwable=" + throwable +
+                   '}';
         }
     }
 }

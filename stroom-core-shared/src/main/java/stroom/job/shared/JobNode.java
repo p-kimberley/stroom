@@ -17,10 +17,10 @@
 package stroom.job.shared;
 
 
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.HasAuditInfo;
 import stroom.util.shared.HasIntegerId;
 import stroom.util.shared.HasPrimitiveValue;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PrimitiveValueConverter;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -175,7 +175,7 @@ public class JobNode implements HasAuditInfo, HasIntegerId {
      */
     @JsonIgnore
     public String getJobName() {
-        return GwtNullSafe.get(job, Job::getName);
+        return NullSafe.get(job, Job::getName);
     }
 
     public JobType getJobType() {
@@ -190,7 +190,7 @@ public class JobNode implements HasAuditInfo, HasIntegerId {
         return nodeName;
     }
 
-    public void setNodeName(String nodeName) {
+    public void setNodeName(final String nodeName) {
         this.nodeName = nodeName;
     }
 

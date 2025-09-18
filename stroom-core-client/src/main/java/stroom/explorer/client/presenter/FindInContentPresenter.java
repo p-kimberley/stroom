@@ -21,7 +21,6 @@ import stroom.data.grid.client.PagerView;
 import stroom.data.table.client.MyCellTable;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
-import stroom.docref.StringMatch;
 import stroom.document.client.event.OpenDocumentEvent;
 import stroom.editor.client.presenter.EditorPresenter;
 import stroom.explorer.client.event.ShowFindInContentEvent;
@@ -31,9 +30,10 @@ import stroom.explorer.shared.ExplorerResource;
 import stroom.explorer.shared.FetchHighlightsRequest;
 import stroom.explorer.shared.FindInContentRequest;
 import stroom.explorer.shared.FindInContentResult;
+import stroom.explorer.shared.StringMatch;
 import stroom.task.client.TaskMonitorFactory;
 import stroom.util.client.TextRangeUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.TextRange;
@@ -119,8 +119,8 @@ public class FindInContentPresenter
         };
         cellTable.addStyleName("FindCellTable");
 
-        selectionModel = new MultiSelectionModelImpl<>(cellTable);
-        SelectionEventManager<FindInContentResult> selectionEventManager = new SelectionEventManager<>(
+        selectionModel = new MultiSelectionModelImpl<>();
+        final SelectionEventManager<FindInContentResult> selectionEventManager = new SelectionEventManager<>(
                 cellTable,
                 selectionModel,
                 this::openDocument,
@@ -145,7 +145,7 @@ public class FindInContentPresenter
                 final boolean filterChange = !Objects.equals(lastFilter, currentQuery.getFilter());
                 lastFilter = currentQuery.getFilter();
 
-                if (GwtNullSafe.isBlankString(currentQuery.getFilter().getPattern())) {
+                if (NullSafe.isBlankString(currentQuery.getFilter().getPattern())) {
                     final ResultPage<FindInContentResult> resultPage = ResultPage.empty();
                     if (resultPage.getPageStart() != cellTable.getPageStart()) {
                         cellTable.setPageStart(resultPage.getPageStart());

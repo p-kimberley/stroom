@@ -4,17 +4,18 @@ import stroom.meta.api.AttributeMap;
 import stroom.meta.api.AttributeMapUtil;
 import stroom.meta.api.StandardHeaderArguments;
 import stroom.proxy.StroomStatusCode;
+import stroom.receive.common.DataReceiptMetrics;
 import stroom.receive.common.ReceiptIdGenerator;
 import stroom.receive.common.RequestAuthenticator;
 import stroom.receive.common.RequestHandler;
 import stroom.receive.common.StroomStreamException;
-import stroom.util.NullSafe;
 import stroom.util.cert.CertificateExtractor;
 import stroom.util.concurrent.UniqueId;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.net.HostNameUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,22 +43,31 @@ public class ProxyRequestHandler implements RequestHandler {
     private final CertificateExtractor certificateExtractor;
     private final ReceiverFactory receiverFactory;
     private final ReceiptIdGenerator receiptIdGenerator;
+    private final DataReceiptMetrics dataReceiptMetrics;
     private final String hostName;
 
     @Inject
     public ProxyRequestHandler(final RequestAuthenticator requestAuthenticator,
                                final CertificateExtractor certificateExtractor,
                                final ReceiverFactory receiverFactory,
-                               final ReceiptIdGenerator receiptIdGenerator) {
+                               final ReceiptIdGenerator receiptIdGenerator,
+                               final DataReceiptMetrics dataReceiptMetrics) {
         this.requestAuthenticator = requestAuthenticator;
         this.certificateExtractor = certificateExtractor;
         this.receiverFactory = receiverFactory;
         this.receiptIdGenerator = receiptIdGenerator;
+        this.dataReceiptMetrics = dataReceiptMetrics;
         this.hostName = HostNameUtil.determineHostName();
     }
 
     @Override
     public void handle(final HttpServletRequest request, final HttpServletResponse response) {
+        dataReceiptMetrics.timeRequest(() -> {
+            doHandle(request, response);
+        });
+    }
+
+    private void doHandle(final HttpServletRequest request, final HttpServletResponse response) {
         try {
             final Instant receiveTime = Instant.now();
 
@@ -90,12 +100,18 @@ public class ProxyRequestHandler implements RequestHandler {
                             StroomStatusCode.UNKNOWN_COMPRESSION, attributeMap, compressionVal));
 
             final Receiver receiver;
-            if (ZERO_CONTENT.equals(attributeMap.get(StandardHeaderArguments.CONTENT_LENGTH))) {
+            final String contentLength = attributeMap.get(StandardHeaderArguments.CONTENT_LENGTH);
+            dataReceiptMetrics.recordContentLength(contentLength);
+            if (ZERO_CONTENT.equals(contentLength)) {
                 LOGGER.warn("process() - Skipping Zero Content " + attributeMap);
                 receiver = null;
             } else {
                 receiver = receiverFactory.get(attributeMap);
-                receiver.receive(receiveTime, attributeMap, request.getRequestURI(), request::getInputStream);
+                receiver.receive(
+                        receiveTime,
+                        attributeMap,
+                        request.getRequestURI(),
+                        request::getInputStream);
             }
 
             response.setStatus(HttpStatus.SC_OK);

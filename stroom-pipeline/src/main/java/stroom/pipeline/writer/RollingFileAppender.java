@@ -25,10 +25,10 @@ import stroom.pipeline.factory.PipelineProperty;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.shared.data.PipelineElementType.Category;
 import stroom.svg.shared.SvgImage;
-import stroom.util.NullSafe;
 import stroom.util.io.CompressionUtil;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathCreator;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import org.apache.commons.compress.compressors.CompressorStreamFactory;
@@ -166,7 +166,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
         }
 
         // Get a path to use.
-        String path;
+        final String path;
         if (outputPaths.length == 1) {
             path = outputPaths[0];
         } else {
@@ -187,7 +187,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
 
         try {
             return PosixFilePermissions.fromString(filePermissions);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             LOGGER.debug("Invalid file permissions format: '" + filePermissions + "'");
             return null;
         }
@@ -214,7 +214,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
 
     @PipelineProperty(
             description = "One or more destination paths for output files separated with commas. " +
-                    "Replacement variables can be used in path strings such as ${feed}.",
+                          "Replacement variables can be used in path strings such as ${feed}.",
             displayPriority = 1)
     public void setOutputPaths(final String outputPaths) {
         this.outputPaths = outputPaths.split(",");
@@ -247,7 +247,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
 
     @PipelineProperty(
             description = "When the current output file exceeds this size it will be closed and a new one " +
-                    "created, e.g. 10M, 1G.",
+                          "created, e.g. 10M, 1G.",
             defaultValue = "100M",
             displayPriority = 6)
     public void setRollSize(final String rollSize) {
@@ -264,7 +264,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
 
     @PipelineProperty(
             description = "Compression method to apply, if compression is enabled. Supported values: " +
-                    CompressionUtil.SUPPORTED_COMPRESSORS + ".",
+                          CompressionUtil.SUPPORTED_COMPRESSORS + ".",
             defaultValue = CompressorStreamFactory.GZIP,
             displayPriority = 8)
     public void setCompressionMethod(final String compressionMethod) {
@@ -272,7 +272,7 @@ public class RollingFileAppender extends AbstractRollingAppender {
             if (CompressionUtil.isSupportedCompressor(compressionMethod)) {
                 this.compressionMethod = compressionMethod;
             } else {
-                String errorMsg = "Unsupported compression method: " + compressionMethod;
+                final String errorMsg = "Unsupported compression method: " + compressionMethod;
                 throw ProcessException.create(errorMsg);
             }
         }

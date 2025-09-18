@@ -5,7 +5,7 @@ import stroom.security.common.impl.ExternalIdpConfigurationProvider;
 import stroom.security.common.impl.IdpConfigurationProvider;
 import stroom.security.openid.api.IdpType;
 import stroom.security.openid.api.OpenIdConfigurationResponse;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -120,8 +120,13 @@ public class DelegatingIdpConfigurationProvider implements IdpConfigurationProvi
     }
 
     @Override
-    public boolean isValidateAudience() {
-        return delegate.isValidateAudience();
+    public Set<String> getAllowedAudiences() {
+        return delegate.getAllowedAudiences();
+    }
+
+    @Override
+    public boolean isAudienceClaimRequired() {
+        return delegate.isAudienceClaimRequired();
     }
 
     @Override
@@ -140,6 +145,11 @@ public class DelegatingIdpConfigurationProvider implements IdpConfigurationProvi
     }
 
     @Override
+    public String getFullNameClaimTemplate() {
+        return delegate.getFullNameClaimTemplate();
+    }
+
+    @Override
     public String getLogoutRedirectParamName() {
         return delegate.getLogoutRedirectParamName();
     }
@@ -147,5 +157,10 @@ public class DelegatingIdpConfigurationProvider implements IdpConfigurationProvi
     @Override
     public Set<String> getExpectedSignerPrefixes() {
         return delegate.getExpectedSignerPrefixes();
+    }
+
+    @Override
+    public String getPublicKeyUriPattern() {
+        return delegate.getPublicKeyUriPattern();
     }
 }

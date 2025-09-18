@@ -18,26 +18,26 @@ package stroom.search.impl;
 
 import stroom.bytebuffer.impl6.ByteBufferFactoryImpl;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
 import stroom.lmdb.LmdbLibrary;
 import stroom.lmdb.LmdbLibraryConfig;
 import stroom.lmdb2.LmdbEnvDirFactory;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.Format;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.ResultRequest.Fetch;
-import stroom.query.api.v2.ResultRequest.ResultStyle;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchResponse;
-import stroom.query.api.v2.Sort;
-import stroom.query.api.v2.Sort.SortDirection;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.Format;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.ResultRequest.Fetch;
+import stroom.query.api.ResultRequest.ResultStyle;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchResponse;
+import stroom.query.api.Sort;
+import stroom.query.api.Sort.SortDirection;
+import stroom.query.api.TableSettings;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.Coprocessors;
 import stroom.query.common.v2.CoprocessorsFactory;
@@ -123,7 +123,7 @@ class TestSearchResultCreation {
                 () -> executorService,
                 new MapDataStoreFactory(SearchResultStoreConfig::new),
                 new ByteBufferFactoryImpl(),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
     }
 
     @AfterEach
@@ -176,7 +176,7 @@ class TestSearchResultCreation {
                 "node",
                 new ResultStoreSettingsFactory().get(),
                 new MapDataStoreFactory(SearchResultStoreConfig::new),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         // Mark the collector as artificially complete.
         resultStore.signalComplete();
 
@@ -311,7 +311,7 @@ class TestSearchResultCreation {
                 "node",
                 new ResultStoreSettingsFactory().get(),
                 new MapDataStoreFactory(SearchResultStoreConfig::new),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         // Mark the collector as artificially complete.
         resultStore.signalComplete();
 
@@ -392,7 +392,7 @@ class TestSearchResultCreation {
                 "node",
                 new ResultStoreSettingsFactory().get(),
                 new MapDataStoreFactory(SearchResultStoreConfig::new),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         // Mark the collector as artificially complete.
         resultStore.signalComplete();
 
@@ -507,7 +507,7 @@ class TestSearchResultCreation {
                 "node",
                 new ResultStoreSettingsFactory().get(),
                 new MapDataStoreFactory(SearchResultStoreConfig::new),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         // Mark the collector as artificially complete.
         resultStore.signalComplete();
 
@@ -581,7 +581,7 @@ class TestSearchResultCreation {
         final Map<DocRef, ValuesConsumer> receivers = new HashMap<>();
         coprocessors.forEachExtractionCoprocessor((docRef, coprocessorSet) -> {
             // Create a receiver that will send data to all coprocessors.
-            ValuesConsumer receiver;
+            final ValuesConsumer receiver;
             if (coprocessorSet.size() == 1) {
                 receiver = coprocessorSet.iterator().next();
             } else {

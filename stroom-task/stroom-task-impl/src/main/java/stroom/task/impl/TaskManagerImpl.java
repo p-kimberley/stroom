@@ -17,6 +17,11 @@
 package stroom.task.impl;
 
 import stroom.node.api.NodeInfo;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.common.v2.ExpressionPredicateFactory;
+import stroom.query.common.v2.FieldProviderImpl;
+import stroom.query.common.v2.SimpleStringExpressionParser.FieldProvider;
+import stroom.query.common.v2.ValueFunctionFactoriesImpl;
 import stroom.security.api.SecurityContext;
 import stroom.security.api.UserIdentity;
 import stroom.security.shared.AppPermission;
@@ -28,14 +33,11 @@ import stroom.task.shared.FindTaskProgressCriteria;
 import stroom.task.shared.TaskId;
 import stroom.task.shared.TaskProgress;
 import stroom.task.shared.TaskProgress.FilterMatchState;
-import stroom.util.NullSafe;
-import stroom.util.filter.FilterFieldMapper;
-import stroom.util.filter.FilterFieldMappers;
-import stroom.util.filter.QuickFilterPredicateFactory;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.servlet.SessionIdProvider;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 
@@ -59,32 +61,39 @@ class TaskManagerImpl implements TaskManager {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(TaskManagerImpl.class);
 
-    public static final FilterFieldMappers<TaskProgress> FIELD_MAPPERS = FilterFieldMappers.of(
-            FilterFieldMapper.of(FindTaskProgressCriteria.FIELD_DEF_NODE, TaskProgress::getNodeName),
-            FilterFieldMapper.of(FindTaskProgressCriteria.FIELD_DEF_NAME, TaskProgress::getTaskName),
-            FilterFieldMapper.of(FindTaskProgressCriteria.FIELD_DEF_USER, (TaskProgress taskProgress) ->
-                    NullSafe.get(taskProgress, TaskProgress::getUserRef, UserRef::getDisplayName)),
-            FilterFieldMapper.of(FindTaskProgressCriteria.FIELD_DEF_SUBMIT_TIME, (TaskProgress taskProgress) ->
-                    Instant.ofEpochMilli(taskProgress.getSubmitTimeMs()).toString()),
-            FilterFieldMapper.of(FindTaskProgressCriteria.FIELD_DEF_INFO, TaskProgress::getTaskInfo)
-    );
+    private static final ValueFunctionFactoriesImpl<TaskProgress> VALUE_FUNCTION_FACTORIES =
+            new ValueFunctionFactoriesImpl<TaskProgress>()
+                    .put(FindTaskProgressCriteria.FIELD_DEF_NODE, TaskProgress::getNodeName)
+                    .put(FindTaskProgressCriteria.FIELD_DEF_NAME, TaskProgress::getTaskName)
+                    .put(FindTaskProgressCriteria.FIELD_DEF_USER, (TaskProgress taskProgress) ->
+                            NullSafe.get(taskProgress, TaskProgress::getUserRef, UserRef::getDisplayName))
+                    .put(FindTaskProgressCriteria.FIELD_DEF_SUBMIT_TIME, (TaskProgress taskProgress) ->
+                            Instant.ofEpochMilli(taskProgress.getSubmitTimeMs()).toString())
+                    .put(FindTaskProgressCriteria.FIELD_DEF_INFO, TaskProgress::getTaskInfo);
+    private static final FieldProvider FIELD_PROVIDER =
+            new FieldProviderImpl(FindTaskProgressCriteria.FIELD_DEFINITIONS);
+
 
     private final SessionIdProvider sessionIdProvider;
     private final SecurityContext securityContext;
     private final ExecutorProviderImpl executorProvider;
     private final TaskRegistry taskRegistry;
     private final String thisNodeName;
+    private final ExpressionPredicateFactory expressionPredicateFactory;
 
     @Inject
     TaskManagerImpl(final NodeInfo nodeInfo,
                     final SessionIdProvider sessionIdProvider,
                     final SecurityContext securityContext,
                     final ExecutorProviderImpl executorProvider,
-                    final TaskRegistry taskRegistry) {
+                    final TaskRegistry taskRegistry,
+                    final ExpressionPredicateFactory expressionPredicateFactory) {
         this.sessionIdProvider = sessionIdProvider;
         this.securityContext = securityContext;
         this.executorProvider = executorProvider;
         this.taskRegistry = taskRegistry;
+        this.expressionPredicateFactory = expressionPredicateFactory;
+
         // Node name is from read-only config, so we can hold it as an instance variable
         // on this singleton
         this.thisNodeName = nodeInfo.getThisNodeName();
@@ -215,13 +224,18 @@ class TaskManagerImpl implements TaskManager {
         final String nameFilter = NullSafe.get(findTaskProgressCriteria, FindTaskProgressCriteria::getNameFilter);
         if (!NullSafe.isBlankString(nameFilter)) {
             LOGGER.debug("Using nameFilter: '{}'", nameFilter);
-            fuzzyMatchPredicate = QuickFilterPredicateFactory.createFuzzyMatchPredicate(nameFilter, FIELD_MAPPERS);
+            fuzzyMatchPredicate = expressionPredicateFactory.create(
+                    nameFilter,
+                    FIELD_PROVIDER,
+                    VALUE_FUNCTION_FACTORIES,
+                    DateTimeSettings.builder().build());
         } else {
             LOGGER.debug("No nameFilter, match all");
             fuzzyMatchPredicate = taskProgress -> true;
         }
 
-        final String criteriaSessionId = NullSafe.get(findTaskProgressCriteria, FindTaskProgressCriteria::getSessionId);
+        final String criteriaSessionId = NullSafe.get(findTaskProgressCriteria,
+                FindTaskProgressCriteria::getSessionId);
         // Only add this task progress if it matches the supplied criteria.
         final Predicate<TaskContextImpl> sessionIdPredicate;
         if (criteriaSessionId == null) {
@@ -241,7 +255,7 @@ class TaskManagerImpl implements TaskManager {
                 .filter(sessionIdPredicate)
                 .map(taskContext ->
                         buildFilteredTaskProgress(timeNowMs, taskContext, fuzzyMatchPredicate))
-                .collect(Collectors.toList());
+                .toList();
 
         // For DEV testing uncomment this line to send dummy data to UI so you have some thing to
         // look at in the UI.
@@ -362,10 +376,10 @@ class TaskManagerImpl implements TaskManager {
         final List<TaskProgress> colourTasks = taskNames.stream()
                 .flatMap(taskname -> {
                     // Need to make sure task IDs are unique over the cluster
-                    TaskId grandparentTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(), null);
-                    TaskId parentTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(),
+                    final TaskId grandparentTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(), null);
+                    final TaskId parentTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(),
                             grandparentTaskId);
-                    TaskId childTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(),
+                    final TaskId childTaskId = new TaskId(thisNodeName + "-" + id.incrementAndGet(),
                             parentTaskId);
                     return Stream.of(
                             Tuple.of(taskname + "-grandparent", grandparentTaskId),
@@ -373,8 +387,8 @@ class TaskManagerImpl implements TaskManager {
                             Tuple.of(taskname + "-child", childTaskId));
                 })
                 .map(tuple2 -> {
-                    String taskName = tuple2._1();
-                    TaskId taskId = tuple2._2();
+                    final String taskName = tuple2._1();
+                    final TaskId taskId = tuple2._2();
                     String taskInfo = "taskInfo-" + taskName;
                     // Make a long taskInfo so we can test cell wrapping
                     for (int i = 0; i < 3; i++) {
@@ -414,6 +428,6 @@ class TaskManagerImpl implements TaskManager {
                 null);
 
         return Stream.concat(colourTasks.stream(), Stream.of(orphanedTask))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

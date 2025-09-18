@@ -1,7 +1,6 @@
 package stroom.test.common;
 
 import stroom.test.common.DynamicTestBuilder.InitialBuilder;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.ThreadUtil;
 import stroom.util.logging.AsciiTable;
 import stroom.util.logging.AsciiTable.Column;
@@ -11,6 +10,7 @@ import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,7 +48,8 @@ public class TestUtil {
     }
 
     /**
-     * Build a {@link Provider} for a mocked class.
+     * Build a {@link Provider} that will provide a mock for the supplied class.
+     * Useful for constructors whose arguments are all providers.
      */
     public static <T> Provider<T> mockProvider(final Class<T> type) {
         return () -> Mockito.mock(type);
@@ -253,7 +254,7 @@ public class TestUtil {
         final String json;
         try {
             json = objectMapper.writeValueAsString(object);
-        } catch (JsonProcessingException e) {
+        } catch (final JsonProcessingException e) {
             throw new RuntimeException(LogUtil.message(
                     "Error serialising {}: {}", object, e.getMessage()), e);
         }
@@ -267,7 +268,7 @@ public class TestUtil {
         final T object2;
         try {
             object2 = objectMapper.readValue(json, clazz);
-        } catch (JsonProcessingException e) {
+        } catch (final JsonProcessingException e) {
             throw new RuntimeException(LogUtil.message(
                     "Error deserialising {}: {}", json, e.getMessage()), e);
         }

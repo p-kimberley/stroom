@@ -3,19 +3,20 @@ package stroom.security.impl.db;
 import stroom.db.util.ExpressionMapper;
 import stroom.db.util.ExpressionMapperFactory;
 import stroom.db.util.JooqUtil;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
 import stroom.security.impl.UserDao;
+import stroom.security.shared.FindUserContext;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.User;
 import stroom.security.shared.UserFields;
-import stroom.util.NullSafe;
 import stroom.util.exception.DataChangedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.BaseCriteria;
 import stroom.util.shared.CriteriaFieldSort;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserInfo;
 import stroom.util.shared.UserRef;
@@ -29,6 +30,7 @@ import org.jooq.OrderField;
 import org.jooq.Record;
 import org.jooq.exception.DataAccessException;
 import org.jooq.exception.IntegrityConstraintViolationException;
+import org.jooq.impl.DSL;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -190,18 +192,35 @@ public class UserDaoImpl implements UserDao {
         return JooqUtil.contextResult(securityDbConnProvider, context -> getByUuid(context, uuid));
     }
 
+    @Override
+    public Optional<User> getByUuid(final String uuid, final String currentUserUuid, final FindUserContext context) {
+        return JooqUtil.contextResult(securityDbConnProvider, ctx -> {
+            Condition condition = STROOM_USER.UUID.eq(uuid);
+            condition = addRelatedUserCondition(condition, currentUserUuid, context);
+            final Optional<User> optUser = get(ctx, condition);
+            LOGGER.debug("getByUuid - uuid: {}, returning: {}", uuid, optUser);
+            return optUser;
+        });
+    }
+
     /**
      * Get user or group by their UUID.
      */
-    public Optional<User> getByUuid(final DSLContext context, final String uuid) {
-        final Optional<User> optUser = context
-                .select()
-                .from(STROOM_USER)
-                .where(STROOM_USER.UUID.eq(uuid))
-                .fetchOptional()
-                .map(RECORD_TO_USER_MAPPER);
+    public Optional<User> getByUuid(final DSLContext context,
+                                    final String uuid) {
+        final Optional<User> optUser = get(context, STROOM_USER.UUID.eq(uuid));
         LOGGER.debug("getByUuid - uuid: {}, returning: {}", uuid, optUser);
         return optUser;
+    }
+
+    private Optional<User> get(final DSLContext context,
+                               final Condition condition) {
+        return context
+                .select()
+                .from(STROOM_USER)
+                .where(condition)
+                .fetchOptional()
+                .map(RECORD_TO_USER_MAPPER);
     }
 
     @Override
@@ -276,7 +295,8 @@ public class UserDaoImpl implements UserDao {
         final List<String> fields = ExpressionUtil.fields(criteria.getExpression());
 
         Condition condition = expressionMapper.apply(criteria.getExpression());
-        if (criteria.isActiveUsersOnly()) {
+        if (FindUserContext.ANNOTATION_ASSIGNMENT.equals(criteria.getContext()) ||
+            FindUserContext.RUN_AS.equals(criteria.getContext())) {
             condition = condition.and(STROOM_USER.ENABLED.isTrue());
         }
 
@@ -295,8 +315,59 @@ public class UserDaoImpl implements UserDao {
         } else {
             list = getMatchingUsersOrGroups(condition, orderFields, offset, limit);
         }
-
         return ResultPage.createCriterialBasedList(list, criteria);
+    }
+
+    @Override
+    public ResultPage<User> findRelatedUsers(final String currentUserUuid, final FindUserCriteria criteria) {
+        final List<String> fields = ExpressionUtil.fields(criteria.getExpression());
+
+        Condition condition = expressionMapper.apply(criteria.getExpression());
+        condition = addRelatedUserCondition(condition, currentUserUuid, criteria.getContext());
+
+        final Collection<OrderField<?>> orderFields = createOrderFields(criteria);
+        final int limit = JooqUtil.getLimit(criteria.getPageRequest(), true);
+        final int offset = JooqUtil.getOffset(criteria.getPageRequest());
+
+        LOGGER.debug("findRelatedUsers - criteria: {}, fields: {}, condition: {}, limit: {}, offset: {}",
+                criteria, fields, condition, limit, offset);
+
+        final List<User> list = getMatchingUsersOrGroups(condition, orderFields, offset, limit);
+        return ResultPage.createCriterialBasedList(list, criteria);
+    }
+
+    private Condition addRelatedUserCondition(final Condition condition,
+                                              final String currentUserUuid,
+                                              final FindUserContext context) {
+        if (FindUserContext.ANNOTATION_ASSIGNMENT.equals(context)) {
+            // Get immediate parent groups for the supplied user.
+            final var selectParentGroupUuids = DSL
+                    .selectDistinct(STROOM_USER_GROUP.GROUP_UUID)
+                    .from(STROOM_USER_GROUP)
+                    .where(STROOM_USER_GROUP.USER_UUID.eq(currentUserUuid));
+            // Get siblings users for all parent groups (this will obviously include the supplied user).
+            final var selectSiblingUsers = DSL
+                    .selectDistinct(STROOM_USER_GROUP.USER_UUID)
+                    .from(STROOM_USER_GROUP)
+                    .where(STROOM_USER_GROUP.GROUP_UUID.in(selectParentGroupUuids));
+            return condition
+                    .and(STROOM_USER.ENABLED.isTrue())
+                    .and(STROOM_USER.UUID.in(selectParentGroupUuids).or(STROOM_USER.UUID.in(selectSiblingUsers)));
+
+        } else if (FindUserContext.RUN_AS.equals(context)) {
+            // Get immediate parent groups for the supplied user.
+            final var selectParentGroupUuids = DSL
+                    .selectDistinct(STROOM_USER_GROUP.GROUP_UUID)
+                    .from(STROOM_USER_GROUP)
+                    .where(STROOM_USER_GROUP.USER_UUID.eq(currentUserUuid));
+            return condition
+                    .and(STROOM_USER.ENABLED.isTrue())
+                    .and(STROOM_USER.UUID.in(selectParentGroupUuids).or(STROOM_USER.UUID.eq(currentUserUuid)));
+        }
+
+        return condition
+                .and(STROOM_USER.ENABLED.isTrue())
+                .and(STROOM_USER.UUID.eq(currentUserUuid));
     }
 
     private List<User> getMatchingUsersOrGroups(final Condition condition,
@@ -381,8 +452,8 @@ public class UserDaoImpl implements UserDao {
             nameToFieldMap = SORT_FIELD_NAME_TO_FIELD_MAP;
         }
 
-        final List<CriteriaFieldSort> sortList = new ArrayList<>(NullSafe
-                .getOrElseGet(criteria, BaseCriteria::getSortList, Collections::emptyList));
+        final List<CriteriaFieldSort> sortList = NullSafe.mutableList(
+                NullSafe.get(criteria, BaseCriteria::getSortList));
         if (sortList.isEmpty()) {
             return Collections.singleton(DEFAULT_SORT_FIELD);
         }
@@ -471,7 +542,7 @@ public class UserDaoImpl implements UserDao {
                     .execute());
             LOGGER.debug("addUserToGroup - userUuid: {}, groupUuid: {}, count: {}",
                     userUuid, groupUuid, insertCount);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException(LogUtil.message(
                     "Error adding user to group - userUuid: {}, groupUuid: {}", userUuid, groupUuid), e);
         }
@@ -488,7 +559,7 @@ public class UserDaoImpl implements UserDao {
                     .execute());
             LOGGER.debug("removeUserFromGroup - userUuid: {}, groupUuid: {}, count: {}",
                     userUuid, groupUuid, updateCount);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException(LogUtil.message(
                     "Error removing user from group - userUuid: {}, groupUuid: {}", userUuid, groupUuid), e);
         }
@@ -528,7 +599,7 @@ public class UserDaoImpl implements UserDao {
 
             LOGGER.debug("insertOrUpdateStroomUserArchiveRecord - changeCount: {} for userUuid: {}",
                     changeCount, userUuid);
-        } catch (DataAccessException e) {
+        } catch (final DataAccessException e) {
             throw new RuntimeException(LogUtil.message("Error upserting archive record for userUuid {}", userUuid), e);
         }
     }

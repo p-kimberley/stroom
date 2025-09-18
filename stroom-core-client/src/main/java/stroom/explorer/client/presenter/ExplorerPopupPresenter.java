@@ -28,7 +28,7 @@ import stroom.explorer.shared.NodeFlag;
 import stroom.security.shared.DocumentPermission;
 import stroom.task.client.TaskMonitorFactory;
 import stroom.ui.config.client.UiConfigCache;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.dropdowntree.client.view.ExplorerPopupUiHandlers;
 import stroom.widget.dropdowntree.client.view.ExplorerPopupView;
 import stroom.widget.dropdowntree.client.view.QuickFilterTooltipUtil;
@@ -43,6 +43,7 @@ import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
 import com.gwtplatform.mvp.client.MyPresenterWidget;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class ExplorerPopupPresenter
@@ -98,12 +99,7 @@ public class ExplorerPopupPresenter
     protected void onHide() {
     }
 
-    public void show(final Consumer<DocRef> onHideOk) {
-        show(onHideOk, null);
-    }
-
-    public void show(final Consumer<DocRef> onHideOk, final Runnable onShow) {
-
+    public void show(final BiConsumer<DocRef, HidePopupRequestEvent> consumer) {
         refresh();
         final PopupSize popupSize = PopupSize.resizable(500, 550);
 
@@ -112,18 +108,15 @@ public class ExplorerPopupPresenter
                 .popupSize(popupSize)
                 .caption(caption)
                 .onShow(e -> {
-                    GwtNullSafe.run(onShow);
                     getView().focus();
                 })
                 .onHideRequest(e -> {
                     if (e.isOk()) {
                         final ExplorerNode selected = getSelectedEntityData();
                         if (isSelectionAllowed(selected)) {
-//                            selection = selected;
                             selectionChangeConsumer.accept(selected);
                             explorerTree.getSelectionModel().setSelected(selected);
-                            onHideOk.accept(GwtNullSafe.get(selected, ExplorerNode::getDocRef));
-                            e.hide();
+                            consumer.accept(NullSafe.get(selected, ExplorerNode::getDocRef), e);
                         } else {
                             AlertEvent.fireError(ExplorerPopupPresenter.this,
                                     "You must choose a valid item.", e::reset);
@@ -133,6 +126,18 @@ public class ExplorerPopupPresenter
                     }
                 })
                 .fire();
+    }
+
+    public void show(final Consumer<DocRef> consumer) {
+        show((docRef, e) -> {
+            try {
+                consumer.accept(docRef);
+            } catch (final RuntimeException ex) {
+                AlertEvent.fireErrorFromException(ExplorerPopupPresenter.this, ex, null);
+            } finally {
+                e.hide();
+            }
+        });
     }
 
     protected void setIncludeNullSelection(final boolean includeNullSelection) {
@@ -204,27 +209,27 @@ public class ExplorerPopupPresenter
     }
 
     public DocRef getSelectedEntityReference() {
-        return GwtNullSafe.get(getSelectedEntityData(), ExplorerNode::getDocRef);
+        return NullSafe.get(getSelectedEntityData(), ExplorerNode::getDocRef);
     }
 
     public void setSelectedEntityReference(final DocRef docRef) {
         setSelectedEntityReference(docRef, null);
     }
 
-    public void setSelectedEntityReference(final DocRef docRef, Runnable onSetSelected) {
+    public void setSelectedEntityReference(final DocRef docRef, final Runnable onSetSelected) {
         if (docRef != null) {
             restFactory
                     .create(EXPLORER_RESOURCE)
                     .method(res -> res.getFromDocRef(docRef))
                     .onSuccess(explorerNode -> {
                         setSelectedEntityData(explorerNode);
-                        GwtNullSafe.run(onSetSelected);
+                        NullSafe.run(onSetSelected);
                     })
                     .taskMonitorFactory(this)
                     .exec();
         } else {
             clearSelected();
-            GwtNullSafe.run(onSetSelected);
+            NullSafe.run(onSetSelected);
         }
     }
 

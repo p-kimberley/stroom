@@ -28,12 +28,12 @@ import stroom.security.shared.AppPermission;
 import stroom.security.shared.DocumentPermission;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TerminateHandlerFactory;
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathCreator;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.StringUtil;
@@ -56,7 +56,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 /**
  * Pool API into open index shards.
@@ -142,8 +141,8 @@ public class IndexShardManager {
                                     if (optional.isPresent()) {
                                         LOGGER.debug(() ->
                                                 "deleteShardsFromDisk() - Unable to delete index " +
-                                                        "shard " + shard.getId() + " as it is currently " +
-                                                        "in use");
+                                                "shard " + shard.getId() + " as it is currently " +
+                                                "in use");
                                     } else {
                                         deleteFromDisk(shard);
                                     }
@@ -194,7 +193,7 @@ public class IndexShardManager {
             final List<IndexShard> ownedShards = shards
                     .stream()
                     .filter(indexShard -> thisNodeName.equals(indexShard.getNodeName()))
-                    .collect(Collectors.toList());
+                    .toList();
             return performAction(ownedShards, action);
         });
     }
@@ -232,8 +231,8 @@ public class IndexShardManager {
                                             TerminateHandlerFactory.NOOP_FACTORY,
                                             taskContext -> {
                                                 taskContext.info(() -> action.getActivity() +
-                                                        " index shard: " +
-                                                        shard.getId());
+                                                                       " index shard: " +
+                                                                       shard.getId());
                                                 switch (action) {
                                                     case FLUSH:
                                                         shardCount.incrementAndGet();
@@ -257,8 +256,8 @@ public class IndexShardManager {
                         }
 
                         LOGGER.info(() -> "Finished " +
-                                action.getActivity().toLowerCase(Locale.ROOT) +
-                                " index shards");
+                                          action.getActivity().toLowerCase(Locale.ROOT) +
+                                          " index shards");
                     }).run();
         }
 
@@ -310,8 +309,8 @@ public class IndexShardManager {
                 final Integer retentionDayAge = index.getRetentionDayAge();
                 final Long partitionToTime = shard.getPartitionToTime();
                 if (retentionDayAge != null
-                        && partitionToTime != null
-                        && !IndexShardStatus.DELETED.equals(shard.getStatus())) {
+                    && partitionToTime != null
+                    && !IndexShardStatus.DELETED.equals(shard.getStatus())) {
                     // See if this index shard is older than the index retention
                     // period.
                     final long retentionTime = ZonedDateTime.now(ZoneOffset.UTC)

@@ -16,7 +16,7 @@
 
 package stroom.query.common.v2;
 
-import stroom.query.api.v2.Column;
+import stroom.query.api.Column;
 import stroom.query.language.functions.Expression;
 import stroom.query.language.functions.ExpressionContext;
 import stroom.query.language.functions.ExpressionParser;
@@ -25,7 +25,7 @@ import stroom.query.language.functions.Generator;
 import stroom.query.language.functions.Null;
 import stroom.query.language.functions.ParamFactory;
 import stroom.query.language.functions.ref.ValueReferenceIndex;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.text.ParseException;
 import java.util.Collections;

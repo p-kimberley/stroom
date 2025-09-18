@@ -39,20 +39,22 @@ import stroom.processor.shared.ProcessorRow;
 import stroom.processor.shared.ProcessorType;
 import stroom.processor.shared.QueryData;
 import stroom.processor.shared.ReprocessDataInfo;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
 import stroom.security.shared.DocumentPermission;
+import stroom.security.shared.FindUserContext;
+import stroom.security.user.api.UserRefLookup;
 import stroom.util.AuditUtil;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Expander;
 import stroom.util.shared.HasUserDependencies;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.Severity;
@@ -84,6 +86,7 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
     private final MetaService metaService;
     private final SecurityContext securityContext;
     private final DocRefInfoService docRefInfoService;
+    private final UserRefLookup userRefLookup;
 
     @Inject
     ProcessorFilterServiceImpl(final ProcessorService processorService,
@@ -91,13 +94,15 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
                                final ProcessorTaskDao processorTaskDao,
                                final MetaService metaService,
                                final SecurityContext securityContext,
-                               final DocRefInfoService docRefInfoService) {
+                               final DocRefInfoService docRefInfoService,
+                               final UserRefLookup userRefLookup) {
         this.processorService = processorService;
         this.processorFilterDao = processorFilterDao;
         this.processorTaskDao = processorTaskDao;
         this.metaService = metaService;
         this.securityContext = securityContext;
         this.docRefInfoService = docRefInfoService;
+        this.userRefLookup = userRefLookup;
     }
 
     @Override
@@ -148,15 +153,19 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
     }
 
     private void setRunAs(final CreateProcessFilterRequest request, final ProcessorFilter filter) {
-        filter.setRunAsUser(NullSafe.getOrElse(request,
+        filter.setRunAsUser(NullSafe.getOrElseGet(
+                request,
                 CreateProcessFilterRequest::getRunAsUser,
-                securityContext.getUserRef()));
+                securityContext::getUserRef));
     }
 
     @Override
-    public ProcessorFilter importFilter(final Processor processor,
+    public ProcessorFilter importFilter(final ProcessorFilter existingProcessorFilter,
+                                        final Processor processor,
                                         final DocRef processorFilterDocRef,
                                         final CreateProcessFilterRequest request) {
+        LOGGER.debug("importFilter() - processorFilterDocRef: {}, existingProcessorFilter: {}",
+                processorFilterDocRef, existingProcessorFilter);
         // Check the user has read permissions on the pipeline.
         final DocRef pipelineDocRef = DocRef
                 .builder()
@@ -176,7 +185,10 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
         }
 
         // now create the filter and tracker
-        ProcessorFilter processorFilter = new ProcessorFilter();
+        final ProcessorFilter processorFilter = Objects.requireNonNullElseGet(
+                existingProcessorFilter,
+                ProcessorFilter::new);
+
         AuditUtil.stamp(securityContext, processorFilter);
         processorFilter.setReprocess(request.isReprocess());
         processorFilter.setEnabled(request.isEnabled());
@@ -191,7 +203,13 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
             processorFilter.setUuid(processorFilterDocRef.getUuid());
         }
 
-        return create(processorFilter);
+        if (existingProcessorFilter != null) {
+            LOGGER.debug("importFilter() - updating {}", processorFilter);
+            return update(processorFilter);
+        } else {
+            LOGGER.debug("importFilter() - creating {}", processorFilter);
+            return create(processorFilter);
+        }
     }
 
     private void checkRunAs(final ProcessorFilter processorFilter) {
@@ -200,13 +218,17 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
             // By default the creator of the filter becomes the run as user for the filter
             // (see stroom.processor.impl.ProcessorTaskCreatorImpl.createNewTasks)
             processorFilter.setRunAsUser(currentUser);
-        } else if (!Objects.equals(processorFilter.getRunAsUser(), currentUser) &&
-                   !securityContext.hasAppPermission(AppPermission.MANAGE_USERS_PERMISSION)) {
-            throw new PermissionException(securityContext.getUserRef(),
-                    "You do not have permission to set the run as user to '" +
-                    processorFilter.getRunAsUser().toDisplayString() +
-                    "'. You can only run a filter as " +
-                    "yourself unless you have manage users permission");
+        } else {
+            checkRunAs(processorFilter.getRunAsUser());
+        }
+    }
+
+    private void checkRunAs(final UserRef runAsUser) {
+        if (userRefLookup.getByUuid(runAsUser.getUuid(), FindUserContext.RUN_AS).isEmpty()) {
+            throw new PermissionException(
+                    runAsUser,
+                    "You do not have permission to view the Pipeline Filters that are configured to run-as user "
+                    + runAsUser.toInfoString());
         }
     }
 
@@ -439,6 +461,15 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
     }
 
     @Override
+    public ProcessorFilter restore(final DocRef processorFilterDocRef, final boolean resetTracker) {
+        final ProcessorFilter processorFilter = fetchByUuid(processorFilterDocRef.getUuid())
+                .orElseThrow(() ->
+                        new RuntimeException("No processor filter found for docRef " + processorFilterDocRef));
+
+        return processorFilterDao.restoreProcessorFilter(processorFilter, resetTracker);
+    }
+
+    @Override
     public ResultPage<ProcessorFilter> find(final DocRef pipelineDocRef) {
         if (pipelineDocRef == null) {
             throw new IllegalArgumentException("Supplied pipeline reference cannot be null");
@@ -452,19 +483,20 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
         // First try to find the associated processors
         final ExpressionOperator processorExpression = ExpressionOperator.builder()
                 .addDocRefTerm(ProcessorFields.PIPELINE, Condition.IS_DOC_REF, pipelineDocRef).build();
-        ResultPage<Processor> processorResultPage = processorService.find(new ExpressionCriteria(processorExpression));
+        final ResultPage<Processor> processorResultPage = processorService.find(
+                new ExpressionCriteria(processorExpression));
         if (processorResultPage.isEmpty()) {
             return new ResultPage<>(new ArrayList<>());
         }
 
         final ArrayList<ProcessorFilter> filters = new ArrayList<>();
         // Now find all the processor filters
-        for (Processor processor : processorResultPage.getValues()) {
+        for (final Processor processor : processorResultPage.getValues()) {
             final ExpressionOperator filterExpression = ExpressionOperator.builder()
                     .addIdTerm(ProcessorFields.ID,
                             ExpressionTerm.Condition.EQUALS,
                             processor.getId()).build();
-            ResultPage<ProcessorFilter> filterResultPage = find(new ExpressionCriteria(filterExpression));
+            final ResultPage<ProcessorFilter> filterResultPage = find(new ExpressionCriteria(filterExpression));
             filters.addAll(filterResultPage.getValues());
         }
 
@@ -478,11 +510,11 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
 
         if (operator.getChildren() != null) {
             for (final ExpressionItem child : operator.getChildren()) {
-                if (child instanceof ExpressionOperator expressionOperator) {
+                if (child instanceof final ExpressionOperator expressionOperator) {
                     builder.addOperator(decorate(expressionOperator));
 
                 } else if (child instanceof ExpressionTerm expressionTerm) {
-                    DocRef docRef = expressionTerm.getDocRef();
+                    final DocRef docRef = expressionTerm.getDocRef();
 
                     try {
                         if (docRef != null) {
@@ -614,13 +646,8 @@ class ProcessorFilterServiceImpl implements ProcessorFilterService, HasUserDepen
     public List<UserDependency> getUserDependencies(final UserRef userRef) {
         Objects.requireNonNull(userRef);
 
-        if (!securityContext.hasAppPermission(AppPermission.MANAGE_USERS_PERMISSION)
-            && !securityContext.isCurrentUser(userRef)) {
-            throw new PermissionException(
-                    userRef,
-                    "You do not have permission to view the Pipeline Filters that are configured to run-as user "
-                    + userRef.toInfoString());
-        }
+        // Check we are allowed to see this processor filter.
+        checkRunAs(userRef);
 
         return NullSafe.stream(processorFilterDao.fetchByRunAsUser(userRef.getUuid()))
                 .map(processorFilter -> {

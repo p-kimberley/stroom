@@ -6,11 +6,11 @@ import stroom.security.openid.api.OpenIdConfiguration;
 import stroom.security.openid.api.TokenRequest;
 import stroom.security.openid.api.TokenRequest.Builder;
 import stroom.security.openid.api.TokenResponse;
-import stroom.util.NullSafe;
 import stroom.util.jersey.JerseyClientFactory;
 import stroom.util.jersey.JerseyClientName;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -119,7 +119,7 @@ public class OpenIdTokenRequestHelper {
         addBasicAuth(invocationBuilder);
 
         TokenResponse tokenResponse = null;
-        try (Response response = doPost(invocationBuilder)) {
+        try (final Response response = doPost(invocationBuilder)) {
             if (HttpServletResponse.SC_OK == response.getStatus()) {
                 final String json = response.readEntity(String.class);
                 LOGGER.debug("response json:\n{}", json);
@@ -134,11 +134,11 @@ public class OpenIdTokenRequestHelper {
                 // This may only be an issue for KeyCloak standalone.
                 final String msg = getContent(response);
                 throw new AuthenticationException("Received status '" +
-                        response.getStatus() +
-                        "' from " +
-                        endpointUri + " :\n" + msg);
+                                                  response.getStatus() +
+                                                  "' from " +
+                                                  endpointUri + " :\n" + msg);
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new AuthenticationException(
                     "Error requesting token from " + endpointUri + ": " + e.getMessage(), e);
         }
@@ -147,8 +147,8 @@ public class OpenIdTokenRequestHelper {
             throw new AuthenticationException("Null tokenResponse using url: " + endpointUri);
         } else if (expectingIdToken && tokenResponse.getIdToken() == null) {
             throw new AuthenticationException("Expecting '" +
-                    OpenId.ID_TOKEN +
-                    "' to be in response but it is absent. Using url: " + endpointUri);
+                                              OpenId.ID_TOKEN +
+                                              "' to be in response but it is absent. Using url: " + endpointUri);
         }
 
         return tokenResponse;
@@ -161,7 +161,7 @@ public class OpenIdTokenRequestHelper {
         final String clientId = getClientId();
         final String clientSecret = getClientSecret();
         if (!NullSafe.isBlankString(clientId)
-                && !NullSafe.isBlankString(clientSecret)) {
+            && !NullSafe.isBlankString(clientSecret)) {
             String authorization = String.join(":", clientId, clientSecret);
             authorization = Base64.getEncoder().encodeToString(authorization.getBytes(StandardCharsets.UTF_8));
             authorization = "Basic " + authorization;
@@ -263,23 +263,28 @@ public class OpenIdTokenRequestHelper {
     }
 
     private String getClientSecret() {
-        return NullSafe.getOrElseGet(
-                clientCredentials,
-                ClientCredentials::getClientSecret,
-                openIdConfiguration::getClientSecret);
+        // clientSecret may not be set, e.g. if we are using mTLS auth
+        String clientSecret = NullSafe.get(clientCredentials, ClientCredentials::getClientSecret);
+        if (NullSafe.isEmptyString(clientSecret)) {
+            clientSecret = openIdConfiguration.getClientSecret();
+        }
+        if (LOGGER.isDebugEnabled() && NullSafe.isBlankString(clientSecret)) {
+            LOGGER.debug("Blank clientSecret");
+        }
+        return clientSecret;
     }
 
     @Override
     public String toString() {
         return "OpenIdTokenRequestHelper{" +
-                "endpointUri='" + endpointUri + '\'' +
-                ", clientId='" + getClientId() + '\'' +
-                ", clientSecret='" + getClientSecret() + '\'' +
-                ", code='" + code + '\'' +
-                ", grantType='" + grantType + '\'' +
-                ", redirectUri='" + redirectUri + '\'' +
-                ", refreshToken='" + refreshToken + '\'' +
-                ", scopes=" + scopes +
-                '}';
+               "endpointUri='" + endpointUri + '\'' +
+               ", clientId='" + getClientId() + '\'' +
+               ", clientSecret='" + getClientSecret() + '\'' +
+               ", code='" + code + '\'' +
+               ", grantType='" + grantType + '\'' +
+               ", redirectUri='" + redirectUri + '\'' +
+               ", refreshToken='" + refreshToken + '\'' +
+               ", scopes=" + scopes +
+               '}';
     }
 }

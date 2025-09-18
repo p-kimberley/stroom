@@ -10,7 +10,7 @@ import stroom.processor.shared.ProcessorTask;
 import stroom.processor.shared.ProcessorTaskFields;
 import stroom.processor.shared.ProcessorTaskSummary;
 import stroom.processor.shared.TaskStatus;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.ExpressionUtil;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ValuesConsumer;
 import stroom.util.shared.Clearable;
@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Singleton
 public class MockProcessorTaskDao implements ProcessorTaskDao, Clearable {
@@ -181,7 +180,7 @@ public class MockProcessorTaskDao implements ProcessorTaskDao, Clearable {
                     }
                     return true;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         return ResultPage.createCriterialBasedList(list, criteria);
     }

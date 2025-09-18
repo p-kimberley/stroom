@@ -231,9 +231,9 @@ public class ElasticSearchTaskHandler {
                 ));
             }
 
-            SearchResponse<ObjectNode> searchResponse = elasticClient.search(searchRequestBuilder.build(),
+            final SearchResponse<ObjectNode> searchResponse = elasticClient.search(searchRequestBuilder.build(),
                     ObjectNode.class);
-            String scrollId = searchResponse.scrollId();
+            final String scrollId = searchResponse.scrollId();
 
             // Retrieve the initial result batch
             List<Hit<ObjectNode>> searchHits = searchResponse.hits().hits();
@@ -297,7 +297,7 @@ public class ElasticSearchTaskHandler {
 
                 for (final String fieldName : fieldIndex.getFields()) {
                     final Integer insertAt = fieldIndex.getPos(fieldName);
-                    Object fieldValue = getFieldValue(mapSearchHit, fieldName);
+                    final Object fieldValue = getFieldValue(mapSearchHit, fieldName);
 
                     if (fieldValue != null) {
                         if (values == null) {
@@ -345,11 +345,11 @@ public class ElasticSearchTaskHandler {
             return null;
         }
 
-        JsonArray docField = searchHitMap.get(fieldName).toJson().asJsonArray();
+        final JsonArray docField = searchHitMap.get(fieldName).toJson().asJsonArray();
         if (docField.size() > 1) {
             return docField.stream()
                     .map(this::jsonValueToNative)
-                    .collect(Collectors.toList());
+                    .toList();
         } else {
             return jsonValueToNative(docField.get(0));
         }

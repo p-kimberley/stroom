@@ -42,7 +42,9 @@ import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.Event.NativePreviewEvent;
 import com.google.gwt.user.client.Event.NativePreviewHandler;
+import com.google.gwt.user.client.ui.CustomScrollPanel;
 import com.google.gwt.user.client.ui.FocusUtil;
+import com.google.gwt.user.client.ui.HeaderPanel;
 import com.google.gwt.user.client.ui.RootPanel;
 import com.google.gwt.user.client.ui.SimplePanel;
 import com.google.gwt.view.client.CellPreviewEvent;
@@ -73,6 +75,9 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
     private boolean allowResize = true;
     private boolean allowHeaderSelection = true;
 
+    private int horzPos = 0;
+    private int vertPos = 0;
+
     private final DoubleClickTester doubleClickTester = new DoubleClickTester();
 
     public MyDataGrid() {
@@ -99,10 +104,25 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
 
         // Sink all mouse events.
         sinkEvents(Event.MOUSEEVENTS);
+
+        final HeaderPanel headerPanel = (HeaderPanel) getWidget();
+        final CustomScrollPanel customScrollPanel = (CustomScrollPanel) headerPanel.getContentWidget();
+
+        customScrollPanel.addScrollHandler(event -> {
+            horzPos = customScrollPanel.getHorizontalScrollPosition();
+            vertPos = customScrollPanel.getVerticalScrollPosition();
+        });
+
+        addAttachHandler(event -> {
+            if (horzPos > 0 || vertPos > 0) {
+                customScrollPanel.setVerticalScrollPosition(vertPos);
+                customScrollPanel.setHorizontalScrollPosition(horzPos);
+            }
+        });
     }
 
     public MultiSelectionModelImpl<R> addDefaultSelectionModel(final boolean allowMultiSelect) {
-        final MultiSelectionModelImpl<R> selectionModel = new MultiSelectionModelImpl<>(this);
+        final MultiSelectionModelImpl<R> selectionModel = new MultiSelectionModelImpl<>();
         final DataGridSelectionEventManager<R> selectionEventManager =
                 new DataGridSelectionEventManager<>(this, selectionModel, allowMultiSelect);
         setSelectionModel(selectionModel, selectionEventManager);
@@ -180,11 +200,15 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
 
                 } else if (allowMove) {
                     // Try and start moving the current column.
-                    moveHandle.startMove(event);
+                    if (moveHandle.isDragThresholdExceeded(event)) {
+                        moveHandle.startMove(event);
 
-                    // Hide the resize handle if we are dragging a column.
-                    if (moveHandle.isMoving()) {
+                        // Hide the resize handle if we are dragging a column.
                         resizeHandle.hide();
+
+                        if (headingListener != null) {
+                            headingListener.onMoveStart(event, () -> getHeading(event));
+                        }
 
                     } else {
                         // Update the resize handle position.
@@ -205,18 +229,17 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
 
                 moveHeading = null;
 
-                final Heading heading = getHeading(event);
-                if (headingListener != null) {
-                    headingListener.onMouseDown(event, heading);
-                }
-
                 if (allowResize &&
                     !resizeHandle.isResizing() &&
                     MouseHelper.mouseIsOverElement(event, resizeHandle.getElement())) {
                     resizeHandle.startResize(event);
 
+                    if (headingListener != null) {
+                        headingListener.onMoveStart(event, () -> getHeading(event));
+                    }
+
                 } else {
-                    moveHeading = heading;
+                    moveHeading = getHeading(event);
                 }
 
                 // Set the heading that the move handle will use.
@@ -268,13 +291,22 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
                             hideResizeHandle();
                         }
                     }
+
+                    if (headingListener != null) {
+                        headingListener.onMoveEnd(event, () -> getHeading(event));
+                    }
+
                 } else if (moveHandle.isMoving()) {
                     // Stop moving column.
                     moveHandle.endMove(event);
+
+                    if (headingListener != null) {
+                        headingListener.onMoveEnd(event, () -> getHeading(event));
+                    }
+
                 } else {
                     if (allowHeaderSelection && headingListener != null) {
-                        final Heading heading = getHeading(event);
-                        headingListener.onMouseUp(event, heading);
+                        headingListener.onShowMenu(event, () -> getHeading(event));
 
                         // Detach event preview handler.
                         resizeHandle.hide();
@@ -341,9 +373,9 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
 
         // If we still have a narrow col see if there is any text content.
         if (minWidth < 10) {
-            String text = col.getInnerText();
+            final String text = col.getInnerText();
             tempDiv.setInnerHTML(text);
-            double scrollWidth = ElementUtil.getSubPixelOffsetWidth(tempDiv);
+            final double scrollWidth = ElementUtil.getSubPixelOffsetWidth(tempDiv);
             minWidth = Math.max(minWidth, scrollWidth);
         }
 
@@ -362,11 +394,11 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
                 el = el.getFirstChildElement();
             }
 
-            String text = el.getInnerText();
+            final String text = el.getInnerText();
 
             if (text.length() > 0) {
                 tempDiv.setInnerHTML(text);
-                double offsetWidth = ElementUtil.getSubPixelOffsetWidth(tempDiv) + 1;
+                final double offsetWidth = ElementUtil.getSubPixelOffsetWidth(tempDiv) + 1;
                 minWidth = Math.max(minWidth, offsetWidth);
             }
         }
@@ -406,7 +438,7 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
     private Heading getHeading(final Element target, final int initialX) {
         int childIndex;
         Element th = target;
-        Element headerRow;
+        final Element headerRow;
 
         // Get parent th.
         while (th != null && !"th".equalsIgnoreCase(th.getTagName())) {
@@ -462,6 +494,10 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
         colSettings.add(colSpec.getColSettings());
         super.addColumn(colSpec.getColumn(), colSpec.getHeader());
         setColumnWidth(colSpec.getColumn(), colSpec.getWidth(), Unit.PX);
+    }
+
+    public void sort(final Column<R, ?> column) {
+        getColumnSortList().push(column);
     }
 
     /**
@@ -599,14 +635,14 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
         // If the outer width is greater than the table with then see if we can expand the columns and table to fit the
         // space.
         if (redistribute && outerWidth > 0 && outerWidth > tableWidth) {
-            int totalWeight = 0;
+            double totalWeight = 0;
             int totalColWidth = 0;
             for (int i = 0; i < super.getColumnCount() && i < colSettings.size(); i++) {
                 final Column<R, ?> col = super.getColumn(i);
                 final ColSettings settings = colSettings.get(i);
                 if (settings != null) {
                     final String stringWidth = getColumnWidth(col);
-                    int w = getPx(stringWidth);
+                    final int w = getPx(stringWidth);
                     totalColWidth += w;
                     if (settings.isFill()) {
                         totalWeight += settings.getFillWeight();
@@ -650,7 +686,7 @@ public class MyDataGrid<R> extends DataGrid<R> implements NativePreviewHandler {
 
     private int resizeColumnsAndFill(final double remaining, final double totalWeight) {
         int totalWidth = 0;
-        final double delta = (double) remaining / (double) totalWeight;
+        final double delta = remaining / totalWeight;
         for (int i = 0; i < super.getColumnCount(); i++) {
             final Column<R, ?> col = super.getColumn(i);
             final String stringWidth = super.getColumnWidth(col);

@@ -1,7 +1,7 @@
 package stroom.search.elastic.suggest;
 
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.QueryField;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.shared.FetchSuggestionsRequest;
 import stroom.query.shared.Suggestions;
 import stroom.search.elastic.ElasticClientCache;
@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 @Singleton
 public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQueryHandler {
@@ -61,7 +60,7 @@ public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQue
         final ElasticClusterDoc elasticCluster = elasticClusterStoreProvider.get()
                 .readDocument(elasticIndex.getClusterRef());
 
-        CompletableFuture<Suggestions> future = CompletableFuture.supplyAsync(taskContextFactoryProvider.get()
+        final CompletableFuture<Suggestions> future = CompletableFuture.supplyAsync(taskContextFactoryProvider.get()
                 .contextResult("Query suggestions for Elasticsearch index '" + elasticIndex.getName() + "'",
                         taskContext -> elasticClientCacheProvider.get().contextResult(elasticCluster.getConnection(),
                                 elasticClient -> querySuggestions(request, elasticIndex, elasticClient)
@@ -71,11 +70,11 @@ public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQue
 
         try {
             return future.get();
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
             LOGGER.error(() -> "Thread interrupted");
             return Suggestions.EMPTY;
-        } catch (ExecutionException e) {
+        } catch (final ExecutionException e) {
             throw new RuntimeException("Error getting Elasticsearch term suggestions: " + e.getMessage(), e);
         }
     }
@@ -114,8 +113,8 @@ public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQue
 
             return new Suggestions(termSuggestion.getFirst().term().options().stream()
                     .map(TermSuggestOption::text)
-                    .collect(Collectors.toList()));
-        } catch (IOException | RuntimeException e) {
+                    .toList());
+        } catch (final IOException | RuntimeException e) {
             LOGGER.error(() -> "Failed to retrieve search suggestions for field: " + field.getFldName() +
                     ". " + e.getMessage(), e);
             return Suggestions.EMPTY;

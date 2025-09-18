@@ -21,7 +21,7 @@ import stroom.pipeline.shared.XPathFilter.MatchType;
 import stroom.test.common.StroomPipelineTestFileUtil;
 import stroom.test.common.TestUtil;
 import stroom.test.common.util.test.StroomUnitTest;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.xml.SAXParserFactoryFactory;
 
 import io.vavr.Tuple;
@@ -78,7 +78,7 @@ class TestXPathFilter extends StroomUnitTest {
 
                     try {
                         return match(xPathFilter, steppingFilter);
-                    } catch (XPathExpressionException e) {
+                    } catch (final XPathExpressionException e) {
                         throw new RuntimeException(e);
                     }
                 })

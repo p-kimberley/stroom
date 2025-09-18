@@ -2,11 +2,10 @@ package stroom.security.common.impl;
 
 import stroom.security.openid.api.OpenId;
 import stroom.security.openid.api.OpenIdConfiguration;
-import stroom.util.NullSafe;
-import stroom.util.exception.ThrowingFunction;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.jose4j.json.internal.json_simple.parser.ContainerFactory;
@@ -87,6 +86,7 @@ public final class JwtUtil {
         Objects.requireNonNull(openIdConfiguration);
         Objects.requireNonNull(jwtClaims);
         final String uniqueIdentityClaim = openIdConfiguration.getUniqueIdentityClaim();
+        // Trim so that the value is consistent with the users created in our DB
         final String id = JwtUtil.getClaimValue(jwtClaims, uniqueIdentityClaim)
                 .orElseThrow(() -> new RuntimeException(LogUtil.message(
                         "Expecting claims to contain configured uniqueIdentityClaim '{}' " +
@@ -108,7 +108,9 @@ public final class JwtUtil {
         Objects.requireNonNull(openIdConfiguration);
         Objects.requireNonNull(jwtClaims);
         final String userDisplayNameClaim = openIdConfiguration.getUserDisplayNameClaim();
-        final Optional<String> userDisplayName = JwtUtil.getClaimValue(jwtClaims, userDisplayNameClaim);
+        // Trim so that the value is consistent with the users created in our DB
+        final Optional<String> userDisplayName = JwtUtil.getClaimValue(jwtClaims, userDisplayNameClaim)
+                .map(String::trim);
 
         LOGGER.debug("userDisplayNameClaim: {}, userDisplayName: {}", userDisplayNameClaim, userDisplayName);
 
@@ -117,7 +119,7 @@ public final class JwtUtil {
 
     public static String removePrefix(final String userId) {
         if (userId != null) {
-            int index = userId.indexOf(CORP_PREFIX);
+            final int index = userId.indexOf(CORP_PREFIX);
             if (index != -1) {
                 return userId.substring(CORP_PREFIX.length());
             }
@@ -171,26 +173,32 @@ public final class JwtUtil {
         return subject;
     }
 
+    /**
+     * Get the trimmed value corresponding to claim
+     */
     public static Optional<String> getClaimValue(final JwtContext jwtContext, final String claim) {
-        try {
-            return NullSafe.getAsOptional(
-                    jwtContext,
-                    JwtContext::getJwtClaims,
-                    ThrowingFunction.unchecked(jwtClaims ->
-                            jwtClaims.getClaimValue(claim, String.class)));
-        } catch (Exception e) {
-            LOGGER.debug(() -> LogUtil.message("Error getting claim {}: {}", claim, e.getMessage()), e);
-            return Optional.empty();
-        }
+        return Optional.ofNullable(jwtContext)
+                .map(JwtContext::getJwtClaims)
+                .flatMap(jwtClaims ->
+                        getClaimValue(jwtClaims, claim));
     }
 
+    /**
+     * Get the trimmed value corresponding to claim
+     */
     public static Optional<String> getClaimValue(final JwtClaims jwtClaims, final String claim) {
+        Objects.requireNonNull(claim);
         try {
-            return NullSafe.getAsOptional(
-                    jwtClaims,
-                    ThrowingFunction.unchecked(jwtClaims2 ->
-                            jwtClaims2.getClaimValue(claim, String.class)));
-        } catch (Exception e) {
+            if (jwtClaims != null) {
+                final String value = jwtClaims.getClaimValue(claim, String.class);
+                final String trimmed = NullSafe.trim(value);
+                return !trimmed.isEmpty()
+                        ? Optional.of(trimmed)
+                        : Optional.empty();
+            } else {
+                return Optional.empty();
+            }
+        } catch (final Exception e) {
             LOGGER.debug(() -> LogUtil.message("Error getting claim {}: {}", claim, e.getMessage()), e);
             return Optional.empty();
         }

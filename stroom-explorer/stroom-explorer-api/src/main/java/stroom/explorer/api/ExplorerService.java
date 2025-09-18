@@ -17,12 +17,12 @@
 
 package stroom.explorer.api;
 
-import stroom.docref.DocContentHighlights;
 import stroom.docref.DocRef;
 import stroom.docstore.shared.DocumentType;
 import stroom.explorer.shared.AdvancedDocumentFindRequest;
 import stroom.explorer.shared.AdvancedDocumentFindWithPermissionsRequest;
 import stroom.explorer.shared.BulkActionResult;
+import stroom.explorer.shared.DocContentHighlights;
 import stroom.explorer.shared.DocumentFindRequest;
 import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.ExplorerResource.TagFetchMode;
@@ -35,6 +35,7 @@ import stroom.explorer.shared.FindResult;
 import stroom.explorer.shared.FindResultWithPermissions;
 import stroom.explorer.shared.PermissionInheritance;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.DocPath;
 import stroom.util.shared.ResultPage;
 
 import java.util.Collection;
@@ -50,6 +51,21 @@ public interface ExplorerService extends Clearable {
                         String docName,
                         ExplorerNode destinationFolder,
                         PermissionInheritance permissionInheritance);
+
+    /**
+     * @param docPath The path to ensure. Must be relative if baseNode is not the root node.
+     * @return The leaf node in path.
+     */
+    ExplorerNode ensureFolderPath(DocPath docPath,
+                                  PermissionInheritance permissionInheritance);
+
+    /**
+     * @param docPath The path to ensure. Must be relative if baseNode is not the root node.
+     * @param baseNode The node to append path onto.
+     * @return The leaf node in path.
+     */
+    ExplorerNode ensureFolderPath(DocPath docPath,
+                                  final ExplorerNode baseNode, PermissionInheritance permissionInheritance);
 
     BulkActionResult copy(List<ExplorerNode> explorerNodes,
                           ExplorerNode destinationFolder,

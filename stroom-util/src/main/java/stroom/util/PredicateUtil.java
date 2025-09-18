@@ -1,10 +1,14 @@
 package stroom.util;
 
+import stroom.util.shared.NullSafe;
 import stroom.util.string.PatternUtil;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -73,6 +77,7 @@ public class PredicateUtil {
     /**
      * Create a predicate ORing all the filter terms in inListStr together. Supports standard stroom
      * wild carding with '*'.  Matches are complete matches.
+     *
      * @param inListStr List of filter terms delimited by LIST_DELIMITER
      */
     public static Predicate<String> createWildCardedInPredicate(final String inListStr,
@@ -105,7 +110,7 @@ public class PredicateUtil {
         } else {
             final List<Predicate<String>> predicates = Arrays.stream(filters)
                     .map(String::trim)
-                    .filter(part -> part.length() > 0)
+                    .filter(part -> !part.isEmpty())
                     .map(part -> createWildCardedFilterPredicate(part, true, isCaseSensitive))
                     .collect(Collectors.toList());
             return orPredicates(predicates, str -> false);
@@ -121,7 +126,7 @@ public class PredicateUtil {
         final int count = NullSafe.size(predicates);
         Predicate<T> combinedPredicate = null;
         if (count == 1) {
-            combinedPredicate = predicates.get(0);
+            combinedPredicate = predicates.getFirst();
         } else if (count == 2) {
             combinedPredicate = andPredicates(predicates.get(0), predicates.get(1));
         } else if (count > 2) {
@@ -141,7 +146,7 @@ public class PredicateUtil {
         final int count = NullSafe.size(predicates);
         Predicate<T> combinedPredicate = null;
         if (count == 1) {
-            combinedPredicate = predicates.get(0);
+            combinedPredicate = predicates.getFirst();
         } else if (count == 2) {
             combinedPredicate = orPredicates(predicates.get(0), predicates.get(1));
         } else if (count > 2) {
@@ -191,5 +196,70 @@ public class PredicateUtil {
                 return predicate1.or(predicate2);
             }
         }
+    }
+
+    public static <T> Predicate<T> get(final Optional<Predicate<T>> optionalPredicate) {
+        return optionalPredicate.orElse(x -> true);
+    }
+
+    /**
+     * Creates a predicate that increments counter for each match encountered.
+     *
+     * @param counter   The counter to increment. It is the caller's responsibility to zero it as needed.
+     * @param predicate The predicate to wrap
+     * @return The wrapped predicate
+     */
+    public static <T> Predicate<T> countingPredicate(final LongAdder counter,
+                                                     final Predicate<T> predicate) {
+        return countingPredicate(counter, true, predicate);
+    }
+
+    /**
+     * Creates a predicate that increments counter for each match encountered.
+     *
+     * @param counter     The counter to increment. It is the caller's responsibility to zero it as needed.
+     * @param countIfTrue If true counter is incremented for a match. If false, counter is incremented for
+     *                    a non-match.
+     * @param predicate   The predicate to wrap
+     * @return The wrapped predicate
+     */
+    public static <T> Predicate<T> countingPredicate(final LongAdder counter,
+                                                     final boolean countIfTrue,
+                                                     final Predicate<T> predicate) {
+        Objects.requireNonNull(predicate);
+        Objects.requireNonNull(counter);
+        return val -> {
+            final boolean result = predicate.test(val);
+            if (countIfTrue) {
+                if (result) {
+                    counter.increment();
+                }
+            } else {
+                if (!result) {
+                    counter.increment();
+                }
+            }
+            return result;
+        };
+    }
+
+    /**
+     * Creates a {@link BiPredicate} that increments counter for each match encountered.
+     *
+     * @param counter   The counter to increment. It is the caller's responsibility to zero it as needed.
+     * @param predicate The {@link BiPredicate} to wrap
+     * @return The wrapped predicate
+     */
+    public static <T1, T2> BiPredicate<T1, T2> countingBiPredicate(final LongAdder counter,
+                                                                   final BiPredicate<T1, T2> predicate) {
+        Objects.requireNonNull(predicate);
+        Objects.requireNonNull(counter);
+        return (t1, t2) -> {
+            final boolean result = predicate.test(t1, t2);
+            if (result) {
+                counter.increment();
+            }
+            return result;
+        };
     }
 }

@@ -39,6 +39,7 @@ import stroom.util.jersey.UriBuilderUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.servlet.SessionUtil;
 
 import event.logging.AuthenticateOutcomeReason;
 import jakarta.inject.Inject;
@@ -59,7 +60,7 @@ class AuthenticationServiceImpl implements AuthenticationService {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(AuthenticationServiceImpl.class);
 
     private static final long MIN_CREDENTIAL_CONFIRMATION_INTERVAL = 600000;
-    private static final String AUTH_STATE = "AUTH_STATE";
+    private static final String AUTH_STATE_ATTRIBUTE_NAME = "AUTH_STATE";
 
     private final UriFactory uriFactory;
     private final IdentityConfig config;
@@ -93,29 +94,25 @@ class AuthenticationServiceImpl implements AuthenticationService {
         this.certificateExtractor = certificateExtractor;
     }
 
-    private void setAuthState(final HttpSession session, final AuthStateImpl authStateImpl) {
-        if (session != null) {
-            session.setAttribute(AUTH_STATE, authStateImpl);
-        }
+    private void setAuthState(final HttpServletRequest request,
+                              final AuthStateImpl authStateImpl,
+                              final boolean createSession) {
+        SessionUtil.setAttribute(request, AUTH_STATE_ATTRIBUTE_NAME, authStateImpl, createSession);
+
     }
 
     private AuthStateImpl getAuthState(final HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-
-        final HttpSession session = request.getSession(false);
-        if (session == null) {
-            return null;
-        }
-
-        return (AuthStateImpl) session.getAttribute(AUTH_STATE);
+        return SessionUtil.getAttribute(
+                request,
+                AUTH_STATE_ATTRIBUTE_NAME,
+                AuthStateImpl.class,
+                false);
     }
 
     @Override
     public AuthStatus currentAuthState(final HttpServletRequest request) {
         LOGGER.debug("currentAuthState");
-        AuthStateImpl authState = getAuthState(request);
+        final AuthStateImpl authState = getAuthState(request);
 
         // Now we can check if we're logged in somehow (session or certs) and build the response accordingly
         if (authState != null) {
@@ -125,7 +122,7 @@ class AuthenticationServiceImpl implements AuthenticationService {
         } else if (config.isAllowCertificateAuthentication()) {
             LOGGER.debug("Attempting login with certificate");
 
-            AuthStatus status = loginWithCertificate(request);
+            final AuthStatus status = loginWithCertificate(request);
             if (status.getError().isPresent()) {
                 LOGGER.error("Failed to log in with certificate, user: " + status.getError().get().getSubject()
                              + ", message: " + status.getError().get().getMessage());
@@ -147,7 +144,7 @@ class AuthenticationServiceImpl implements AuthenticationService {
             final String cn = optionalCN.get();
             // Check for a certificate
             LOGGER.debug(() -> "Got CN: " + cn);
-            Optional<String> optionalUserId = getIdFromCertificate(cn);
+            final Optional<String> optionalUserId = getIdFromCertificate(cn);
 
             if (optionalUserId.isEmpty()) {
                 return new AuthStatusImpl(new BadRequestException(cn,
@@ -174,16 +171,16 @@ class AuthenticationServiceImpl implements AuthenticationService {
                         verifyAccountStateOrThrow(account, "locked", authType, () -> !account.isLocked());
                         verifyAccountStateOrThrow(account, "inactive", authType, () -> !account.isInactive());
                         verifyAccountStateOrThrow(account, "disabled", authType, account::isEnabled);
-                    } catch (BadRequestException badRequestException) {
+                    } catch (final BadRequestException badRequestException) {
                         return new AuthStatusImpl(badRequestException, true);
                     }
 
                     LOGGER.info("Logging user in: {}", userId);
-                    AuthStateImpl newState = new AuthStateImpl(
+                    final AuthStateImpl newState = new AuthStateImpl(
                             account,
                             false,
                             System.currentTimeMillis());
-                    setAuthState(request.getSession(true), newState);
+                    setAuthState(request, newState, true);
 
                     // Reset last access, login failures, etc...
                     accountDao.recordSuccessfulLogin(userId);
@@ -253,10 +250,9 @@ class AuthenticationServiceImpl implements AuthenticationService {
         final String message = result.toString();
         if (result.isAllOk()) {
             // Update tha last credential confirmation time.
-            setAuthState(request.getSession(true),
-                    new AuthStateImpl(authState.getAccount(),
-                            authState.isRequirePasswordChange(),
-                            System.currentTimeMillis()));
+
+            final AuthStateImpl newAuthState = authState.withLastCredentialCheckMs(System.currentTimeMillis());
+            setAuthState(request, newAuthState, true);
             return new ConfirmPasswordResponse(true, message);
         }
 
@@ -302,8 +298,11 @@ class AuthenticationServiceImpl implements AuthenticationService {
         accountDao.changePassword(userId, changePasswordRequest.getNewPassword());
 
         if (authState.getSubject().equals(userId)) {
-            setAuthState(request.getSession(true),
-                    new AuthStateImpl(authState.getAccount(), false, System.currentTimeMillis()));
+            final AuthStateImpl newAuthState = new AuthStateImpl(
+                    authState.getAccount(),
+                    false,
+                    System.currentTimeMillis());
+            setAuthState(request, newAuthState, true);
         }
 
         return new ChangePasswordResponse(true, null, false);
@@ -344,8 +343,11 @@ class AuthenticationServiceImpl implements AuthenticationService {
 
         // Reset last access, login failures, etc...
         accountDao.recordSuccessfulLogin(userId);
-        setAuthState(request.getSession(true),
-                new AuthStateImpl(account, userNeedsToChangePassword, System.currentTimeMillis()));
+        final AuthStateImpl newAuthState = new AuthStateImpl(
+                account,
+                userNeedsToChangePassword,
+                System.currentTimeMillis());
+        setAuthState(request, newAuthState, true);
 
         return new LoginResponse(true, message, userNeedsToChangePassword);
     }
@@ -392,7 +394,7 @@ class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     private void clearSession(final HttpServletRequest request) {
-        setAuthState(request.getSession(false), null);
+        setAuthState(request, null, false);
     }
 
     public PasswordPolicyConfig getPasswordPolicy() {
@@ -466,7 +468,15 @@ class AuthenticationServiceImpl implements AuthenticationService {
         public long getLastCredentialCheckMs() {
             return lastCredentialCheckMs;
         }
+
+        public AuthStateImpl withLastCredentialCheckMs(final long lastCredentialCheckMs) {
+            return new AuthStateImpl(account, requirePasswordChange, lastCredentialCheckMs);
+        }
     }
+
+
+    // --------------------------------------------------------------------------------
+
 
     private static class AuthStatusImpl implements AuthStatus {
 
@@ -480,13 +490,13 @@ class AuthenticationServiceImpl implements AuthenticationService {
             isNew = false;
         }
 
-        AuthStatusImpl(AuthState state, boolean isNew) {
+        AuthStatusImpl(final AuthState state, final boolean isNew) {
             this.state = state;
             this.isNew = isNew;
             this.error = null;
         }
 
-        AuthStatusImpl(BadRequestException error, boolean isNew) {
+        AuthStatusImpl(final BadRequestException error, final boolean isNew) {
             this.error = error;
             this.isNew = isNew;
             this.state = null;

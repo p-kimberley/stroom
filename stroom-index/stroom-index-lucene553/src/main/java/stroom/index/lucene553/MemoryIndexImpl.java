@@ -1,9 +1,9 @@
 package stroom.index.lucene553;
 
-import stroom.datasource.api.v2.IndexField;
 import stroom.index.lucene553.SearchExpressionQueryBuilder.SearchExpressionQuery;
 import stroom.index.shared.LuceneIndexField;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.datasource.IndexField;
 import stroom.search.extraction.FieldValue;
 import stroom.search.impl.SearchException;
 import stroom.util.logging.LambdaLogger;
@@ -42,7 +42,7 @@ class MemoryIndexImpl implements stroom.search.extraction.MemoryIndex {
             if (luceneIndexField.isIndexed()) {
                 final Analyzer fieldAnalyzer = searchExpressionQueryCache.getAnalyser(luceneIndexField);
                 final IndexableField field = FieldFactory.create(fieldValue);
-                TokenStream tokenStream = field.tokenStream(fieldAnalyzer, null);
+                final TokenStream tokenStream = field.tokenStream(fieldAnalyzer, null);
                 if (tokenStream != null) {
                     memoryIndex.addField(field.name(), tokenStream, field.boost());
                 }

@@ -2,7 +2,7 @@ package stroom.explorer.impl;
 
 import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.ExplorerNode.NodeInfo;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -403,7 +403,7 @@ public abstract class AbstractTreeModel<K> {
             this.parentKeyToChildNodesMap.forEach((key, childNodes) ->
                     treeModel.parentKeyToChildNodesMap.put(key, new LinkedHashSet<>(childNodes)));
             return treeModel;
-        } catch (CloneNotSupportedException e) {
+        } catch (final CloneNotSupportedException e) {
             throw new RuntimeException(e);
         }
     }

@@ -6,6 +6,7 @@ import stroom.analytics.shared.DuplicateCheckRows;
 import stroom.analytics.shared.FindDuplicateCheckCriteria;
 import stroom.bytebuffer.impl6.ByteBufferFactory;
 import stroom.bytebuffer.impl6.ByteBufferFactoryImpl;
+import stroom.bytebuffer.impl6.ByteBuffers;
 import stroom.lmdb2.LmdbEnvDir;
 import stroom.query.common.v2.DuplicateCheckStoreConfig;
 import stroom.util.logging.LambdaLogger;
@@ -47,24 +48,26 @@ class TestDuplicateCheckStore {
     private static final char[] CHARS = ALPHANUMERIC.toCharArray();
 
     private final ByteBufferFactory byteBufferFactory = new ByteBufferFactoryImpl();
+    private final ByteBuffers byteBuffers = new ByteBuffers(byteBufferFactory);
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Mock
     private DuplicateCheckDirs mockDuplicateCheckDirs;
 
     @Test
-    void test(@TempDir Path tempDir) {
-        LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
+    void test(@TempDir final Path tempDir) {
+        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
         Mockito.when(mockDuplicateCheckDirs.getDir(UUID))
                 .thenReturn(lmdbEnvDir);
 
         final DuplicateCheckStoreConfig duplicateCheckStoreConfig = new DuplicateCheckStoreConfig();
         final DuplicateCheckRowSerde serde = new DuplicateCheckRowSerde(byteBufferFactory);
 
-        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+        try (final ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             final DuplicateCheckStore duplicateCheckStore = new DuplicateCheckStore(
                     mockDuplicateCheckDirs,
                     byteBufferFactory,
+                    byteBuffers,
                     duplicateCheckStoreConfig,
                     serde,
                     () -> executorService,
@@ -105,18 +108,19 @@ class TestDuplicateCheckStore {
     }
 
     @Test
-    void testLargeValue(@TempDir Path tempDir) {
-        LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
+    void testLargeValue(@TempDir final Path tempDir) {
+        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
         Mockito.when(mockDuplicateCheckDirs.getDir(UUID))
                 .thenReturn(lmdbEnvDir);
 
         final DuplicateCheckStoreConfig duplicateCheckStoreConfig = new DuplicateCheckStoreConfig();
         final DuplicateCheckRowSerde serde = new DuplicateCheckRowSerde(byteBufferFactory);
 
-        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+        try (final ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             final DuplicateCheckStore duplicateCheckStore = new DuplicateCheckStore(
                     mockDuplicateCheckDirs,
                     byteBufferFactory,
+                    byteBuffers,
                     duplicateCheckStoreConfig,
                     serde,
                     () -> executorService,
@@ -151,18 +155,19 @@ class TestDuplicateCheckStore {
     }
 
     @Test
-    void testDeletes(@TempDir Path tempDir) {
-        LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
+    void testDeletes(@TempDir final Path tempDir) {
+        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
         Mockito.when(mockDuplicateCheckDirs.getDir(UUID))
                 .thenReturn(lmdbEnvDir);
 
         final DuplicateCheckStoreConfig duplicateCheckStoreConfig = new DuplicateCheckStoreConfig();
         final DuplicateCheckRowSerde serde = new DuplicateCheckRowSerde(byteBufferFactory);
 
-        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+        try (final ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             final DuplicateCheckStore duplicateCheckStore = new DuplicateCheckStore(
                     mockDuplicateCheckDirs,
                     byteBufferFactory,
+                    byteBuffers,
                     duplicateCheckStoreConfig,
                     serde,
                     () -> executorService,
@@ -202,14 +207,14 @@ class TestDuplicateCheckStore {
             duplicateCheckStore.flush();
 
             duplicateCheckStore.close();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error", e);
         }
     }
 
     @Test
-    void testHashClash(@TempDir Path tempDir) {
-        LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
+    void testHashClash(@TempDir final Path tempDir) {
+        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
         Mockito.when(mockDuplicateCheckDirs.getDir(UUID))
                 .thenReturn(lmdbEnvDir);
 
@@ -217,10 +222,11 @@ class TestDuplicateCheckStore {
         // Every value gets the same hash, so 100% hash clashes
         final DuplicateCheckRowSerde serde = new HashClashDupCheckRowSerde(byteBufferFactory);
 
-        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+        try (final ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             final DuplicateCheckStore duplicateCheckStore = new DuplicateCheckStore(
                     mockDuplicateCheckDirs,
                     byteBufferFactory,
+                    byteBuffers,
                     duplicateCheckStoreConfig,
                     serde,
                     () -> executorService,
@@ -261,8 +267,8 @@ class TestDuplicateCheckStore {
     }
 
     @Test
-    void testDeletesWithHashClash(@TempDir Path tempDir) {
-        LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
+    void testDeletesWithHashClash(@TempDir final Path tempDir) {
+        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(tempDir, true);
         Mockito.when(mockDuplicateCheckDirs.getDir(UUID))
                 .thenReturn(lmdbEnvDir);
 
@@ -270,10 +276,11 @@ class TestDuplicateCheckStore {
         // Every value gets the same hash, so 100% hash clashes
         final DuplicateCheckRowSerde serde = new HashClashDupCheckRowSerde(byteBufferFactory);
 
-        try (ExecutorService executorService = Executors.newSingleThreadExecutor()) {
+        try (final ExecutorService executorService = Executors.newSingleThreadExecutor()) {
             final DuplicateCheckStore duplicateCheckStore = new DuplicateCheckStore(
                     mockDuplicateCheckDirs,
                     byteBufferFactory,
+                    byteBuffers,
                     duplicateCheckStoreConfig,
                     serde,
                     () -> executorService,
@@ -322,7 +329,7 @@ class TestDuplicateCheckStore {
         return duplicateCheckStore.delete(request);
     }
 
-    private String makeValue(int len) {
+    private String makeValue(final int len) {
         return StringUtil.createRandomCode(secureRandom, len);
     }
 

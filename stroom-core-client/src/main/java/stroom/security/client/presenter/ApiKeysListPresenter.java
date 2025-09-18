@@ -3,14 +3,14 @@ package stroom.security.client.presenter;
 import stroom.alert.client.event.AlertEvent;
 import stroom.cell.info.client.ActionMenuCell;
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
 import stroom.preferences.client.DateTimeFormatter;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.security.shared.ApiKeyResource;
 import stroom.security.shared.AppPermission;
@@ -22,7 +22,7 @@ import stroom.svg.client.Preset;
 import stroom.task.client.TaskMonitorFactory;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.Selection;
 import stroom.util.shared.UserRef;
@@ -141,6 +141,12 @@ public class ApiKeysListPresenter
 //        });
     }
 
+    @Override
+    protected void onBind() {
+        super.onBind();
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
+    }
+
     public MultiSelectionModelImpl<HashedApiKey> getSelectionModel() {
         return selectionModel;
     }
@@ -165,7 +171,7 @@ public class ApiKeysListPresenter
 //    }
 
 //    private void setButtonStates() {
-//        final boolean hasSelectedItems = GwtNullSafe.hasItems(selectionModel.getSelectedItems());
+//        final boolean hasSelectedItems = NullSafe.hasItems(selectionModel.getSelectedItems());
 //        editButton.setEnabled(hasSelectedItems);
 //        deleteButton.setEnabled(!selection.isMatchNothing());
 //    }
@@ -184,7 +190,7 @@ public class ApiKeysListPresenter
 //        final HashedApiKey selectedApiKey = selectionModel.getSelected();
 //
 //        // The ones selected with the checkboxes
-//        final Set<Integer> selectedSet = GwtNullSafe.set(selection.getSet());
+//        final Set<Integer> selectedSet = NullSafe.set(selection.getSet());
 //        final boolean clearSelection = selectedApiKey != null && selectedSet.contains(selectedApiKey.getId());
 //        final List<Integer> selectedItems = new ArrayList<>(selectedSet);
 //
@@ -250,8 +256,6 @@ public class ApiKeysListPresenter
 //    }
 
     private void initTableColumns() {
-        DataGridUtil.addColumnSortHandler(dataGrid, criteriaBuilder, this::refresh);
-
 //        final Column<HashedApiKey, TickBoxState> checkBoxColumn = DataGridUtil.columnBuilder(
 //                        (HashedApiKey row) ->
 //                                TickBoxState.fromBoolean(selection.isMatch(row.getId())),
@@ -329,6 +333,7 @@ public class ApiKeysListPresenter
                 .withSorting(FindApiKeyCriteria.FIELD_EXPIRE_TIME)
                 .build();
         dataGrid.addColumn(expiresOnColumn, "Expires On", ColumnSizeConstants.DATE_AND_DURATION_COL);
+        dataGrid.sort(expiresOnColumn);
 
         // Hash algorithm
         final Column<HashedApiKey, String> hashAlgorithmColumn = DataGridUtil.textColumnBuilder(
@@ -350,7 +355,7 @@ public class ApiKeysListPresenter
                         Function.identity(),
                         () -> new ActionMenuCell<>(
                                 (HashedApiKey hashedApiKey) -> UserAndGroupHelper.buildUserActionMenu(
-                                        GwtNullSafe.get(hashedApiKey, HashedApiKey::getOwner),
+                                        NullSafe.get(hashedApiKey, HashedApiKey::getOwner),
                                         isExternalIdp(),
                                         getActionScreensToInclude(),
                                         this),
@@ -364,7 +369,6 @@ public class ApiKeysListPresenter
                 "",
                 ColumnSizeConstants.ICON_COL + 10);
 
-        dataGrid.getColumnSortList().push(expiresOnColumn);
         DataGridUtil.addEndColumn(dataGrid);
     }
 
@@ -380,11 +384,12 @@ public class ApiKeysListPresenter
                            final Consumer<ResultPage<HashedApiKey>> dataConsumer,
                            final RestErrorHandler errorHandler,
                            final TaskMonitorFactory taskMonitorFactory) {
-        ExpressionOperator expression = QuickFilterExpressionParser
+        final ExpressionOperator expression = QuickFilterExpressionParser
                 .parse(filter, FindApiKeyCriteria.DEFAULT_FIELDS, FindApiKeyCriteria.ALL_FIELDs_MAP);
 
         criteriaBuilder.expression(expression);
-        criteriaBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+        criteriaBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+        criteriaBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
 
         restFactory
                 .create(API_KEY_RESOURCE)
@@ -513,7 +518,7 @@ public class ApiKeysListPresenter
 
     @Override
     public void onFilterChange(final String text) {
-        filter = GwtNullSafe.trim(text);
+        filter = NullSafe.trim(text);
         if (filter.isEmpty()) {
             filter = null;
         }

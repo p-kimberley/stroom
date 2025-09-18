@@ -24,16 +24,16 @@ import stroom.document.client.event.OpenDocumentEvent.CommonDocLinkTab;
 import stroom.explorer.client.presenter.DocumentListPresenter;
 import stroom.explorer.client.presenter.FindDocResultListHandler;
 import stroom.explorer.shared.FindResult;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.shared.DocumentPermission;
 import stroom.security.shared.DocumentPermissionFields;
 import stroom.security.shared.QuickFilterExpressionParser;
 import stroom.svg.client.Preset;
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.dropdowntree.client.view.QuickFilterPageView;
@@ -183,7 +183,7 @@ public class BatchDocumentPermissionsPresenter
     private void onBatchEdit() {
         final BatchDocumentPermissionsEditPresenter presenter =
                 batchDocumentPermissionsEditPresenterProvider.get();
-        presenter.show(combinedExpression, GwtNullSafe.get(docs, ResultPage::getPageResponse), () ->
+        presenter.show(combinedExpression, NullSafe.get(docs, ResultPage::getPageResponse), () ->
                 documentListPresenter.refresh());
     }
 

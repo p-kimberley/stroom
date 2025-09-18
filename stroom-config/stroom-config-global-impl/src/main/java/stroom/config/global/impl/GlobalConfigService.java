@@ -19,11 +19,16 @@ package stroom.config.global.impl;
 
 
 import stroom.config.global.shared.ConfigProperty;
+import stroom.config.global.shared.ConfigProperty.SourceType;
 import stroom.config.global.shared.ConfigPropertyValidationException;
 import stroom.config.global.shared.GlobalConfigCriteria;
 import stroom.config.global.shared.GlobalConfigResource;
 import stroom.config.global.shared.ListConfigResponse;
 import stroom.node.api.NodeInfo;
+import stroom.query.common.v2.ExpressionPredicateFactory;
+import stroom.query.common.v2.FieldProviderImpl;
+import stroom.query.common.v2.SimpleStringExpressionParser.FieldProvider;
+import stroom.query.common.v2.ValueFunctionFactoriesImpl;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
 import stroom.task.api.TaskContextFactory;
@@ -32,14 +37,12 @@ import stroom.util.config.AppConfigValidator;
 import stroom.util.config.ConfigValidator.Result;
 import stroom.util.config.PropertyUtil;
 import stroom.util.config.PropertyUtil.ObjectInfo;
-import stroom.util.filter.FilterFieldMapper;
-import stroom.util.filter.FilterFieldMappers;
-import stroom.util.filter.QuickFilterPredicateFactory;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.AbstractConfig;
 import stroom.util.shared.CompareUtil;
+import stroom.util.shared.CompareUtil.FieldComparators;
 import stroom.util.shared.NotInjectableConfig;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.PropertyPath;
@@ -58,30 +61,29 @@ public class GlobalConfigService {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(GlobalConfigService.class);
 
-    private static final FilterFieldMappers<ConfigProperty> FIELD_MAPPERS = FilterFieldMappers.of(
-            FilterFieldMapper.of(
-                    GlobalConfigResource.FIELD_DEF_NAME,
-                    ConfigProperty::getNameAsString),
-            FilterFieldMapper.of(
-                    GlobalConfigResource.FIELD_DEF_VALUE,
-                    configProperty -> configProperty.getEffectiveValue().orElse("")),
-            FilterFieldMapper.of(
-                    GlobalConfigResource.FIELD_DEF_SOURCE,
-                    configProperty -> configProperty.getSource().getName()),
-            FilterFieldMapper.of(
-                    GlobalConfigResource.FIELD_DEF_DESCRIPTION,
-                    ConfigProperty::getDescription));
+    public static final ValueFunctionFactoriesImpl<ConfigProperty> VALUE_FUNCTION_FACTORIES =
+            new ValueFunctionFactoriesImpl<ConfigProperty>()
+                    .put(GlobalConfigResource.FIELD_DEF_NAME, ConfigProperty::getNameAsString)
+                    .put(GlobalConfigResource.FIELD_DEF_VALUE, configProperty ->
+                            configProperty.getEffectiveValue().orElse(""))
+                    .put(GlobalConfigResource.FIELD_DEF_SOURCE, configProperty ->
+                            configProperty.getSource().getName())
+                    .put(GlobalConfigResource.FIELD_DEF_DESCRIPTION, ConfigProperty::getDescription);
+    public static final FieldProvider FIELD_PROVIDER = new FieldProviderImpl(GlobalConfigResource.FIELD_DEFINITIONS);
 
-//    private static final Comparator<ConfigProperty> com = Comparator.comparing(configProperty ->
-//    configProperty.getEffectiveValueMasked().orElse(""));
-
-    private static final Map<String, Comparator<ConfigProperty>> FIELD_COMPARATORS = Map.of(
-            GlobalConfigResource.FIELD_DEF_NAME.getDisplayName(), Comparator.comparing(
-                    ConfigProperty::getNameAsString, String::compareToIgnoreCase),
-            GlobalConfigResource.FIELD_DEF_VALUE.getDisplayName(), Comparator.comparing(
-                    (ConfigProperty prop) ->
-                            prop.getEffectiveValueMasked().orElse(""), String::compareToIgnoreCase),
-            GlobalConfigResource.FIELD_DEF_SOURCE.getDisplayName(), Comparator.comparing(ConfigProperty::getSource));
+    private static final FieldComparators<ConfigProperty> FIELD_COMPARATORS = FieldComparators.builder(
+                    ConfigProperty.class)
+            .addStringComparator(
+                    GlobalConfigResource.FIELD_DEF_NAME.getDisplayName(),
+                    ConfigProperty::getNameAsString)
+            .addStringComparator(
+                    GlobalConfigResource.FIELD_DEF_VALUE.getDisplayName(),
+                    prop -> prop.getEffectiveValueMasked().orElse(""))
+            .addEnumComparator(
+                    GlobalConfigResource.FIELD_DEF_SOURCE.getDisplayName(),
+                    ConfigProperty::getSource,
+                    SourceType::getName)
+            .build();
 
     private final GlobalConfigBootstrapService globalConfigBootstrapService;
     private final ConfigPropertyDao dao;
@@ -90,6 +92,7 @@ public class GlobalConfigService {
     private final AppConfigValidator appConfigValidator;
     private final TaskContextFactory taskContextFactory;
     private final NodeInfo nodeInfo;
+    private final ExpressionPredicateFactory expressionPredicateFactory;
 
     @Inject
     GlobalConfigService(final GlobalConfigBootstrapService globalConfigBootstrapService,
@@ -98,7 +101,8 @@ public class GlobalConfigService {
                         final ConfigMapper configMapper,
                         final AppConfigValidator appConfigValidator,
                         final TaskContextFactory taskContextFactory,
-                        final NodeInfo nodeInfo) {
+                        final NodeInfo nodeInfo,
+                        final ExpressionPredicateFactory expressionPredicateFactory) {
         this.globalConfigBootstrapService = globalConfigBootstrapService;
         this.dao = dao;
         this.securityContext = securityContext;
@@ -106,6 +110,7 @@ public class GlobalConfigService {
         this.appConfigValidator = appConfigValidator;
         this.taskContextFactory = taskContextFactory;
         this.nodeInfo = nodeInfo;
+        this.expressionPredicateFactory = expressionPredicateFactory;
     }
 
 //    private void initialise() {
@@ -139,22 +144,18 @@ public class GlobalConfigService {
 
             final Optional<Comparator<ConfigProperty>> optConfigPropertyComparator = buildComparator(criteria);
 
-            final String fullyQualifyInput = QuickFilterPredicateFactory.fullyQualifyInput(
-                    criteria.getQuickFilterInput(),
-                    FIELD_MAPPERS);
-
-            return QuickFilterPredicateFactory.filterStream(
-                            criteria.getQuickFilterInput(),
-                            FIELD_MAPPERS,
+            // Extracting the value out of the json details is not very efficient.  May be better to use
+            // something like jsoniter on the raw json.
+            return expressionPredicateFactory.filterAndSortStream(
                             configMapper.getGlobalProperties().stream(),
-                            optConfigPropertyComparator.orElse(null))
+                            criteria.getQuickFilterInput(), FIELD_PROVIDER, VALUE_FUNCTION_FACTORIES,
+                            optConfigPropertyComparator)
                     .collect(ListConfigResponse.collector(
                             pageRequest,
                             (configProperties, pageResponse) ->
                                     new ListConfigResponse(configProperties,
                                             pageResponse,
-                                            nodeInfo.getThisNodeName(),
-                                            fullyQualifyInput)));
+                                            nodeInfo.getThisNodeName())));
         });
     }
 
@@ -257,14 +258,14 @@ public class GlobalConfigService {
                 if (configProperty.getId() == null) {
                     try {
                         persistedConfigProperty = dao.create(configProperty);
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         throw new RuntimeException(LogUtil.message("Error inserting property {}: {}",
                                 configProperty.getName(), e.getMessage()));
                     }
                 } else {
                     try {
                         persistedConfigProperty = dao.update(configProperty);
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         throw new RuntimeException(LogUtil.message("Error updating property {} with id {}: {}",
                                 configProperty.getName(), configProperty.getId(), e.getMessage()));
                     }
@@ -274,7 +275,7 @@ public class GlobalConfigService {
                     // getDatabaseValue is unset so we need to remove it from the DB
                     try {
                         dao.delete(configProperty.getName());
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         throw new RuntimeException(LogUtil.message("Error deleting property {}: {}",
                                 configProperty.getName(), e.getMessage()));
                     }
@@ -303,7 +304,7 @@ public class GlobalConfigService {
         final String effectiveValueStr = configProperty.getEffectiveValue().orElse(null);
         try {
             configMapper.validateValueSerialisation(propertyPath, effectiveValueStr);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new ConfigPropertyValidationException(LogUtil.message("Error parsing [{}]: {}",
                     effectiveValueStr, e.getMessage(), e));
         }
@@ -332,7 +333,7 @@ public class GlobalConfigService {
                         effectiveValueStr,
                         parentConfigObject);
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error validating prop {} with value '{}': {}",
                     propertyPath, effectiveValueStr, e.getMessage(), e);
             throw new RuntimeException(e);
@@ -363,7 +364,7 @@ public class GlobalConfigService {
 
         while (true) {
 
-            PropertyPath parentPath = curPropertyPath.getParent()
+            final PropertyPath parentPath = curPropertyPath.getParent()
                     .orElseThrow(() -> new RuntimeException(LogUtil.message(
                             "Path {} has no parent", propertyPath)));
 

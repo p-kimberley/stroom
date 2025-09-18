@@ -16,11 +16,11 @@
 
 package stroom.query.common.v2;
 
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.TableSettings;
-import stroom.query.api.v2.TimeFilter;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.TableSettings;
+import stroom.query.api.TimeFilter;
 import stroom.query.language.functions.ChildData;
 import stroom.query.language.functions.ExpressionContext;
 import stroom.query.language.functions.FieldIndex;
@@ -88,7 +88,7 @@ public class MapDataStore implements DataStore {
                         final ErrorConsumer errorConsumer,
                         final ResultStoreMapConfig resultStoreMapConfig) {
         this.componentId = componentId;
-        List<Column> columns = tableSettings.getColumns();
+        final List<Column> columns = tableSettings.getColumns();
         this.dateTimeSettings = expressionContext == null
                 ? null
                 : expressionContext.getDateTimeSettings();
@@ -637,7 +637,7 @@ public class MapDataStore implements DataStore {
                                        final Key key,
                                        final StoredValues storedValues,
                                        final int index) {
-            Val val;
+            final Val val;
             final Generator generator = dataStore.compiledColumnsArray[index].getGenerator();
             if (key.isGrouped()) {
                 final Supplier<ChildData> childDataSupplier = () -> new ChildData() {

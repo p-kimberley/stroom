@@ -17,7 +17,7 @@
 package stroom.item.client;
 
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.SafeHtmlUtil;
 import stroom.widget.util.client.SvgImageUtil;
 
@@ -48,7 +48,7 @@ public class SelectionItemCell<I extends SelectionItem> extends AbstractCell<I> 
             final SafeHtmlBuilder content = new SafeHtmlBuilder();
             if (row.getIcon() != null) {
                 // Add icon
-                final String title = GwtNullSafe.requireNonNullElseGet(
+                final String title = NullSafe.requireNonNullElseGet(
                         row.getIconTooltip(),
                         row::getLabel);
                 final SafeHtml iconSafeHtml = SvgImageUtil.toSafeHtml(
@@ -70,7 +70,7 @@ public class SelectionItemCell<I extends SelectionItem> extends AbstractCell<I> 
             // Add parent indicator arrow.
             if (row.isHasChildren()) {
                 final SvgImage expanderIcon = SvgImage.ARROW_RIGHT;
-                SafeHtml expanderIconSafeHtml;
+                final SafeHtml expanderIconSafeHtml;
                 String className = getCellClassName() + "-expander";
                 className += " " + expanderIcon.getClassName();
                 expanderIconSafeHtml = SafeHtmlUtils.fromTrustedString(expanderIcon.getSvg());

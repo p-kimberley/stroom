@@ -1,11 +1,11 @@
 package stroom.security.shared;
 
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.QueryField;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.util.shared.GwtNullSafe;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.QueryField;
+import stroom.util.shared.NullSafe;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,8 +45,8 @@ public class QuickFilterExpressionParser {
         // If the default field mapper is two fields, field1 & field2 then "bad stuff" is really
         // (field1:bad OR field2:bad) AND (field1:stuff OR field2:stuff)
 
-        ExpressionOperator.Builder builder = ExpressionOperator.builder();
-        if (GwtNullSafe.isNonBlankString(userInput)) {
+        final ExpressionOperator.Builder builder = ExpressionOperator.builder();
+        if (NullSafe.isNonBlankString(userInput)) {
             extractMatchTokens(userInput, defaultFields, fieldMap, builder);
         }
         return builder.build();
@@ -152,7 +152,7 @@ public class QuickFilterExpressionParser {
                     insideQuotes = !insideQuotes; // toggle state
                 }
 
-                boolean atLastChar = (current == cleanedInput.length() - 1);
+                final boolean atLastChar = (current == cleanedInput.length() - 1);
 
                 if (atLastChar) {
                     if (wasInsideQuotes) {
@@ -182,7 +182,7 @@ public class QuickFilterExpressionParser {
 //                        unEscapedQuoteCount, userInput);
                 tokens.clear();
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
 //            LOGGER.trace("Unable to parse [{}] due to: {}", userInput, e.getMessage(), e);
             // Don't want to throw as it may be unfinished user input.
         }

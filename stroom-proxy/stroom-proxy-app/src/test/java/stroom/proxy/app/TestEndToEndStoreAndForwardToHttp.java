@@ -30,8 +30,7 @@ public class TestEndToEndStoreAndForwardToHttp extends AbstractEndToEndTest {
                 .pathConfig(createProxyPathConfig())
                 .aggregatorConfig(AggregatorConfig.builder()
                         .maxUncompressedByteSizeString("1G")
-                        .maxAggregateAge(StroomDuration.ofSeconds(5))
-                        .aggregationFrequency(StroomDuration.ofSeconds(1))
+                        .aggregationFrequency(StroomDuration.ofSeconds(5))
                         .maxItemsPerAggregate(3)
                         .build())
                 .addForwardHttpDestination(MockHttpDestination.createForwardHttpPostConfig(false))
@@ -54,8 +53,8 @@ public class TestEndToEndStoreAndForwardToHttp extends AbstractEndToEndTest {
 
         // Two feeds each send 4, agg max items of 3 so two batches each
         final PostDataHelper postDataHelper = createPostDataHelper();
-        int reqPerFeed = 16;
-        int reqCount = reqPerFeed * 2;
+        final int reqPerFeed = 16;
+        final int reqCount = reqPerFeed * 2;
         for (int i = 0; i < reqPerFeed; i++) {
             postDataHelper.sendFeed1TestData();
             postDataHelper.sendFeed2TestData();

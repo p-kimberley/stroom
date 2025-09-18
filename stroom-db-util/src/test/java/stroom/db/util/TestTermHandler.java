@@ -1,13 +1,13 @@
 package stroom.db.util;
 
 import stroom.collection.api.CollectionService;
-import stroom.datasource.api.v2.QueryField;
 import stroom.db.util.ExpressionMapper.MultiConverter;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
 import stroom.meta.shared.MetaFields;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.datasource.QueryField;
 import stroom.test.common.TestUtil;
 
 import io.vavr.Tuple;
@@ -58,7 +58,7 @@ class TestTermHandler {
 
     @Test
     void name() {
-        TermHandler<String> termHandler = getDocRefTermHandler(false);
+        final TermHandler<String> termHandler = getDocRefTermHandler(false);
 //        termHandler.apply(E)
     }
 
@@ -257,7 +257,8 @@ class TestTermHandler {
                 wordListProviderMock,
                 collectionServiceMock,
                 docRefInfoServiceMock,
-                useName);
+                useName,
+                false);
     }
 
     TermHandler<Long> getIdTermHandler(final boolean useName) {
@@ -268,6 +269,7 @@ class TestTermHandler {
                 wordListProviderMock,
                 collectionServiceMock,
                 docRefInfoServiceMock,
-                useName);
+                useName,
+                false);
     }
 }

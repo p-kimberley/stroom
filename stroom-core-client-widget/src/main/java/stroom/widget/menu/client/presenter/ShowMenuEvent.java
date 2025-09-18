@@ -1,6 +1,6 @@
 package stroom.widget.menu.client.presenter;
 
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.popup.client.event.HidePopupEvent;
 import stroom.widget.popup.client.event.ShowPopupEvent;
 import stroom.widget.popup.client.presenter.PopupPosition;
@@ -81,7 +81,7 @@ public class ShowMenuEvent
     }
 
     @Override
-    protected void dispatch(Handler handler) {
+    protected void dispatch(final Handler handler) {
         handler.onShow(this);
     }
 
@@ -164,7 +164,7 @@ public class ShowMenuEvent
             return this;
         }
 
-        public void fire(HasHandlers hasHandlers) {
+        public void fire(final HasHandlers hasHandlers) {
             Element[] elements = null;
             if (!autoHidePartners.isEmpty()) {
                 elements = autoHidePartners.toArray(new Element[0]);
@@ -176,7 +176,7 @@ public class ShowMenuEvent
                     showHandler,
                     hideHandler,
                     elements,
-                    GwtNullSafe.requireNonNullElse(allowCloseOnMoveLeft, false)));
+                    NullSafe.requireNonNullElse(allowCloseOnMoveLeft, false)));
         }
     }
 }

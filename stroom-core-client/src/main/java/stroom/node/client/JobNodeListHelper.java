@@ -29,8 +29,8 @@ import stroom.svg.shared.SvgImage;
 import stroom.task.client.TaskMonitorFactory;
 import stroom.task.client.event.OpenTaskManagerEvent;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.scheduler.Schedule;
 import stroom.widget.button.client.InlineSvgToggleButton;
 import stroom.widget.menu.client.presenter.Item;
@@ -92,7 +92,7 @@ public class JobNodeListHelper {
 
     public void setEnabledNodeNames(final Collection<String> enabledNodeNames) {
         this.enabledNodeNames.clear();
-        GwtNullSafe.consume(enabledNodeNames, this.enabledNodeNames::addAll);
+        NullSafe.consume(enabledNodeNames, this.enabledNodeNames::addAll);
     }
 
     public boolean isNodeEnabled(final String nodeName) {
@@ -105,7 +105,7 @@ public class JobNodeListHelper {
 
 //    public BrowserEventHandler<JobNodeAndInfo> createExecuteJobNowHandler() {
 //        return (Context context, Element elem, JobNodeAndInfo jobNodeAndInfo, NativeEvent event) ->
-//                executeJobNow(hasHandlers, taskListener, GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobNode));
+//                executeJobNow(hasHandlers, taskListener, NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobNode));
 //    }
 
     public void executeJobNow(final JobNode jobNode) {
@@ -115,12 +115,10 @@ public class JobNodeListHelper {
                 "\n\nThe job will execute shortly, likely within ten seconds. " +
                 "You can check it has run by refreshing the table until the 'Last Executed' " +
                 "column has been updated.",
-                ok -> {
-                    restFactory.create(JOB_NODE_RESOURCE)
-                            .call(resource -> resource.execute(jobNode.getId()))
-                            .taskMonitorFactory(taskMonitorFactory)
-                            .exec();
-                });
+                ok -> restFactory.create(JOB_NODE_RESOURCE)
+                        .call(resource -> resource.execute(jobNode.getId()))
+                        .taskMonitorFactory(taskMonitorFactory)
+                        .exec());
     }
 
     public void showSchedule(final JobNodeAndInfo jobNodeAndInfo) {
@@ -141,9 +139,9 @@ public class JobNodeListHelper {
             final TaskMonitorFactory taskMonitorFactory,
             final Runnable onSuccessHandler) {
 
-        return (int rowIndex, JobNodeAndInfo jobNodeAndInfo, TickBoxState value) -> {
+        return (final int rowIndex, final JobNodeAndInfo jobNodeAndInfo, final TickBoxState value) -> {
             if (jobNodeAndInfo != null) {
-                final boolean isEnabled = GwtNullSafe.isTrue(value.toBoolean());
+                final boolean isEnabled = NullSafe.isTrue(value.toBoolean());
                 jobNodeAndInfo.getJobNode().setEnabled(isEnabled);
                 restFactory
                         .create(JOB_NODE_RESOURCE)
@@ -151,7 +149,7 @@ public class JobNodeListHelper {
                                 jobNodeResource.setEnabled(jobNodeAndInfo.getId(), isEnabled))
                         .onSuccess(aVoid -> {
                             JobNodeChangeEvent.fire(handlers, jobNodeAndInfo.getJobNode());
-                            GwtNullSafe.run(onSuccessHandler);
+                            NullSafe.run(onSuccessHandler);
                         })
                         .taskMonitorFactory(taskMonitorFactory)
                         .exec();
@@ -216,7 +214,7 @@ public class JobNodeListHelper {
                                                 resource.setScheduleBatch(batchScheduleRequest))
                                         .onSuccess(result -> {
                                             JobNodeChangeEvent.fire(hasHandlers, selectedItems);
-                                            GwtNullSafe.run(refreshFunc);
+                                            NullSafe.run(refreshFunc);
                                         })
                                         .taskMonitorFactory(taskMonitorFactory)
                                         .exec();
@@ -233,7 +231,7 @@ public class JobNodeListHelper {
                                     resource.setSchedule(jobNodeAndInfo.getId(), schedule))
                             .onSuccess(result -> {
                                 JobNodeChangeEvent.fire(hasHandlers, jobNode);
-                                GwtNullSafe.run(refreshFunc);
+                                NullSafe.run(refreshFunc);
                             })
                             .taskMonitorFactory(taskMonitorFactory)
                             .exec();
@@ -242,19 +240,19 @@ public class JobNodeListHelper {
         }
     }
 
-    public String getCurrentTaskCountAsStr(JobNodeAndInfo jobNodeAndInfo) {
-        return GwtNullSafe.getOrElse(
+    public String getCurrentTaskCountAsStr(final JobNodeAndInfo jobNodeAndInfo) {
+        return NullSafe.getOrElse(
                 jobNodeAndInfo,
                 JobNodeAndInfo::getJobNodeInfo,
                 info -> ModelStringUtil.formatCsv(info.getCurrentTaskCount()),
                 "?");
     }
 
-    public String getLastExecutedTimeAsStr(JobNodeAndInfo jobNodeAndInfo) {
-        if (GwtNullSafe.test(jobNodeAndInfo, jobNode2 ->
+    public String getLastExecutedTimeAsStr(final JobNodeAndInfo jobNodeAndInfo) {
+        if (NullSafe.test(jobNodeAndInfo, jobNode2 ->
                 jobNode2.getJobType() == JobType.CRON
                 || jobNode2.getJobType() == JobType.FREQUENCY)) {
-            return GwtNullSafe.getOrElse(
+            return NullSafe.getOrElse(
                     jobNodeAndInfo,
                     JobNodeAndInfo::getJobNodeInfo,
                     info -> dateTimeFormatter.formatWithDuration(info.getLastExecutedTime()),
@@ -264,13 +262,13 @@ public class JobNodeListHelper {
         }
     }
 
-    public String getNextScheduledTimeAsStr(JobNodeAndInfo jobNodeAndInfo) {
-        final JobType jobType = GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobType);
+    public String getNextScheduledTimeAsStr(final JobNodeAndInfo jobNodeAndInfo) {
+        final JobType jobType = NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobType);
         final boolean isJobNodeEnabled = isJobNodeEnabled(jobNodeAndInfo);
 
         if (isJobNodeEnabled
             && (jobType == JobType.CRON || jobType == JobType.FREQUENCY)) {
-            return GwtNullSafe.getOrElse(
+            return NullSafe.getOrElse(
                     jobNodeAndInfo,
                     JobNodeAndInfo::getJobNodeInfo,
                     info -> dateTimeFormatter.formatWithDuration(info.getNextScheduledTime()),
@@ -285,14 +283,14 @@ public class JobNodeListHelper {
             return false;
         } else {
             // A job node is only enabled if the node and the parent job is also enabled
-            return isNodeEnabled(GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getNodeName))
+            return isNodeEnabled(NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getNodeName))
                    && jobNodeAndInfo.isEnabled()
-                   && GwtNullSafe.isTrue(jobNodeAndInfo.getJob(), Job::isEnabled);
+                   && NullSafe.isTrue(jobNodeAndInfo.getJob(), Job::isEnabled);
         }
     }
 
     public static String buildParentJobEnabledStr(final JobNodeAndInfo jobNodeAndInfo) {
-        return GwtNullSafe.get(jobNodeAndInfo,
+        return NullSafe.get(jobNodeAndInfo,
                 JobNodeAndInfo::getJob,
                 Job::isEnabled,
                 isEnabled -> isEnabled
@@ -310,7 +308,7 @@ public class JobNodeListHelper {
         return null;
     }
 
-    public static String buildJobTypeStr(JobNodeAndInfo jobNodeAndInfo) {
+    public static String buildJobTypeStr(final JobNodeAndInfo jobNodeAndInfo) {
         //noinspection EnhancedSwitchMigration // not in GWT
         switch (jobNodeAndInfo.getJobType()) {
             case CRON:
@@ -344,7 +342,7 @@ public class JobNodeListHelper {
     public Function<JobNodeAndInfo, CommandLink> buildOpenScheduleCommandLinkFunc() {
 
         return (final JobNodeAndInfo jobNodeAndInfo) -> {
-            final String schedule = GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getSchedule);
+            final String schedule = NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getSchedule);
 
             if (schedule != null) {
                 return new CommandLink(
@@ -360,9 +358,9 @@ public class JobNodeListHelper {
 
     public List<Item> buildActionMenu(final JobNodeAndInfo jobNodeAndInfo) {
 
-        final JobNode jobNode = GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobNode);
-        final String nodeName = GwtNullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getNodeName);
-        final boolean isSchedulable = GwtNullSafe.test(
+        final JobNode jobNode = NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getJobNode);
+        final String nodeName = NullSafe.get(jobNodeAndInfo, JobNodeAndInfo::getNodeName);
+        final boolean isSchedulable = NullSafe.test(
                 jobNodeAndInfo,
                 JobNodeAndInfo::getJobType,
                 type -> type == JobType.CRON || type == JobType.FREQUENCY);
@@ -389,18 +387,14 @@ public class JobNodeListHelper {
                 .withIconMenuItem(itemBuilder -> itemBuilder
                         .icon(SvgImage.JOBS)
                         .text("Show in Server Tasks (" + jobNode.getNodeName() + ")")
-                        .command(() -> {
-                            OpenTaskManagerEvent.fire(
-                                    hasHandlers,
-                                    jobNode.getNodeName(),
-                                    jobNode.getJobName());
-                        }))
+                        .command(() -> OpenTaskManagerEvent.fire(
+                                hasHandlers,
+                                jobNode.getNodeName(),
+                                jobNode.getJobName())))
                 .withIconMenuItem(itemBuilder -> itemBuilder
                         .icon(SvgImage.JOBS)
                         .text("Show in Server Tasks (All Nodes)")
-                        .command(() -> {
-                            OpenTaskManagerEvent.fire(hasHandlers, jobNode.getJobName());
-                        }))
+                        .command(() -> OpenTaskManagerEvent.fire(hasHandlers, jobNode.getJobName())))
                 .build();
     }
 
@@ -443,8 +437,8 @@ public class JobNodeListHelper {
     public void addNodeStateColumn(final MyDataGrid<JobNodeAndInfo> dataGrid) {
         dataGrid.addColumn(
                 DataGridUtil.textColumnBuilder(
-                                (JobNodeAndInfo jobNodeAndInfo) -> {
-                                    final String nodeName = GwtNullSafe.get(
+                                (final JobNodeAndInfo jobNodeAndInfo) -> {
+                                    final String nodeName = NullSafe.get(
                                             jobNodeAndInfo, JobNodeAndInfo::getNodeName);
                                     return isNodeEnabled(nodeName)
                                             ? "Enabled"

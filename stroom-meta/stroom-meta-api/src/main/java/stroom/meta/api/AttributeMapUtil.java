@@ -16,12 +16,12 @@
 
 package stroom.meta.api;
 
-import stroom.util.NullSafe;
 import stroom.util.cert.CertificateExtractor;
 import stroom.util.concurrent.UniqueId;
 import stroom.util.date.DateUtil;
 import stroom.util.io.StreamUtil;
 import stroom.util.net.HostNameUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -63,7 +63,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -97,10 +96,7 @@ public class AttributeMapUtil {
 
     // Delimiter between key and value
     private static final String HEADER_DELIMITER = ":";
-    // Delimiter within a value
-    static final String VALUE_DELIMITER = ",";
 
-    static final Pattern VALUE_DELIMITER_PATTERN = Pattern.compile(Pattern.quote(VALUE_DELIMITER));
     // Delimiter between attributes
     private static final String ATTRIBUTE_DELIMITER = "\n";
     static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
@@ -191,14 +187,14 @@ public class AttributeMapUtil {
     }
 
     public static void read(final String data, final AttributeMap attributeMap) {
-        try (Stream<String> linesStream = data.lines()) {
+        try (final Stream<String> linesStream = data.lines()) {
             linesStream.map(String::trim)
                     .filter(Predicate.not(String::isEmpty))
                     .forEach(line -> {
                         final int splitPos = line.indexOf(HEADER_DELIMITER);
                         if (splitPos != -1) {
                             final String key = line.substring(0, splitPos);
-                            String value = line.substring(splitPos + 1);
+                            final String value = line.substring(splitPos + 1);
                             attributeMap.put(key.trim(), value.trim());
                         } else {
                             attributeMap.put(line, null);
@@ -221,7 +217,7 @@ public class AttributeMapUtil {
         if (NullSafe.hasItems(keys) && NullSafe.isNonBlankString(data)) {
             // Meta keys come from headers so should be ascii, and thus we don't have to
             // worry about multibyte 'chars' and other such oddities.
-            try (Stream<String> linesStream = data.lines()) {
+            try (final Stream<String> linesStream = data.lines()) {
                 return readKeys(keys, linesStream);
             }
         } else {
@@ -244,7 +240,7 @@ public class AttributeMapUtil {
         if (NullSafe.hasItems(keys)) {
             // Meta keys come from headers so should be ascii, and thus we don't have to
             // worry about multibyte 'chars' and other such oddities.
-            try (Stream<String> linesStream = Files.lines(path, DEFAULT_CHARSET)) {
+            try (final Stream<String> linesStream = Files.lines(path, DEFAULT_CHARSET)) {
                 return readKeys(keys, linesStream);
             }
         } else {
@@ -321,7 +317,7 @@ public class AttributeMapUtil {
     }
 
     /**
-     * Splits the attributeValue using {@link AttributeMapUtil#VALUE_DELIMITER}.
+     * Splits the attributeValue using {@link AttributeMap#VALUE_DELIMITER}.
      *
      * @return A non-null list
      */
@@ -329,7 +325,7 @@ public class AttributeMapUtil {
         if (NullSafe.isEmptyString(attributeValue)) {
             return Collections.emptyList();
         } else {
-            return VALUE_DELIMITER_PATTERN.splitAsStream(attributeValue)
+            return AttributeMap.VALUE_DELIMITER_PATTERN.splitAsStream(attributeValue)
                     .toList();
         }
     }
@@ -389,7 +385,7 @@ public class AttributeMapUtil {
                                            final AttributeMap attributeMap) {
         final Optional<X509Certificate> optional = certificateExtractor.extractCertificate(httpServletRequest);
         optional.ifPresent(cert -> {
-            // If we get here it means SSL has been terminated by DropWizard so we need to add meta items
+            // If we get here it means SSL has been terminated by DropWizard, so we need to add meta items
             // from the certificate
             if (cert.getSubjectDN() != null) {
                 final String remoteDN = cert.getSubjectDN().toString();
@@ -409,9 +405,9 @@ public class AttributeMapUtil {
 
     private static void addAllHeaders(final HttpServletRequest httpServletRequest,
                                       final AttributeMap attributeMap) {
-        Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
+        final Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
         while (headerNames.hasMoreElements()) {
-            String header = headerNames.nextElement();
+            final String header = headerNames.nextElement();
             putHeader(header, httpServletRequest, attributeMap);
         }
     }
@@ -468,23 +464,24 @@ public class AttributeMapUtil {
                 LOGGER.debug("Converting certificate expiry date from [{}] to [{}]", headerValue, instant);
                 attributeMap.putDateTime(StandardHeaderArguments.REMOTE_CERT_EXPIRY, instant);
 
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Unable to create header {} from header {} with value [{}].",
                         StandardHeaderArguments.REMOTE_CERT_EXPIRY, CERT_EXPIRY_HEADER_TOKEN, headerValue, e);
             }
         }
     }
 
-    private static void addAllQueryString(HttpServletRequest httpServletRequest, AttributeMap attributeMap) {
-        String queryString = httpServletRequest.getQueryString();
+    private static void addAllQueryString(final HttpServletRequest httpServletRequest,
+                                          final AttributeMap attributeMap) {
+        final String queryString = httpServletRequest.getQueryString();
         if (queryString != null) {
-            StringTokenizer st = new StringTokenizer(httpServletRequest.getQueryString(), "&");
+            final StringTokenizer st = new StringTokenizer(httpServletRequest.getQueryString(), "&");
             while (st.hasMoreTokens()) {
-                String pair = st.nextToken();
-                int pos = pair.indexOf('=');
+                final String pair = st.nextToken();
+                final int pos = pair.indexOf('=');
                 if (pos != -1) {
-                    String key = pair.substring(0, pos);
-                    String val = pair.substring(pos + 1);
+                    final String key = pair.substring(0, pos);
+                    final String val = pair.substring(pos + 1);
 
                     attributeMap.put(key, val);
                 }

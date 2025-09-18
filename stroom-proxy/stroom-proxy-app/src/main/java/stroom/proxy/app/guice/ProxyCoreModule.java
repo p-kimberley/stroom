@@ -12,10 +12,10 @@ import stroom.docstore.impl.Serialiser2FactoryImpl;
 import stroom.docstore.impl.StoreFactoryImpl;
 import stroom.docstore.impl.fs.FSPersistence;
 import stroom.dropwizard.common.DropwizardHttpClientFactory;
-import stroom.importexport.api.ImportConverter;
 import stroom.proxy.app.DataDirProvider;
 import stroom.proxy.app.DataDirProviderImpl;
 import stroom.proxy.app.ProxyConfig;
+import stroom.proxy.app.cache.ProxyCacheServiceModule;
 import stroom.proxy.app.handler.ProxyId;
 import stroom.proxy.app.handler.ProxyReceiptIdGenerator;
 import stroom.proxy.app.handler.ProxyRequestHandler;
@@ -26,6 +26,9 @@ import stroom.proxy.app.jersey.ProxyJerseyModule;
 import stroom.proxy.app.security.ProxySecurityModule;
 import stroom.proxy.repo.ProgressLog;
 import stroom.proxy.repo.ProgressLogImpl;
+import stroom.proxy.repo.queue.QueueModule;
+import stroom.proxy.repo.store.StoreModule;
+import stroom.receive.common.CertificateExtractorImpl;
 import stroom.receive.common.DataReceiptPolicyAttributeMapFilterFactory;
 import stroom.receive.common.FeedStatusService;
 import stroom.receive.common.ReceiptIdGenerator;
@@ -38,6 +41,7 @@ import stroom.security.api.SecurityContext;
 import stroom.security.mock.MockSecurityContext;
 import stroom.task.impl.TaskContextModule;
 import stroom.util.BuildInfoProvider;
+import stroom.util.cert.CertificateExtractor;
 import stroom.util.entityevent.EntityEventBus;
 import stroom.util.http.HttpClientFactory;
 import stroom.util.io.PathCreator;
@@ -60,6 +64,9 @@ public class ProxyCoreModule extends AbstractModule {
         install(new ProxyJerseyModule());
         install(new ProxySecurityModule());
         install(new MockCollectionModule());
+        install(new ProxyCacheServiceModule());
+        install(new QueueModule());
+        install(new StoreModule());
 
         bind(ProxyId.class).asEagerSingleton();
         bind(ReceiptIdGenerator.class).to(ProxyReceiptIdGenerator.class).asEagerSingleton();
@@ -68,6 +75,7 @@ public class ProxyCoreModule extends AbstractModule {
         bind(DataReceiptPolicyAttributeMapFilterFactory.class).to(DataReceiptPolicyAttributeMapFilterFactoryImpl.class);
         bind(DocumentResourceHelper.class).to(DocumentResourceHelperImpl.class);
         bind(FeedStatusService.class).to(RemoteFeedStatusService.class);
+        bind(CertificateExtractor.class).to(CertificateExtractorImpl.class);
         bind(ReceiveDataRuleSetService.class).to(ReceiveDataRuleSetServiceImpl.class);
         bind(RequestHandler.class).to(ProxyRequestHandler.class);
         bind(SecurityContext.class).to(MockSecurityContext.class);
@@ -76,10 +84,6 @@ public class ProxyCoreModule extends AbstractModule {
         bind(DocRefDecorator.class).to(NoDecorationDocRefDecorator.class);
         bind(DataDirProvider.class).to(DataDirProviderImpl.class);
         bind(ProgressLog.class).to(ProgressLogImpl.class);
-
-        // Proxy doesn't do import so bind a dummy ImportConverter for the StoreImpl(s) to use
-        bind(ImportConverter.class).to(NoOpImportConverter.class);
-
     }
 
     @SuppressWarnings("unused")

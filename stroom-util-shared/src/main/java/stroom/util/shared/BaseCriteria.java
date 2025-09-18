@@ -63,14 +63,14 @@ public abstract class BaseCriteria {
         return pageRequest;
     }
 
-    protected Set<Long> clone(Set<Long> set) {
+    protected Set<Long> clone(final Set<Long> set) {
         if (set == null) {
             return null;
         }
         return new HashSet<>(set);
     }
 
-    protected void copyFrom(BaseCriteria other) {
+    protected void copyFrom(final BaseCriteria other) {
         if (other != null) {
             if (other.pageRequest == null) {
                 this.pageRequest = null;
@@ -83,6 +83,10 @@ public abstract class BaseCriteria {
                 this.sortList = new ArrayList<>(other.sortList);
             }
         }
+    }
+
+    public void setSortList(final List<CriteriaFieldSort> sortList) {
+        this.sortList = sortList;
     }
 
     public void setSort(final String field) {
@@ -113,12 +117,6 @@ public abstract class BaseCriteria {
         sortList.add(sort);
     }
 
-    public void removeSorts() {
-        if (sortList != null) {
-            sortList.clear();
-        }
-    }
-
     public List<CriteriaFieldSort> getSortList() {
         return sortList;
     }
@@ -127,7 +125,7 @@ public abstract class BaseCriteria {
      * @return True if fieldId is included in the sortList
      */
     public boolean isFieldInSort(final String fieldId) {
-        if (sortList != null && GwtNullSafe.isNonBlankString(fieldId)) {
+        if (sortList != null && NullSafe.isNonBlankString(fieldId)) {
             return sortList.stream()
                     .map(CriteriaFieldSort::getId)
                     .anyMatch(fieldId::equals);
@@ -194,14 +192,6 @@ public abstract class BaseCriteria {
 
         public B sortList(final List<CriteriaFieldSort> sortList) {
             this.sortList = sortList;
-            return self();
-        }
-
-        public B addSort(final CriteriaFieldSort sort) {
-            if (sortList == null) {
-                sortList = new ArrayList<>();
-            }
-            sortList.add(sort);
             return self();
         }
     }

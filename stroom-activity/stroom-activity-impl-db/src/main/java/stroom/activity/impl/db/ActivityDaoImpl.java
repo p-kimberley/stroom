@@ -21,12 +21,12 @@ import stroom.activity.impl.ActivityDao;
 import stroom.activity.shared.Activity;
 import stroom.activity.shared.Activity.ActivityDetails;
 import stroom.db.util.JooqUtil;
-import stroom.util.NullSafe;
 import stroom.util.exception.DataChangedException;
 import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserRef;
 
 import jakarta.inject.Inject;
@@ -38,7 +38,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static stroom.activity.impl.db.jooq.tables.Activity.ACTIVITY;
@@ -161,7 +160,7 @@ public class ActivityDaoImpl implements ActivityDao {
                         .fetch())
                 .stream()
                 .map(RECORD_TO_ACTIVITY_MAPPER)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -176,7 +175,7 @@ public class ActivityDaoImpl implements ActivityDao {
         final int limit = JooqUtil.getLimit(criteria.getPageRequest(), true);
 
         return JooqUtil.contextResult(activityDbConnProvider, context -> {
-            try (Stream<Activity> activityStream = context
+            try (final Stream<Activity> activityStream = context
                     .select()
                     .from(ACTIVITY)
                     .where(conditions)
@@ -187,7 +186,7 @@ public class ActivityDaoImpl implements ActivityDao {
                 return streamFunction.apply(activityStream)
                         .skip(offset)
                         .limit(limit)
-                        .collect(Collectors.toList());
+                        .toList();
             }
         });
     }

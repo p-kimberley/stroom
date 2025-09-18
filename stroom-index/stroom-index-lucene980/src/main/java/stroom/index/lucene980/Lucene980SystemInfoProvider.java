@@ -1,22 +1,22 @@
 package stroom.index.lucene980;
 
-import stroom.datasource.api.v2.FieldType;
 import stroom.docref.DocRef;
 import stroom.index.impl.IndexShardWriter;
 import stroom.index.impl.IndexShardWriterCache;
-import stroom.index.impl.IndexStore;
 import stroom.index.impl.IndexSystemInfoProvider;
 import stroom.index.shared.IndexConstants;
 import stroom.index.shared.IndexShard;
 import stroom.index.shared.LuceneIndexDoc;
-import stroom.index.shared.LuceneIndexField;
 import stroom.meta.api.MetaService;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.Status;
 import stroom.node.api.NodeInfo;
-import stroom.util.NullSafe;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.common.v2.IndexFieldCache;
 import stroom.util.date.DateUtil;
 import stroom.util.io.PathCreator;
+import stroom.util.shared.NullSafe;
 import stroom.util.sysinfo.SystemInfoResult;
 
 import io.vavr.Tuple;
@@ -37,7 +37,6 @@ import org.apache.lucene980.search.TopDocs;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.LongAdder;
@@ -47,21 +46,21 @@ class Lucene980SystemInfoProvider implements IndexSystemInfoProvider {
 
     private final IndexShardWriterCache indexShardWriterCache;
     private final MetaService metaService;
-    private final IndexStore indexStore;
     private final NodeInfo nodeInfo;
     private final PathCreator pathCreator;
+    private final IndexFieldCache indexFieldCache;
 
     @Inject
     public Lucene980SystemInfoProvider(final IndexShardWriterCache indexShardWriterCache,
                                        final MetaService metaService,
-                                       final IndexStore indexStore,
                                        final NodeInfo nodeInfo,
-                                       final PathCreator pathCreator) {
+                                       final PathCreator pathCreator,
+                                       final IndexFieldCache indexFieldCache) {
         this.indexShardWriterCache = indexShardWriterCache;
         this.metaService = metaService;
-        this.indexStore = indexStore;
         this.nodeInfo = nodeInfo;
         this.pathCreator = pathCreator;
+        this.indexFieldCache = indexFieldCache;
     }
 
     @Override
@@ -88,7 +87,7 @@ class Lucene980SystemInfoProvider implements IndexSystemInfoProvider {
                                          final IndexShard indexShard,
                                          final Integer limit,
                                          final Long streamId) {
-        SearcherManager searcherManager = indexShardSearcher.getSearcherManager();
+        final SearcherManager searcherManager = indexShardSearcher.getSearcherManager();
         IndexSearcher indexSearcher = null;
         try {
             indexSearcher = searcherManager.acquire();
@@ -101,7 +100,7 @@ class Lucene980SystemInfoProvider implements IndexSystemInfoProvider {
                 consumeDocument(indexSearcher, streamIdDocCounts, scoreDoc);
             }
 
-            var detailMap = streamIdDocCounts
+            final var detailMap = streamIdDocCounts
                     .entrySet()
                     .stream()
                     .collect(Collectors.toMap(
@@ -134,14 +133,14 @@ class Lucene980SystemInfoProvider implements IndexSystemInfoProvider {
                     .addDetail("PartitionToTime",
                             DateUtil.createNormalDateTimeString(indexShard.getPartitionToTime()))
                     .build();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException("Error acquiring index searcher: " + e.getMessage(), e);
         } finally {
             try {
                 if (indexSearcher != null) {
                     searcherManager.release(indexSearcher);
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException("Error releasing index searcher: " + e.getMessage(), e);
             }
         }
@@ -150,17 +149,16 @@ class Lucene980SystemInfoProvider implements IndexSystemInfoProvider {
     private Query buildQuery(final IndexShard indexShard, final Long streamId) {
         if (streamId == null) {
             return new MatchAllDocsQuery();
+
         } else {
-            final LuceneIndexDoc indexDoc = indexStore.readDocument(DocRef.builder()
+            final DocRef docRef = DocRef.builder()
                     .uuid(indexShard.getIndexUuid())
                     .type(LuceneIndexDoc.TYPE)
-                    .build());
-            Objects.requireNonNull(indexDoc);
-
-            LuceneIndexField streamIdField = indexDoc.getFields().stream()
-                    .filter(indexField -> indexField.getFldName().equals(IndexConstants.STREAM_ID))
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Can't find field " + IndexConstants.STREAM_ID));
+                    .build();
+            final IndexField streamIdField = indexFieldCache.get(docRef, IndexConstants.STREAM_ID);
+            if (streamIdField == null) {
+                throw new RuntimeException("Can't find field " + IndexConstants.STREAM_ID);
+            }
 
             if (FieldType.ID.equals(streamIdField.getFldType())) {
                 return LongField.newExactQuery(IndexConstants.STREAM_ID, streamId);

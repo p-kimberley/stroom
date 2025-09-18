@@ -17,7 +17,6 @@
 package stroom.query.language.functions;
 
 import stroom.query.language.functions.ref.StoredValues;
-import stroom.query.language.token.Param;
 
 import java.util.function.Supplier;
 
@@ -83,7 +82,7 @@ abstract class AbstractEqualityFunction extends AbstractManyChildFunction {
             final Val[] values = new Val[childGenerators.length];
 
             for (int i = 0; i < childGenerators.length; i++) {
-                Val val;
+                final Val val;
                 try {
                     val = childGenerators[i].eval(storedValues, childDataSupplier);
                 } catch (final RuntimeException e) {

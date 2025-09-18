@@ -17,7 +17,6 @@
 
 package stroom.importexport.impl;
 
-import stroom.importexport.impl.ContentPackImportConfig.UserType;
 import stroom.importexport.shared.ImportSettings;
 import stroom.security.api.SecurityContext;
 import stroom.security.mock.MockSecurityContext;
@@ -25,6 +24,7 @@ import stroom.security.shared.User;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathCreator;
 import stroom.util.io.SimplePathCreator;
+import stroom.util.shared.UserType;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -126,7 +126,7 @@ class TestContentPackZipImport {
         Mockito.reset(contentPackImportConfig);
 
         Mockito.when(contentPackImportConfig.isEnabled()).thenReturn(false);
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
 
         FileUtil.touch(testPack1);
 
@@ -140,7 +140,7 @@ class TestContentPackZipImport {
     void testStartup_enabledNoFiles() {
         setStandardMockAnswers();
         Mockito.when(contentPackImportConfig.isEnabled()).thenReturn(true);
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
         contentPackImport.startup();
         Mockito.verifyNoInteractions(importExportService);
     }
@@ -152,7 +152,7 @@ class TestContentPackZipImport {
         Mockito.when(contentPackImportConfig.getImportDirectory())
                 .thenReturn(null);
 
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
         contentPackImport.startup();
         Mockito.verifyNoInteractions(importExportService);
     }
@@ -165,7 +165,7 @@ class TestContentPackZipImport {
         Mockito.when(contentPackImportConfig.getImportDirectory())
                 .thenReturn("/xxxxxxxxxxxxxxxx");
 
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
         contentPackImport.startup();
         Mockito.verifyNoInteractions(importExportService);
     }
@@ -212,9 +212,9 @@ class TestContentPackZipImport {
         Mockito.when(contentPackImportConfig.getImportDirectory())
                 .thenReturn(tempDir.toAbsolutePath().toString());
 
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
 
-        Path packFile = tempDir.resolve("testFile1.zip");
+        final Path packFile = tempDir.resolve("testFile1.zip");
         FileUtil.touch(packFile);
 
         contentPackImport.startup();
@@ -234,7 +234,7 @@ class TestContentPackZipImport {
     void testStartup_failedImport() throws IOException {
         setStandardMockAnswers();
         Mockito.when(contentPackImportConfig.isEnabled()).thenReturn(true);
-        ContentPackImport contentPackImport = getContentPackImport();
+        final ContentPackImport contentPackImport = getContentPackImport();
 
         Mockito.doThrow(new RuntimeException("Error thrown by mock import service for test"))
                 .when(importExportService)

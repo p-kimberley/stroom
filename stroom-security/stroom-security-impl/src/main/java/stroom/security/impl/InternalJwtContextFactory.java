@@ -5,16 +5,17 @@ import stroom.security.common.impl.JwtUtil;
 import stroom.security.openid.api.OpenIdClientFactory;
 import stroom.security.openid.api.OpenIdConfiguration;
 import stroom.security.openid.api.PublicJsonWebKeyProvider;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.jose4j.jwa.AlgorithmConstraints;
+import org.jose4j.jwa.AlgorithmConstraints.ConstraintType;
 import org.jose4j.jwk.JsonWebKeySet;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 class InternalJwtContextFactory implements JwtContextFactory {
@@ -142,7 +144,7 @@ class InternalJwtContextFactory implements JwtContextFactory {
                     .build();
             try {
                 optJwtContext = Optional.of(simpleJwtConsumer.process(jwt));
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.debug(() -> "Unable to extract token: " + e.getMessage(), e);
             }
         }
@@ -170,17 +172,24 @@ class InternalJwtContextFactory implements JwtContextFactory {
                 .setRelaxVerificationKeyValidation() // relaxes key length requirement
                 .setJwsAlgorithmConstraints(// only allow the expected signature algorithm(s) in the given context
                         new AlgorithmConstraints(
-                                AlgorithmConstraints.ConstraintType.WHITELIST, // which is only RS256 here
+                                ConstraintType.PERMIT, // which is only RS256 here
                                 AlgorithmIdentifiers.RSA_USING_SHA256))
 //                .setExpectedIssuer(InternalIdpConfigurationProvider.INTERNAL_ISSUER);
                 .setExpectedIssuers(true, validIssuers);
 
-        if (openIdConfiguration.isValidateAudience()) {
-            // aud does not appear in access tokens by default it seems
-            builder.setExpectedAudience(openIdClientDetailsFactory.getClient().getClientId());
+        final Set<String> allowedAudiences = openIdConfiguration.getAllowedAudiences();
+        if (NullSafe.hasItems(allowedAudiences)) {
+            // The IDP may not supply the aud claim
+            builder.setExpectedAudience(
+                    openIdConfiguration.isAudienceClaimRequired(),
+                    allowedAudiences.toArray(String[]::new));
         } else {
             builder.setSkipDefaultAudienceValidation();
         }
+        LOGGER.debug("validIssuers: {}, allowedAudiences: {}, audienceClaimRequired: {}",
+                validIssuers,
+                allowedAudiences,
+                openIdConfiguration.isAudienceClaimRequired());
         return builder.build();
     }
 

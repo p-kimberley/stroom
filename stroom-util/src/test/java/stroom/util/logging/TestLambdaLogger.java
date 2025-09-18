@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 class TestLambdaLogger {
@@ -17,7 +18,7 @@ class TestLambdaLogger {
     @Test
     void compareLambdaToIfBlock() {
 
-        String someStr = "sdskjdsdsdk";
+        final String someStr = "sdskjdsdsdk";
 
         Stream.of(100, 1_000, 1_000_000, 100_000_000)
                 .forEach(iterations -> {
@@ -66,9 +67,46 @@ class TestLambdaLogger {
                     LOGGER.info("ms diff {}", lambdaLoggerDuration.toMillis() - loggerDuration.toMillis());
                     LOGGER.info("%  diff {}",
                             (lambdaLoggerDuration.toMillis() - loggerDuration.toMillis())
-                                    / (double) loggerDuration.toMillis() * 100);
+                            / (double) loggerDuration.toMillis() * 100);
 
                     LOGGER.info("---------------------------");
                 });
+    }
+
+    @Test
+    void testNull1() {
+        try {
+            throw new NullPointerException();
+        } catch (final RuntimeException e) {
+            LAMBDA_LOGGER.error(e::getMessage, e);
+        }
+    }
+
+    @Test
+    void testNull2() {
+        try {
+            throw new NullPointerException();
+        } catch (final RuntimeException e) {
+            LAMBDA_LOGGER.error((Supplier<String>) null, e);
+        }
+    }
+
+    @Test
+    void testNull3() {
+        try {
+            throw new NullPointerException();
+        } catch (final RuntimeException e) {
+            LAMBDA_LOGGER.error(() -> null, e);
+        }
+    }
+
+    @Test
+    void testNull4() {
+        LAMBDA_LOGGER.error(() -> null, null);
+    }
+
+    @Test
+    void testNull5() {
+        LAMBDA_LOGGER.error((Supplier<String>) null, null);
     }
 }

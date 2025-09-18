@@ -14,10 +14,10 @@ import stroom.pipeline.refdata.store.RefStreamDefinition;
 import stroom.pipeline.refdata.store.StagingValue;
 import stroom.pipeline.refdata.store.StagingValueOutputStream;
 import stroom.pipeline.refdata.store.StringValue;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Range;
 
 import org.slf4j.Logger;
@@ -105,7 +105,7 @@ class OnHeapRefDataLoader implements RefDataLoader {
                 effectiveTimeMs,
                 ProcessingState.LOAD_IN_PROGRESS);
 
-        PutOutcome putOutcome = putProcessingInfo(refStreamDefinition, refDataProcessingInfo);
+        final PutOutcome putOutcome = putProcessingInfo(refStreamDefinition, refDataProcessingInfo);
 
         currentLoaderState = LoaderState.INITIALISED;
         return putOutcome;
@@ -263,7 +263,7 @@ class OnHeapRefDataLoader implements RefDataLoader {
 
         processingInfoMap.compute(refStreamDefinition, (refStreamDef, refDataProcessingInfo) -> {
             if (refDataProcessingInfo != null) {
-                RefDataProcessingInfo newRefDataProcessingInfo = refDataProcessingInfo
+                final RefDataProcessingInfo newRefDataProcessingInfo = refDataProcessingInfo
                         .cloneWithNewState(newProcessingState, touchLastAccessedTime);
                 return newRefDataProcessingInfo;
             } else {
@@ -301,7 +301,7 @@ class OnHeapRefDataLoader implements RefDataLoader {
 
     private void checkCurrentState(final LoaderState... validStates) {
         boolean isCurrentStateValid = false;
-        for (LoaderState loaderState : validStates) {
+        for (final LoaderState loaderState : validStates) {
             if (currentLoaderState.equals(loaderState)) {
                 isCurrentStateValid = true;
                 break;

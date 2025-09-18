@@ -6,10 +6,9 @@ import stroom.analytics.shared.AnalyticRuleDoc;
 import stroom.cache.api.CacheManager;
 import stroom.cache.api.LoadingStroomCache;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.SearchRequest;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermission;
-import stroom.util.NullSafe;
 import stroom.util.entityevent.EntityAction;
 import stroom.util.entityevent.EntityEvent;
 import stroom.util.entityevent.EntityEventHandler;
@@ -18,6 +17,7 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogExecutionTime;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.view.api.ViewStore;
 import stroom.view.shared.ViewDoc;
@@ -74,7 +74,7 @@ public class StreamingAnalyticCache implements Clearable, EntityEvent.Handler {
                 LOGGER.info(() -> "Loading rule");
                 final AbstractAnalyticRuleDoc analyticRuleDoc = analyticRuleStore.readDocument(analyticRuleRef);
 
-                ViewDoc viewDoc;
+                final ViewDoc viewDoc;
 
                 // Try and get view.
                 final String ruleIdentity = RuleUtil.getRuleIdentity(analyticRuleDoc);

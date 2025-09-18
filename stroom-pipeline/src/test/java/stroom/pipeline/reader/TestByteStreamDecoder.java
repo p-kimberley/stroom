@@ -4,8 +4,8 @@ import stroom.bytebuffer.ByteArrayUtils;
 import stroom.pipeline.reader.ByteStreamDecoder.DecodedChar;
 import stroom.pipeline.reader.ByteStreamDecoder.DecoderException;
 import stroom.pipeline.reader.ByteStreamDecoder.Mode;
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.string.ByteArrayBuilder;
 
 import org.assertj.core.api.Assertions;
@@ -292,7 +292,7 @@ class TestByteStreamDecoder {
             }
         });
 
-        List<DecodedChar> decodedChars = new ArrayList<>();
+        final List<DecodedChar> decodedChars = new ArrayList<>();
         DecodedChar decodedChar;
         int iterations = 0;
         do {
@@ -433,7 +433,7 @@ class TestByteStreamDecoder {
         final ByteStreamDecoder byteStreamDecoder = new ByteStreamDecoder(charset, () ->
                 myByteBuffer.getByte(byteOffset.getAndIncrement()));
 
-        List<DecodedChar> decodedChars = new ArrayList<>();
+        final List<DecodedChar> decodedChars = new ArrayList<>();
         while (byteOffset.get() < myByteBuffer.size()) {
 
             final DecodedChar decodedChar = byteStreamDecoder.decodeNextChar();

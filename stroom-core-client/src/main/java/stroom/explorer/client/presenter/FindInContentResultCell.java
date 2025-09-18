@@ -16,9 +16,9 @@
 
 package stroom.explorer.client.presenter;
 
-import stroom.docref.DocContentMatch;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
+import stroom.explorer.shared.DocContentMatch;
 import stroom.explorer.shared.FindInContentResult;
 import stroom.widget.util.client.SafeHtmlUtil;
 import stroom.widget.util.client.SvgImageUtil;
@@ -76,7 +76,7 @@ public class FindInContentResultCell extends AbstractCell<FindInContentResult> {
                     .replaceAll("\n", " ");
             final String sampleAfter = sample.substring(Math.min(end, sample.length()))
                     .replaceAll("\n", " ");
-            SafeHtmlBuilder sampleHtml = new SafeHtmlBuilder();
+            final SafeHtmlBuilder sampleHtml = new SafeHtmlBuilder();
             sampleHtml.append(template.div(getCellClassName() + "-sample-before",
                     SafeHtmlUtil.from(sampleBefore)));
             sampleHtml.append(template.div(getCellClassName() + "-highlight",

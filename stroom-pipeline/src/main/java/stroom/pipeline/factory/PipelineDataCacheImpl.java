@@ -26,12 +26,13 @@ import stroom.pipeline.shared.PipelineDataMerger;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.PipelineModelException;
 import stroom.pipeline.shared.data.PipelineData;
+import stroom.pipeline.shared.data.PipelineLayer;
 import stroom.security.api.SecurityContext;
-import stroom.util.NullSafe;
 import stroom.util.entityevent.EntityAction;
 import stroom.util.entityevent.EntityEvent;
 import stroom.util.entityevent.EntityEventHandler;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 
 import jakarta.inject.Inject;
@@ -84,18 +85,18 @@ public class PipelineDataCacheImpl implements PipelineDataCache, Clearable, Enti
         return securityContext.asProcessingUserResult(() -> {
             final List<PipelineDoc> pipelines = pipelineStackLoader.loadPipelineStack(pipelineDoc);
             // Iterate over the pipeline list reading the deepest ancestor first.
-            final List<PipelineData> configStack = new ArrayList<>(pipelines.size());
+            final List<PipelineLayer> pipelineLayers = new ArrayList<>(pipelines.size());
 
             for (final PipelineDoc pipe : pipelines) {
                 final PipelineData pipelineData = pipe.getPipelineData();
                 if (pipelineData != null) {
-                    configStack.add(pipelineData);
+                    pipelineLayers.add(new PipelineLayer(DocRefUtil.create(pipe), pipelineData));
                 }
             }
 
             final PipelineDataMerger pipelineDataMerger = new PipelineDataMerger();
             try {
-                pipelineDataMerger.merge(configStack);
+                pipelineDataMerger.merge(pipelineLayers);
             } catch (final PipelineModelException e) {
                 throw new PipelineFactoryException(e);
             }
@@ -128,9 +129,9 @@ public class PipelineDataCacheImpl implements PipelineDataCache, Clearable, Enti
             // entry to see if any of them relate to the changed docRef(s)
             cache.invalidateEntries((pipelineDoc, pipelineDataHolder) ->
                     DocRefUtil.isSameDocument(pipelineDoc, docRef)
-                            || DocRefUtil.isSameDocument(pipelineDoc, oldDocRef)
-                            || pipelineDataHolder.containsDocRef(docRef)
-                            || pipelineDataHolder.containsDocRef(oldDocRef));
+                    || DocRefUtil.isSameDocument(pipelineDoc, oldDocRef)
+                    || pipelineDataHolder.containsDocRef(docRef)
+                    || pipelineDataHolder.containsDocRef(oldDocRef));
         }
     }
 
@@ -158,9 +159,9 @@ public class PipelineDataCacheImpl implements PipelineDataCache, Clearable, Enti
         @Override
         public String toString() {
             return "PipelineDataHolder{" +
-                    "mergedPipelineData=" + mergedPipelineData +
-                    ", docRefs=" + docRefs +
-                    '}';
+                   "mergedPipelineData=" + mergedPipelineData +
+                   ", docRefs=" + docRefs +
+                   '}';
         }
     }
 }

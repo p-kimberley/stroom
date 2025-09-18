@@ -20,6 +20,8 @@ import stroom.dashboard.impl.download.DelimitedTarget;
 import stroom.dashboard.impl.download.ExcelTarget;
 import stroom.dashboard.impl.download.SearchResultWriter;
 import stroom.dashboard.impl.logging.SearchEventLog;
+import stroom.dashboard.shared.ColumnValues;
+import stroom.dashboard.shared.ColumnValuesRequest;
 import stroom.dashboard.shared.ComponentResultRequest;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.dashboard.shared.DashboardSearchRequest;
@@ -35,27 +37,35 @@ import stroom.docref.DocRefInfo;
 import stroom.docstore.api.DocumentResourceHelper;
 import stroom.event.logging.rs.api.AutoLogged;
 import stroom.node.api.NodeInfo;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.ResultRequest.Fetch;
-import stroom.query.api.v2.ResultRequest.ResultStyle;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchResponse;
-import stroom.query.api.v2.TableResultBuilder;
+import stroom.query.api.Column;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.QueryNodeResolver;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.ResultRequest.Fetch;
+import stroom.query.api.ResultRequest.ResultStyle;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchResponse;
+import stroom.query.api.TableResultBuilder;
+import stroom.query.api.TimeFilter;
+import stroom.query.common.v2.DataStore;
 import stroom.query.common.v2.ExpressionPredicateFactory;
+import stroom.query.common.v2.Key;
+import stroom.query.common.v2.OpenGroupsImpl;
 import stroom.query.common.v2.ResultCreator;
 import stroom.query.common.v2.ResultStoreManager;
 import stroom.query.common.v2.ResultStoreManager.RequestAndStore;
 import stroom.query.common.v2.TableResultCreator;
+import stroom.query.common.v2.ValPredicateFactory;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.language.functions.Expression;
 import stroom.query.language.functions.ExpressionContext;
 import stroom.query.language.functions.ExpressionParser;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ParamFactory;
+import stroom.query.language.functions.Val;
 import stroom.resource.api.ResourceStore;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
@@ -64,14 +74,16 @@ import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TerminateHandlerFactory;
 import stroom.util.EntityServiceExceptionUtil;
-import stroom.util.NullSafe;
+import stroom.util.collections.TrimmedSortedList;
 import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.servlet.HttpServletRequestHolder;
 import stroom.util.shared.EntityServiceException;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
+import stroom.util.shared.ResultPage;
 import stroom.util.string.ExceptionStringUtil;
 
 import jakarta.inject.Inject;
@@ -86,11 +98,14 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -116,6 +131,8 @@ class DashboardServiceImpl implements DashboardService {
     private final ResultStoreManager searchResponseCreatorManager;
     private final NodeInfo nodeInfo;
     private final ExpressionPredicateFactory expressionPredicateFactory;
+    private final ValPredicateFactory valPredicateFactory;
+    private final QueryNodeResolver queryNodeResolver;
 
     @Inject
     DashboardServiceImpl(final DashboardStore dashboardStore,
@@ -130,7 +147,9 @@ class DashboardServiceImpl implements DashboardService {
                          final TaskContextFactory taskContextFactory,
                          final ResultStoreManager searchResponseCreatorManager,
                          final NodeInfo nodeInfo,
-                         final ExpressionPredicateFactory expressionPredicateFactory) {
+                         final ExpressionPredicateFactory expressionPredicateFactory,
+                         final ValPredicateFactory valPredicateFactory,
+                         final QueryNodeResolver queryNodeResolver) {
         this.dashboardStore = dashboardStore;
         this.queryService = queryService;
         this.documentResourceHelper = documentResourceHelper;
@@ -144,6 +163,8 @@ class DashboardServiceImpl implements DashboardService {
         this.searchResponseCreatorManager = searchResponseCreatorManager;
         this.nodeInfo = nodeInfo;
         this.expressionPredicateFactory = expressionPredicateFactory;
+        this.valPredicateFactory = valPredicateFactory;
+        this.queryNodeResolver = queryNodeResolver;
     }
 
     @Override
@@ -216,14 +237,14 @@ class DashboardServiceImpl implements DashboardService {
                         builder.dateTimeSettings(dateTimeSettings.withoutReferenceTime()));
 
                 // Convert our internal model to the model used by the api
-                SearchRequest apiSearchRequest = searchRequestMapper.mapRequest(builder.build());
+                final SearchRequest apiSearchRequest = searchRequestMapper.mapRequest(builder.build());
 
                 if (apiSearchRequest == null) {
                     throw new EntityServiceException("Query could not be mapped to a SearchRequest");
                 }
 
                 // Generate the export file
-                String fileName = getQueryFileName(request);
+                final String fileName = getQueryFileName(request);
 
                 final ResourceKey resourceKey = resourceStore.createTempFile(fileName);
                 final Path tempFile = resourceStore.getTempFile(resourceKey);
@@ -240,7 +261,7 @@ class DashboardServiceImpl implements DashboardService {
         return securityContext.secureResult(AppPermission.DOWNLOAD_SEARCH_RESULTS_PERMISSION, () -> {
             final DashboardSearchRequest searchRequest = request.getSearchRequest();
             final QueryKey queryKey = searchRequest.getQueryKey();
-            ResourceKey resourceKey;
+            final ResourceKey resourceKey;
             long totalRowCount = 0;
 
             try {
@@ -259,7 +280,7 @@ class DashboardServiceImpl implements DashboardService {
                                 ComponentResultRequest::getComponentId,
                                 req -> (TableResultRequest) req));
 
-                SearchRequest mappedRequest = searchRequestMapper.mapRequest(searchRequest);
+                final SearchRequest mappedRequest = searchRequestMapper.mapRequest(searchRequest);
                 final List<ResultRequest> resultRequests = mappedRequest
                         .getResultRequests()
                         .stream()
@@ -272,8 +293,7 @@ class DashboardServiceImpl implements DashboardService {
                     throw new EntityServiceException("No tables specified for download");
                 }
 
-                final RequestAndStore requestAndStore = searchResponseCreatorManager
-                        .getResultStore(mappedRequest);
+                final RequestAndStore requestAndStore = searchResponseCreatorManager.getResultStore(mappedRequest);
 
                 // Import file.
                 final String fileName = getResultsFilename(request);
@@ -375,7 +395,7 @@ class DashboardServiceImpl implements DashboardService {
         String fileName = baseName;
         fileName = NON_BASIC_CHARS.matcher(fileName).replaceAll("");
         fileName = MULTIPLE_SPACE.matcher(fileName).replaceAll(" ");
-        fileName = fileName.replace(" ", "_");
+        fileName = fileName.replace(' ', '_');
         fileName = fileName + "." + extension;
         return fileName;
     }
@@ -396,7 +416,7 @@ class DashboardServiceImpl implements DashboardService {
                             "Dashboard Search",
                             TerminateHandlerFactory.NOOP_FACTORY,
                             taskContext -> {
-                                DashboardSearchResponse searchResponse;
+                                final DashboardSearchResponse searchResponse;
                                 try {
                                     taskContext.info(() -> "Polling for new search results");
                                     httpServletRequestHolder.set(httpServletRequest);
@@ -425,8 +445,8 @@ class DashboardServiceImpl implements DashboardService {
         LOGGER.trace(() -> "processRequest() " + searchRequest);
         DashboardSearchResponse result = null;
 
-        QueryKey queryKey = searchRequest.getQueryKey();
-        Search search = searchRequest.getSearch();
+        final QueryKey queryKey = searchRequest.getQueryKey();
+        final Search search = searchRequest.getSearch();
 
         if (search != null) {
             Exception exception = null;
@@ -507,5 +527,111 @@ class DashboardServiceImpl implements DashboardService {
                 LOGGER.error(e::getMessage, e);
             }
         }
+    }
+
+    @Override
+    public ColumnValues getColumnValues(final ColumnValuesRequest request) {
+        final DashboardSearchRequest searchRequest = request.getSearchRequest();
+        final QueryKey queryKey = searchRequest.getQueryKey();
+        try {
+            if (queryKey == null) {
+                throw new EntityServiceException("No query is active");
+            }
+
+//            final Map<String, TableResultRequest> tableRequestMap = request
+//                    .getSearchRequest()
+//                    .getComponentResultRequests()
+//                    .stream()
+//                    .filter(req -> req instanceof TableResultRequest)
+//                    .collect(Collectors.toMap(
+//                            ComponentResultRequest::getComponentId,
+//                            req -> (TableResultRequest) req));
+
+            final SearchRequest mappedRequest = searchRequestMapper.mapRequest(searchRequest);
+            final List<ResultRequest> resultRequests = mappedRequest
+                    .getResultRequests()
+                    .stream()
+                    .filter(req -> ResultStyle.TABLE.equals(req.getResultStyle()))
+                    .toList();
+
+            if (resultRequests.isEmpty()) {
+                throw new EntityServiceException("No tables specified for download");
+            }
+
+            final Set<String> dedupe = new HashSet<>();
+            final TrimmedSortedList<String> list = new TrimmedSortedList<>(
+                    request.getPageRequest(),
+                    new GenericComparator());
+            for (final ResultRequest resultRequest : resultRequests) {
+//                final TableResultRequest tableResultRequest =
+//                        tableRequestMap.get(resultRequest.getComponentId());
+                try {
+                    final RequestAndStore requestAndStore = searchResponseCreatorManager
+                            .getResultStore(mappedRequest);
+                    final DataStore dataStore = requestAndStore
+                            .resultStore()
+                            .getData(resultRequest.getComponentId());
+
+                    final TimeFilter timeFilter = null;
+                    final Predicate<Val> predicate = valPredicateFactory.createValPredicate(
+                            request.getColumn(),
+                            request.getFilter(),
+                            request.getSearchRequest().getDateTimeSettings());
+
+                    final Set<Key> openGroups = dataStore.getKeyFactory().decodeSet(resultRequest.getOpenGroups());
+
+                    final int index = dataStore
+                            .getColumns()
+                            .stream()
+                            .map(Column::getId)
+                            .toList()
+                            .indexOf(request.getColumn().getId());
+                    if (index != -1) {
+                        dataStore.fetch(
+                                dataStore.getColumns(),
+                                OffsetRange.UNBOUNDED,
+                                new OpenGroupsImpl(openGroups),
+                                timeFilter,
+                                item -> {
+                                    final Val val = item.getValue(index);
+                                    if (predicate.test(val)) {
+                                        final String string = val.toString();
+                                        if (string != null && dedupe.add(string)) {
+                                            list.add(string);
+                                        }
+                                    }
+                                    return null;
+                                },
+                                row -> {
+
+                                },
+                                count -> {
+
+                                });
+                    }
+                } catch (final Exception e) {
+                    LOGGER.debug(e::getMessage, e);
+                    throw e;
+                }
+            }
+
+            final ResultPage<String> resultPage = list.getResultPage();
+            return new ColumnValues(resultPage.getValues(), resultPage.getPageResponse());
+        } catch (final Exception e) {
+            LOGGER.debug(e::getMessage, e);
+            throw e;
+        }
+    }
+
+    @Override
+    public String getBestNode(final String nodeName, final DashboardSearchRequest request) {
+        if (nodeName == null || nodeName.equals("null")) {
+            if (queryNodeResolver == null) {
+                return null;
+            }
+            final DocRef docRef = NullSafe.get(request, DashboardSearchRequest::getSearch, Search::getDataSourceRef);
+            return queryNodeResolver.getNode(docRef);
+        }
+        return nodeName;
     }
 }

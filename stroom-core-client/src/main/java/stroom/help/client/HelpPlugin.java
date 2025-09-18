@@ -22,7 +22,7 @@ import stroom.menubar.client.event.BeforeRevealMenubarEvent;
 import stroom.svg.shared.SvgImage;
 import stroom.task.client.DefaultTaskMonitorFactory;
 import stroom.ui.config.client.UiConfigCache;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.menu.client.presenter.IconMenuItem;
 
 import com.google.gwt.user.client.Window;
@@ -48,9 +48,9 @@ public class HelpPlugin extends Plugin {
 
         clientPropertyCache.get(result -> {
             if (result != null) {
-                IconMenuItem helpMenuItem;
+                final IconMenuItem helpMenuItem;
                 final String helpUrl = result.getHelpUrl();
-                if (GwtNullSafe.isNonBlankString(helpUrl)) {
+                if (NullSafe.isNonBlankString(helpUrl)) {
                     helpMenuItem = new IconMenuItem.Builder()
                             .priority(1)
                             .icon(SvgImage.HELP)

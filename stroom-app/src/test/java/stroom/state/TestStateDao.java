@@ -17,24 +17,10 @@
 
 package stroom.state;
 
-import stroom.pipeline.refdata.store.StringValue;
-import stroom.state.impl.ScyllaDbUtil;
-import stroom.state.impl.dao.TemporalState;
-import stroom.state.impl.dao.TemporalStateDao;
-import stroom.state.impl.dao.TemporalStateRequest;
 import stroom.test.AbstractCoreIntegrationTest;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Collections;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class TestStateDao extends AbstractCoreIntegrationTest {

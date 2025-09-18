@@ -23,6 +23,7 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         bindFunction(ColFromFunction.class);
         bindFunction(ColToFunction.class);
         bindFunction(CurrentTimeFunction.class);
+        bindFunction(CurrentUnixTimeFunction.class);
         bindFunction(CurrentUserFunction.class);
         bindFunction(DecodeUrlFunction.class);
         bindFunction(DictionaryFunction.class);
@@ -31,6 +32,8 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         bindFunction(FeedNameFunction.class);
         bindFunction(FetchJsonFunction.class);
         bindFunction(FormatDateFunction.class);
+        bindFunction(FormatDateTimeFunction.class);
+        bindFunction(FromUnixTimeFunction.class);
         bindFunction(GetFunction.class);
         bindFunction(HashFunction.class);
         bindFunction(HexToDecFunction.class);
@@ -44,11 +47,16 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         bindFunction(LineToFunction.class);
         bindFunction(LinkFunction.class);
         bindFunction(LogFunction.class);
+        bindFunction(ManifestFunction.class);
+        bindFunction(ManifestForIdFunction.class);
         bindFunction(MetaFunction.class);
-        bindFunction(MetaKeysFunction.class);
         bindFunction(MetaAttributesFunction.class);
+        bindFunction(MetaKeysFunction.class);
+        bindFunction(MetaStreamFunction.class);
+        bindFunction(MetaStreamForIdFunction.class);
         bindFunction(NumericIPFunction.class);
         bindFunction(IPInCidrFunction.class);
+        bindFunction(ParseDateTimeFunction.class);
         bindFunction(ParseUriFunction.class);
         bindFunction(PipelineNameFunction.class);
         bindFunction(PointIsInsideXYPolygonFunction.class);
@@ -57,6 +65,7 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         bindFunction(RecordNoFunction.class);
         bindFunction(SearchIdFunction.class);
         bindFunction(SourceFunction.class);
+        bindFunction(ToUnixTimeFunction.class);
     }
 
     private static class CidrToNumericIPRangeFunction extends StroomExtensionFunctionDefinition<CidrToNumericIPRange> {
@@ -125,6 +134,20 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
                     0,
                     new SequenceType[]{},
                     SequenceType.OPTIONAL_STRING,
+                    functionCallProvider);
+        }
+    }
+
+    private static class CurrentUnixTimeFunction extends StroomExtensionFunctionDefinition<CurrentUnixTime> {
+
+        @Inject
+        CurrentUnixTimeFunction(final Provider<CurrentUnixTime> functionCallProvider) {
+            super(
+                    CurrentUnixTime.FUNCTION_NAME,
+                    0,
+                    0,
+                    new SequenceType[]{},
+                    SequenceType.OPTIONAL_INTEGER,
                     functionCallProvider);
         }
     }
@@ -247,6 +270,58 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
                             SequenceType.OPTIONAL_STRING
                     },
                     SequenceType.OPTIONAL_STRING,
+                    functionCallProvider);
+        }
+    }
+
+    private static class ParseDateTimeFunction extends StroomExtensionFunctionDefinition<ParseDateTime> {
+
+        @Inject
+        ParseDateTimeFunction(final Provider<ParseDateTime> functionCallProvider) {
+            super(
+                    ParseDateTime.FUNCTION_NAME,
+                    1,
+                    3,
+                    new SequenceType[]{
+                            SequenceType.SINGLE_STRING,
+                            SequenceType.OPTIONAL_STRING,
+                            SequenceType.OPTIONAL_STRING
+                    },
+                    SequenceType.OPTIONAL_DATE_TIME,
+                    functionCallProvider);
+        }
+    }
+
+    private static class FormatDateTimeFunction extends StroomExtensionFunctionDefinition<FormatDateTime> {
+
+        @Inject
+        FormatDateTimeFunction(final Provider<FormatDateTime> functionCallProvider) {
+            super(
+                    FormatDateTime.FUNCTION_NAME,
+                    1,
+                    3,
+                    new SequenceType[]{
+                            SequenceType.OPTIONAL_DATE_TIME,
+                            SequenceType.OPTIONAL_STRING,
+                            SequenceType.OPTIONAL_STRING
+                    },
+                    SequenceType.OPTIONAL_STRING,
+                    functionCallProvider);
+        }
+    }
+
+    private static class FromUnixTimeFunction extends StroomExtensionFunctionDefinition<FromUnixTime> {
+
+        @Inject
+        FromUnixTimeFunction(final Provider<FromUnixTime> functionCallProvider) {
+            super(
+                    FromUnixTime.FUNCTION_NAME,
+                    1,
+                    1,
+                    new SequenceType[]{
+                            SequenceType.SINGLE_INTEGER
+                    },
+                    SequenceType.OPTIONAL_DATE_TIME,
                     functionCallProvider);
         }
     }
@@ -449,12 +524,54 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         }
     }
 
+    private static class ManifestFunction extends StroomExtensionFunctionDefinition<Manifest> {
+
+        @Inject
+        ManifestFunction(final Provider<Manifest> functionCallProvider) {
+            super(
+                    Manifest.FUNCTION_NAME_NO_ARGS,
+                    0,
+                    0,
+                    new SequenceType[]{},
+                    SequenceType.NODE_SEQUENCE,
+                    functionCallProvider);
+        }
+    }
+
+    private static class ManifestForIdFunction extends StroomExtensionFunctionDefinition<Manifest> {
+
+        @Inject
+        ManifestForIdFunction(final Provider<Manifest> functionCallProvider) {
+            super(
+                    Manifest.FUNCTION_NAME_FOR_ID,
+                    1,
+                    1,
+                    new SequenceType[]{SequenceType.SINGLE_STRING},
+                    SequenceType.NODE_SEQUENCE,
+                    functionCallProvider);
+        }
+    }
+
     private static class MetaFunction extends StroomExtensionFunctionDefinition<Meta> {
 
         @Inject
         MetaFunction(final Provider<Meta> functionCallProvider) {
             super(
                     "meta",
+                    1,
+                    1,
+                    new SequenceType[]{SequenceType.SINGLE_STRING},
+                    SequenceType.OPTIONAL_STRING,
+                    functionCallProvider);
+        }
+    }
+
+    private static class MetaAttributesFunction extends StroomExtensionFunctionDefinition<MetaAttribute> {
+
+        @Inject
+        MetaAttributesFunction(final Provider<MetaAttribute> functionCallProvider) {
+            super(
+                    "meta-attribute",
                     1,
                     1,
                     new SequenceType[]{SequenceType.SINGLE_STRING},
@@ -477,16 +594,31 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
         }
     }
 
-    private static class MetaAttributesFunction extends StroomExtensionFunctionDefinition<MetaAttribute> {
+    private static class MetaStreamFunction extends StroomExtensionFunctionDefinition<MetaStream> {
 
         @Inject
-        MetaAttributesFunction(final Provider<MetaAttribute> functionCallProvider) {
+        MetaStreamFunction(final Provider<MetaStream> functionCallProvider) {
             super(
-                    "meta-attribute",
-                    1,
-                    1,
-                    new SequenceType[]{SequenceType.SINGLE_STRING},
-                    SequenceType.OPTIONAL_STRING,
+                    MetaStream.FUNCTION_NAME_NO_ARGS,
+                    0,
+                    0,
+                    new SequenceType[]{},
+                    SequenceType.NODE_SEQUENCE,
+                    functionCallProvider);
+        }
+    }
+
+    private static class MetaStreamForIdFunction extends StroomExtensionFunctionDefinition<MetaStream> {
+
+        @Inject
+        MetaStreamForIdFunction(final Provider<MetaStream> functionCallProvider) {
+            super(
+                    MetaStream.FUNCTION_NAME_FOR_ID,
+                    2,
+                    2,
+                    new SequenceType[]{SequenceType.SINGLE_STRING,
+                            SequenceType.SINGLE_INTEGER},
+                    SequenceType.NODE_SEQUENCE,
                     functionCallProvider);
         }
     }
@@ -639,6 +771,22 @@ public class CommonXsltFunctionModule extends AbstractXsltFunctionModule {
                     0,
                     new SequenceType[]{},
                     SequenceType.NODE_SEQUENCE,
+                    functionCallProvider);
+        }
+    }
+
+    private static class ToUnixTimeFunction extends StroomExtensionFunctionDefinition<ToUnixTime> {
+
+        @Inject
+        ToUnixTimeFunction(final Provider<ToUnixTime> functionCallProvider) {
+            super(
+                    ToUnixTime.FUNCTION_NAME,
+                    1,
+                    1,
+                    new SequenceType[]{
+                            SequenceType.OPTIONAL_DATE_TIME
+                    },
+                    SequenceType.OPTIONAL_INTEGER,
                     functionCallProvider);
         }
     }

@@ -16,51 +16,62 @@
 
 package stroom.query.impl;
 
+import stroom.dashboard.impl.GenericComparator;
 import stroom.dashboard.impl.SampleGenerator;
 import stroom.dashboard.impl.SearchResponseMapper;
 import stroom.dashboard.impl.download.DelimitedTarget;
 import stroom.dashboard.impl.download.ExcelTarget;
 import stroom.dashboard.impl.download.SearchResultWriter;
 import stroom.dashboard.impl.logging.SearchEventLog;
+import stroom.dashboard.shared.ColumnValues;
 import stroom.dashboard.shared.DashboardSearchResponse;
 import stroom.dashboard.shared.ValidateExpressionResult;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.docstore.api.DocumentResourceHelper;
 import stroom.event.logging.rs.api.AutoLogged;
-import stroom.expression.api.DateTimeSettings;
 import stroom.node.api.NodeInfo;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Param;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.ResultRequest.ResultStyle;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchResponse;
-import stroom.query.api.v2.TableResultBuilder;
-import stroom.query.api.v2.TableSettings;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Param;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.QueryNodeResolver;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.ResultRequest.ResultStyle;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchResponse;
+import stroom.query.api.TableResultBuilder;
+import stroom.query.api.TableSettings;
+import stroom.query.api.TimeFilter;
+import stroom.query.api.TimeRange;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
+import stroom.query.api.datasource.QueryFieldProvider;
+import stroom.query.api.token.Token;
+import stroom.query.api.token.TokenException;
+import stroom.query.api.token.TokenType;
 import stroom.query.common.v2.DataSourceProviderRegistry;
+import stroom.query.common.v2.DataStore;
 import stroom.query.common.v2.ExpressionContextFactory;
 import stroom.query.common.v2.ExpressionPredicateFactory;
+import stroom.query.common.v2.Key;
+import stroom.query.common.v2.OpenGroupsImpl;
 import stroom.query.common.v2.ResultCreator;
 import stroom.query.common.v2.ResultStoreManager;
 import stroom.query.common.v2.ResultStoreManager.RequestAndStore;
 import stroom.query.common.v2.TableResultCreator;
+import stroom.query.common.v2.ValPredicateFactory;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.language.SearchRequestFactory;
 import stroom.query.language.functions.ExpressionContext;
-import stroom.query.language.token.Token;
-import stroom.query.language.token.TokenException;
-import stroom.query.language.token.TokenType;
+import stroom.query.language.functions.Val;
 import stroom.query.language.token.Tokeniser;
 import stroom.query.shared.DownloadQueryResultsRequest;
+import stroom.query.shared.QueryColumnValuesRequest;
 import stroom.query.shared.QueryContext;
 import stroom.query.shared.QueryDoc;
 import stroom.query.shared.QueryHelpType;
@@ -73,11 +84,12 @@ import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TerminateHandlerFactory;
 import stroom.util.EntityServiceExceptionUtil;
-import stroom.util.NullSafe;
+import stroom.util.collections.TrimmedSortedList;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.servlet.HttpServletRequestHolder;
 import stroom.util.shared.EntityServiceException;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
 import stroom.util.shared.ResultPage;
@@ -108,12 +120,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @AutoLogged
-class QueryServiceImpl implements QueryService {
+class QueryServiceImpl implements QueryService, QueryFieldProvider {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(QueryServiceImpl.class);
 
@@ -137,6 +150,8 @@ class QueryServiceImpl implements QueryService {
     private final ExpressionContextFactory expressionContextFactory;
     private final ResourceStore resourceStore;
     private final ExpressionPredicateFactory expressionPredicateFactory;
+    private final ValPredicateFactory valPredicateFactory;
+    private final QueryNodeResolver queryNodeResolver;
 
     @Inject
     QueryServiceImpl(final QueryStore queryStore,
@@ -152,7 +167,9 @@ class QueryServiceImpl implements QueryService {
                      final SearchRequestFactory searchRequestFactory,
                      final ExpressionContextFactory expressionContextFactory,
                      final ResourceStore resourceStore,
-                     final ExpressionPredicateFactory expressionPredicateFactory) {
+                     final ExpressionPredicateFactory expressionPredicateFactory,
+                     final ValPredicateFactory valPredicateFactory,
+                     final QueryNodeResolver queryNodeResolver) {
         this.queryStore = queryStore;
         this.documentResourceHelper = documentResourceHelper;
         this.searchEventLog = searchEventLog;
@@ -167,6 +184,8 @@ class QueryServiceImpl implements QueryService {
         this.expressionContextFactory = expressionContextFactory;
         this.resourceStore = resourceStore;
         this.expressionPredicateFactory = expressionPredicateFactory;
+        this.valPredicateFactory = valPredicateFactory;
+        this.queryNodeResolver = queryNodeResolver;
     }
 
     @Override
@@ -211,7 +230,7 @@ class QueryServiceImpl implements QueryService {
         return securityContext.secureResult(AppPermission.DOWNLOAD_SEARCH_RESULTS_PERMISSION, () -> {
             final QuerySearchRequest searchRequest = request.getSearchRequest();
             final QueryKey queryKey = searchRequest.getQueryKey();
-            ResourceKey resourceKey;
+            final ResourceKey resourceKey;
             long totalRowCount = 0;
             final SearchRequest mappedRequest = mapRequest(searchRequest);
 
@@ -250,7 +269,6 @@ class QueryServiceImpl implements QueryService {
                     };
 
                     // Write delimited file.
-
                     try {
                         target.start();
 
@@ -304,6 +322,91 @@ class QueryServiceImpl implements QueryService {
         });
     }
 
+    @Override
+    public ColumnValues getColumnValues(final QueryColumnValuesRequest request) {
+        final QuerySearchRequest searchRequest = request.getSearchRequest();
+        final QueryKey queryKey = searchRequest.getQueryKey();
+        final SearchRequest mappedRequest = mapRequest(searchRequest);
+
+        try {
+            if (queryKey == null) {
+                throw new EntityServiceException("No query is active");
+            }
+
+            final DateTimeSettings dateTimeSettings = searchRequest.getQueryContext().getDateTimeSettings();
+            final List<ResultRequest> resultRequests = mappedRequest
+                    .getResultRequests()
+                    .stream()
+                    .filter(req -> ResultStyle.TABLE.equals(req.getResultStyle()))
+                    .toList();
+
+            if (resultRequests.isEmpty()) {
+                throw new EntityServiceException("No tables specified for download");
+            }
+
+            final Set<String> dedupe = new HashSet<>();
+            final TrimmedSortedList<String> list = new TrimmedSortedList<>(
+                    request.getPageRequest(),
+                    new GenericComparator());
+            for (final ResultRequest resultRequest : resultRequests) {
+                try {
+                    final RequestAndStore requestAndStore = searchResponseCreatorManager
+                            .getResultStore(mappedRequest);
+                    final DataStore dataStore = requestAndStore
+                            .resultStore()
+                            .getData(resultRequest.getComponentId());
+
+                    final TimeFilter timeFilter = null;
+                    final Predicate<Val> predicate = valPredicateFactory.createValPredicate(
+                            request.getColumn(),
+                            request.getFilter(),
+                            dateTimeSettings);
+
+                    final Set<Key> openGroups = dataStore.getKeyFactory().decodeSet(resultRequest.getOpenGroups());
+
+                    final int index = dataStore
+                            .getColumns()
+                            .stream()
+                            .map(Column::getId)
+                            .toList()
+                            .indexOf(request.getColumn().getId());
+                    if (index != -1) {
+                        dataStore.fetch(
+                                dataStore.getColumns(),
+                                OffsetRange.UNBOUNDED,
+                                new OpenGroupsImpl(openGroups),
+                                timeFilter,
+                                item -> {
+                                    final Val val = item.getValue(index);
+                                    if (predicate.test(val)) {
+                                        final String string = val.toString();
+                                        if (string != null && dedupe.add(string)) {
+                                            list.add(string);
+                                        }
+                                    }
+                                    return null;
+                                },
+                                row -> {
+
+                                },
+                                count -> {
+
+                                });
+                    }
+                } catch (final Exception e) {
+                    LOGGER.debug(e::getMessage, e);
+                    throw e;
+                }
+            }
+
+            final ResultPage<String> resultPage = list.getResultPage();
+            return new ColumnValues(resultPage.getValues(), resultPage.getPageResponse());
+        } catch (final Exception e) {
+            LOGGER.debug(e::getMessage, e);
+            throw e;
+        }
+    }
+
     private String getResultsFilename(final DownloadQueryResultsRequest request) {
         final QuerySearchRequest searchRequest = request.getSearchRequest();
         final String basename = searchRequest.getQueryKey().getUuid();
@@ -315,7 +418,7 @@ class QueryServiceImpl implements QueryService {
         String fileName = baseName;
         fileName = NON_BASIC_CHARS.matcher(fileName).replaceAll("");
         fileName = MULTIPLE_SPACE.matcher(fileName).replaceAll(" ");
-        fileName = fileName.replace(" ", "_");
+        fileName = fileName.replace(' ', '_');
         fileName = fileName + "." + extension;
         return fileName;
     }
@@ -368,7 +471,7 @@ class QueryServiceImpl implements QueryService {
                             "Dashboard Search",
                             TerminateHandlerFactory.NOOP_FACTORY,
                             taskContext -> {
-                                DashboardSearchResponse searchResponse;
+                                final DashboardSearchResponse searchResponse;
                                 try {
                                     taskContext.info(() -> "Polling for new search results");
                                     httpServletRequestHolder.set(httpServletRequest);
@@ -423,7 +526,7 @@ class QueryServiceImpl implements QueryService {
         SearchRequest mappedRequest = searchRequestFactory.create(query, sampleRequest, expressionContext);
 
         // Mutate expression with selection expression.
-        Query qry = mappedRequest.getQuery();
+        final Query qry = mappedRequest.getQuery();
         ExpressionOperator expression = qry.getExpression();
         expression = ExpressionUtil.combine(
                 expression,
@@ -439,7 +542,7 @@ class QueryServiceImpl implements QueryService {
         // Fix table result requests.
         final List<ResultRequest> resultRequests = mappedRequest.getResultRequests();
         if (resultRequests != null) {
-            List<ResultRequest> modifiedResultRequests = new ArrayList<>();
+            final List<ResultRequest> modifiedResultRequests = new ArrayList<>();
             for (final ResultRequest resultRequest : resultRequests) {
 
                 // Modify result request to apply additional UI table preferences.
@@ -481,11 +584,12 @@ class QueryServiceImpl implements QueryService {
 
                 final List<Column> modifiedColumns = new ArrayList<>();
                 for (final Column column : tableSettings.getColumns()) {
-                    Column.Builder columnBuilder = column.copy();
+                    final Column.Builder columnBuilder = column.copy();
                     final Column pref = prefs.get(column.getId());
                     if (pref != null) {
                         columnBuilder.filter(pref.getFilter());
                         columnBuilder.columnFilter(pref.getColumnFilter());
+                        columnBuilder.columnValueSelection(pref.getColumnValueSelection());
                         columnBuilder.width(pref.getWidth());
                         columnBuilder.format(pref.getFormat());
                         if (pref.getSort() != null) {
@@ -524,7 +628,7 @@ class QueryServiceImpl implements QueryService {
         LOGGER.trace(() -> "processRequest() " + searchRequest);
         DashboardSearchResponse result = null;
 
-        QueryKey queryKey = searchRequest.getQueryKey();
+        final QueryKey queryKey = searchRequest.getQueryKey();
         final String query = searchRequest.getQuery();
         Exception exception = null;
         SearchRequest mappedRequest = null;
@@ -761,6 +865,9 @@ class QueryServiceImpl implements QueryService {
                         // 'from xxx '
                         ? EnumSet.of(QueryHelpType.STRUCTURE)
                         : QueryHelpType.NO_TYPES;
+                case WHERE -> count > 2
+                        ? EnumSet.of(QueryHelpType.QUERYABLE_FIELD, QueryHelpType.FUNCTION, QueryHelpType.STRUCTURE)
+                        : EnumSet.of(QueryHelpType.QUERYABLE_FIELD);
                 case LIMIT -> count > 3
                         // LIMIT only allows numbers/strings
                         ? EnumSet.of(QueryHelpType.STRUCTURE)
@@ -932,5 +1039,22 @@ class QueryServiceImpl implements QueryService {
     public Optional<String> fetchDocumentation(final DocRef docRef) {
         return securityContext.useAsReadResult(() ->
                 dataSourceProviderRegistry.fetchDocumentation(docRef));
+    }
+
+    @Override
+    public String getBestNode(final String nodeName, final QuerySearchRequest request) {
+        if (nodeName == null || nodeName.equals("null")) {
+            if (queryNodeResolver == null) {
+                return null;
+            }
+            try {
+                final SearchRequest mappedRequest = mapRequest(request);
+                final DocRef docRef = NullSafe.get(mappedRequest, SearchRequest::getQuery, Query::getDataSource);
+                return queryNodeResolver.getNode(docRef);
+            } catch (final RuntimeException e) {
+                return null;
+            }
+        }
+        return nodeName;
     }
 }

@@ -19,13 +19,14 @@ package stroom.task.impl;
 import stroom.cluster.task.api.NodeNotFoundException;
 import stroom.cluster.task.api.NullClusterStateException;
 import stroom.cluster.task.api.TargetNodeSetFactory;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.expression.matcher.ExpressionMatcher;
 import stroom.expression.matcher.ExpressionMatcherFactory;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValDate;
@@ -43,7 +44,7 @@ import stroom.task.api.TaskContextFactory;
 import stroom.task.shared.TaskProgress;
 import stroom.task.shared.TaskProgressResponse;
 import stroom.task.shared.TaskResource;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 
@@ -75,6 +76,7 @@ class SearchableTaskProgress implements Searchable {
     private final TaskResource taskResource;
     private final SecurityContext securityContext;
     private final ExpressionMatcherFactory expressionMatcherFactory;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     SearchableTaskProgress(final Executor executor,
@@ -82,13 +84,15 @@ class SearchableTaskProgress implements Searchable {
                            final TargetNodeSetFactory targetNodeSetFactory,
                            final TaskResource taskResource,
                            final SecurityContext securityContext,
-                           final ExpressionMatcherFactory expressionMatcherFactory) {
+                           final ExpressionMatcherFactory expressionMatcherFactory,
+                           final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.executor = executor;
         this.taskContextFactory = taskContextFactory;
         this.targetNodeSetFactory = targetNodeSetFactory;
         this.taskResource = taskResource;
         this.securityContext = securityContext;
         this.expressionMatcherFactory = expressionMatcherFactory;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
@@ -114,9 +118,7 @@ class SearchableTaskProgress implements Searchable {
         if (!TASK_MANAGER_PSEUDO_DOC_REF.equals(criteria.getDataSourceRef())) {
             return ResultPage.empty();
         }
-        return FieldInfoResultPageBuilder.builder(criteria)
-                .addAll(getFields())
-                .build();
+        return fieldInfoResultPageFactory.create(criteria, getFields());
     }
 
     private List<QueryField> getFields() {
@@ -131,6 +133,7 @@ class SearchableTaskProgress implements Searchable {
     @Override
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
+                       final DateTimeSettings dateTimeSettings,
                        final ValuesConsumer consumer) {
         securityContext.secure(AppPermission.MANAGE_TASKS_PERMISSION, () -> {
             final Map<String, TaskProgressResponse> nodeResponses = searchAllNodes();

@@ -1,11 +1,14 @@
 package stroom.dashboard.impl;
 
+import stroom.dashboard.shared.ColumnValues;
+import stroom.dashboard.shared.ColumnValuesRequest;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.dashboard.shared.DashboardSearchRequest;
 import stroom.dashboard.shared.DashboardSearchResponse;
 import stroom.dashboard.shared.DownloadSearchResultsRequest;
 import stroom.dashboard.shared.ValidateExpressionResult;
 import stroom.docref.DocRef;
+import stroom.query.shared.QuerySearchRequest;
 import stroom.util.shared.ResourceGeneration;
 
 public interface DashboardService {
@@ -23,4 +26,8 @@ public interface DashboardService {
     DashboardSearchResponse search(DashboardSearchRequest request);
 
 //    Boolean destroy(DestroySearchRequest request);
+
+    ColumnValues getColumnValues(ColumnValuesRequest request);
+
+    String getBestNode(String nodeName, DashboardSearchRequest request);
 }

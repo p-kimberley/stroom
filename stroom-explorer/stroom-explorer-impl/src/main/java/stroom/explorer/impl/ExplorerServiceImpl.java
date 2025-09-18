@@ -17,8 +17,6 @@
 package stroom.explorer.impl;
 
 import stroom.collection.api.CollectionService;
-import stroom.docref.DocContentHighlights;
-import stroom.docref.DocContentMatch;
 import stroom.docref.DocRef;
 import stroom.docstore.api.ContentIndex;
 import stroom.docstore.shared.DocumentType;
@@ -31,6 +29,8 @@ import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.AdvancedDocumentFindRequest;
 import stroom.explorer.shared.AdvancedDocumentFindWithPermissionsRequest;
 import stroom.explorer.shared.BulkActionResult;
+import stroom.explorer.shared.DocContentHighlights;
+import stroom.explorer.shared.DocContentMatch;
 import stroom.explorer.shared.DocumentFindRequest;
 import stroom.explorer.shared.ExplorerConstants;
 import stroom.explorer.shared.ExplorerFields;
@@ -52,9 +52,11 @@ import stroom.explorer.shared.PermissionInheritance;
 import stroom.explorer.shared.StandardExplorerTags;
 import stroom.expression.matcher.ExpressionMatcher;
 import stroom.expression.matcher.TermMatcher;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.gitrepo.shared.GitRepoDoc;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.common.v2.ExpressionPredicateFactory;
 import stroom.query.shared.FetchSuggestionsRequest;
 import stroom.query.shared.Suggestions;
 import stroom.security.api.DocumentPermissionService;
@@ -64,7 +66,6 @@ import stroom.security.shared.DocumentPermissionFields;
 import stroom.security.shared.DocumentUserPermissions;
 import stroom.security.shared.FetchDocumentUserPermissionsRequest;
 import stroom.suggestions.api.SuggestionsQueryHandler;
-import stroom.util.NullSafe;
 import stroom.util.entityevent.EntityAction;
 import stroom.util.entityevent.EntityEvent;
 import stroom.util.entityevent.EntityEventBus;
@@ -72,9 +73,11 @@ import stroom.util.logging.DurationTimer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
-import stroom.util.logging.Metrics;
-import stroom.util.logging.Metrics.LocalMetrics;
+import stroom.util.logging.SimpleMetrics;
+import stroom.util.logging.SimpleMetrics.LocalMetrics;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.DocPath;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
@@ -99,6 +102,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -112,7 +116,8 @@ class ExplorerServiceImpl
     private static final Set<String> FOLDER_TYPES = Set.of(
             ExplorerConstants.SYSTEM_TYPE,
             ExplorerConstants.FAVOURITES_TYPE,
-            ExplorerConstants.FOLDER_TYPE);
+            ExplorerConstants.FOLDER_TYPE,
+            GitRepoDoc.TYPE);
 
     // NONE/DESTINATION involve clearing all current perms and COMBINED means adding additional perms.
     // All are something only an OWNER (or admin) can do.
@@ -131,6 +136,7 @@ class ExplorerServiceImpl
     private final EntityEventBus entityEventBus;
     private final DocumentPermissionService documentPermissionService;
     private final ContentIndex contentIndex;
+    private final ExpressionPredicateFactory expressionPredicateFactory;
 
     @Inject
     ExplorerServiceImpl(final ExplorerNodeService explorerNodeService,
@@ -142,7 +148,8 @@ class ExplorerServiceImpl
                         final Provider<ExplorerFavService> explorerFavService,
                         final EntityEventBus entityEventBus,
                         final DocumentPermissionService documentPermissionService,
-                        final ContentIndex contentIndex) {
+                        final ContentIndex contentIndex,
+                        final ExpressionPredicateFactory expressionPredicateFactory) {
         this.explorerNodeService = explorerNodeService;
         this.explorerTreeModel = explorerTreeModel;
         this.explorerActionHandlers = explorerActionHandlers;
@@ -153,6 +160,7 @@ class ExplorerServiceImpl
         this.entityEventBus = entityEventBus;
         this.documentPermissionService = documentPermissionService;
         this.contentIndex = contentIndex;
+        this.expressionPredicateFactory = expressionPredicateFactory;
 
         explorerNodeService.ensureRootNodeExists();
     }
@@ -160,7 +168,7 @@ class ExplorerServiceImpl
     @Override
     public FetchExplorerNodeResult getData(final FetchExplorerNodesRequest criteria) {
         final DurationTimer timer = DurationTimer.start();
-        final LocalMetrics metrics = Metrics.createLocalMetrics(LOGGER.isDebugEnabled());
+        final LocalMetrics metrics = SimpleMetrics.createLocalMetrics(LOGGER.isDebugEnabled());
         try {
             // Get a copy of the master tree model, so we can add the favourites into it.
             final TreeModel masterTreeModelClone = explorerTreeModel.getModel().createMutableCopy();
@@ -193,7 +201,7 @@ class ExplorerServiceImpl
             }
             return result;
 
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error fetching nodes with criteria {}", criteria, e);
             throw e;
         }
@@ -216,7 +224,8 @@ class ExplorerServiceImpl
                 masterTreeModelClone.getCreationTime());
 
         // A transient holder for the filter, predicate
-        final NodeInclusionChecker nodeInclusionChecker = new NodeInclusionChecker(securityContext, filter);
+        final NodeInclusionChecker nodeInclusionChecker =
+                new NodeInclusionChecker(securityContext, filter, expressionPredicateFactory);
 
         // Recurse down the tree adding items that should be included
         final NodeStates nodeStates = addDescendants(
@@ -237,7 +246,7 @@ class ExplorerServiceImpl
         filteredModel.sort(this::getPriority);
 
         // If the name filter has changed then we want to temporarily expand all nodes.
-        Set<ExplorerNodeKey> temporaryOpenItems;
+        final Set<ExplorerNodeKey> temporaryOpenItems;
         if (filter.isNameFilterChange()) {
             if (NullSafe.isBlankString(filter.getNameFilter()) || nodeStates.openNodes.isEmpty()) {
                 temporaryOpenItems = Collections.emptySet();
@@ -249,7 +258,7 @@ class ExplorerServiceImpl
             temporaryOpenItems = null;
         }
 
-        List<ExplorerNodeKey> openedItems = new ArrayList<>();
+        final List<ExplorerNodeKey> openedItems = new ArrayList<>();
         List<ExplorerNode> rootNodes = addRoots(
                 filteredModel,
                 openItems,
@@ -264,7 +273,7 @@ class ExplorerServiceImpl
         rootNodes = ensureRootNodes(rootNodes, filter);
 
         final FetchExplorerNodeResult result = new FetchExplorerNodeResult(
-                rootNodes, openedItems, temporaryOpenItems, nodeInclusionChecker.getQualifiedNameFilterInput());
+                rootNodes, openedItems, temporaryOpenItems, nodeInclusionChecker.getFilter().getNameFilter());
 
         if (LOGGER.isTraceEnabled()) {
             logOpenItems(
@@ -318,13 +327,13 @@ class ExplorerServiceImpl
                                      final OpenItems openItems,
                                      final OpenItems tempOpenItems,
                                      final OpenItems ensureVisible) {
-        if (NullSafe.hasItems(openItems)) {
+        if (openItems != null) {
             LOGGER.trace(() -> LogUtil.message("openItems:\n{}", openItemsToStr(treeModel, openItems)));
         }
-        if (NullSafe.hasItems(tempOpenItems)) {
+        if (tempOpenItems != null) {
             LOGGER.trace(() -> LogUtil.message("tempOpenItems:\n{}", openItemsToStr(treeModel, openItems)));
         }
-        if (NullSafe.hasItems(ensureVisible)) {
+        if (ensureVisible != null) {
             LOGGER.trace(() -> LogUtil.message("ensureVisible:\n{}", openItemsToStr(treeModel, openItems)));
         }
     }
@@ -336,7 +345,7 @@ class ExplorerServiceImpl
         if (openItems == null) {
             return null;
         } else {
-            if (openItems instanceof OpenItemsImpl openItemsImpl) {
+            if (openItems instanceof final OpenItemsImpl openItemsImpl) {
                 try {
                     return openItemsImpl.getOpenItemSet()
                             .stream()
@@ -346,7 +355,7 @@ class ExplorerServiceImpl
                                          + node.getName()
                                          + " (" + node.getUuid() + ")")
                             .collect(Collectors.joining("\n"));
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOGGER.trace(e::getMessage, e);
                     return Objects.toString(openItems);
                 }
@@ -396,7 +405,7 @@ class ExplorerServiceImpl
 
     private static Optional<ExplorerNode> removeMatchingNode(final List<ExplorerNode> nodes,
                                                              final ExplorerNode targetNode) {
-        List<ExplorerNode> list = NullSafe.list(nodes);
+        final List<ExplorerNode> list = NullSafe.list(nodes);
 
         for (int i = 0; i < list.size(); i++) {
             final ExplorerNode node = list.get(i);
@@ -870,7 +879,7 @@ class ExplorerServiceImpl
                                      final List<ExplorerNodeKey> openedItems,
                                      final LocalMetrics metrics) {
         return metrics.measure("addChildren", () -> {
-            ExplorerNode.Builder builder = parent.copy();
+            final ExplorerNode.Builder builder = parent.copy();
             builder.depth(currentDepth);
 
             final ExplorerNodeKey parentNodeKey = parent.getUniqueKey();
@@ -918,7 +927,7 @@ class ExplorerServiceImpl
         final DocRef folderRef = getDestinationFolderRef(destinationFolder);
         final ExplorerActionHandler handler = explorerActionHandlers.getHandler(type);
 
-        DocRef result;
+        final DocRef result;
 
         // Create the document.
         try {
@@ -939,12 +948,61 @@ class ExplorerServiceImpl
         // Make sure the tree model is rebuilt.
         rebuildTree();
 
+        // Fire a POST_CREATE event
+        EntityEvent.fire(entityEventBus, result, EntityAction.POST_CREATE);
+
         return ExplorerNode.builder()
                 .docRef(result)
                 .rootNodeUuid(destinationFolder != null
                         ? destinationFolder.getRootNodeUuid()
                         : null)
                 .build();
+    }
+
+    @Override
+    public ExplorerNode ensureFolderPath(final DocPath docPath,
+                                         final PermissionInheritance permissionInheritance) {
+        return ensureFolderPath(docPath, explorerNodeService.getRoot(), permissionInheritance);
+    }
+
+    @Override
+    public ExplorerNode ensureFolderPath(final DocPath docPath,
+                                         final ExplorerNode baseNode,
+                                         final PermissionInheritance permissionInheritance) {
+        Objects.requireNonNull(baseNode);
+
+        if (docPath.isAbsolute() && !Objects.equals(baseNode, explorerNodeService.getRoot())) {
+            throw new IllegalArgumentException(LogUtil.message(
+                    "docPath {} is absolute so baseNode must be the root node {}",
+                    docPath, explorerNodeService.getRoot()));
+        }
+        Objects.requireNonNull(docPath);
+        final AtomicReference<ExplorerNode> parentNode = new AtomicReference<>(baseNode);
+        docPath.forEach((idx, pathPart) -> {
+            final List<ExplorerNode> childNodes = explorerNodeService.getNodesByNameAndType(
+                    parentNode.get(),
+                    pathPart,
+                    ExplorerConstants.FOLDER_TYPE);
+            final ExplorerNode childNode;
+
+            if (childNodes.size() > 1) {
+                throw new RuntimeException(LogUtil.message(
+                        "Found {} folders with name '{}' that are a child of {}",
+                        childNodes.size(), pathPart, parentNode));
+            } else if (childNodes.isEmpty()) {
+                // node doesn't exist so create it
+                childNode = create(
+                        ExplorerConstants.FOLDER_TYPE,
+                        pathPart,
+                        parentNode.get(),
+                        PermissionInheritance.DESTINATION);
+            } else {
+                // One node found
+                childNode = childNodes.get(0);
+            }
+            parentNode.set(childNode);
+        });
+        return parentNode.get();
     }
 
     /**
@@ -1017,6 +1075,9 @@ class ExplorerServiceImpl
             // Although the copy above will have fired entity events, they were before the deps
             // get re-mapped. Thus, we need to let the exp tree know that deps may have changed
             EntityEvent.fire(entityEventBus, newNode.getDocRef(), EntityAction.CREATE_EXPLORER_NODE);
+
+            // Tell listeners that the nodes are in the explorer tree
+            EntityEvent.fire(entityEventBus, newNode.getDocRef(), EntityAction.POST_CREATE);
         });
 
         return new BulkActionResult(new ArrayList<>(remappings.values()), resultMessage.toString());
@@ -1062,7 +1123,7 @@ class ExplorerServiceImpl
 
                 // Copy the item to the destination folder.
                 String name = sourceNode.getDocRef().getName();
-                if (allowRename && !NullSafe.isBlankString(docName)) {
+                if (allowRename && NullSafe.isNonBlankString(docName)) {
                     name = docName;
                 }
                 final DocRef destinationDocRef = handler.copyDocument(
@@ -1192,6 +1253,7 @@ class ExplorerServiceImpl
             }
             // Let the tree know it has changed
             EntityEvent.fire(entityEventBus, explorerNode.getDocRef(), result, EntityAction.UPDATE_EXPLORER_NODE);
+            EntityEvent.fire(entityEventBus, result, EntityAction.UPDATE);
         }
 
         return new BulkActionResult(resultNodes, resultMessage.toString());
@@ -1232,6 +1294,7 @@ class ExplorerServiceImpl
 
         // Make sure the tree model is rebuilt.
         EntityEvent.fire(entityEventBus, result.getDocRef(), EntityAction.UPDATE_EXPLORER_NODE);
+        EntityEvent.fire(entityEventBus, result.getDocRef(), EntityAction.UPDATE);
 
         return result;
     }
@@ -1266,6 +1329,7 @@ class ExplorerServiceImpl
 
             // Make sure the tree model is rebuilt.
             EntityEvent.fire(entityEventBus, docRef, EntityAction.UPDATE_EXPLORER_NODE);
+            EntityEvent.fire(entityEventBus, docRef, EntityAction.UPDATE);
             return afterNode;
         } catch (final Exception e) {
             explorerEventLog.update(beforeNode, afterNode, e);
@@ -1307,7 +1371,7 @@ class ExplorerServiceImpl
     private ExplorerNode rename(final ExplorerActionHandler handler,
                                 final ExplorerNode explorerNode,
                                 final String docName) {
-        DocRef result;
+        final DocRef result;
 
         try {
             result = handler.renameDocument(explorerNode.getDocRef(), docName);
@@ -1331,6 +1395,11 @@ class ExplorerServiceImpl
     public BulkActionResult delete(final List<ExplorerNode> explorerNodes) {
         final List<ExplorerNode> resultNodes = new ArrayList<>();
         final StringBuilder resultMessage = new StringBuilder();
+
+        // Fire the PRE_DELETE event so listeners can find ancestors of
+        // the nodes before they disappear from the Explorer
+        explorerNodes.forEach(explorerNode ->
+                EntityEvent.fire(entityEventBus, explorerNode.getDocRef(), EntityAction.PRE_DELETE));
 
         final HashSet<ExplorerNode> deleted = new HashSet<>();
         explorerNodes.forEach(explorerNode -> {
@@ -1545,7 +1614,7 @@ class ExplorerServiceImpl
 
     @Override
     public ResultPage<FindResult> find(final DocumentFindRequest request) {
-        final LocalMetrics metrics = Metrics.createLocalMetrics(LOGGER.isDebugEnabled());
+        final LocalMetrics metrics = SimpleMetrics.createLocalMetrics(LOGGER.isDebugEnabled());
         try {
             if (request.getFilter() == null) {
                 return ResultPage.empty();
@@ -1602,7 +1671,7 @@ class ExplorerServiceImpl
 
             return ResultPage.createPageLimitedList(results, request.getPageRequest());
 
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error finding nodes with request {}", request, e);
             throw e;
         }
@@ -1651,7 +1720,7 @@ class ExplorerServiceImpl
 
             return ResultPage.createPageLimitedList(results, request.getPageRequest());
 
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error finding nodes with request {}", request, e);
             throw e;
         }
@@ -1664,7 +1733,7 @@ class ExplorerServiceImpl
 
     private void applyExpressionFilter(final AdvancedDocumentFindRequest request,
                                        final TreeConsumer consumer) {
-        final LocalMetrics metrics = Metrics.createLocalMetrics(LOGGER.isDebugEnabled());
+        final LocalMetrics metrics = SimpleMetrics.createLocalMetrics(LOGGER.isDebugEnabled());
         try {
             if (!ExpressionUtil.hasTerms(request.getExpression())) {
                 return;
@@ -1698,7 +1767,7 @@ class ExplorerServiceImpl
                 }
                 return true;
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error finding nodes with request {}", request, e);
             throw e;
         }
@@ -1881,7 +1950,7 @@ class ExplorerServiceImpl
             }
             final StringBuilder parentPath = new StringBuilder();
             for (int i = parents.size() - 1; i >= 0; i--) {
-                String parent = parents.get(i);
+                final String parent = parents.get(i);
                 parentPath.append(parent);
                 if (i > 0) {
                     parentPath.append(" / ");

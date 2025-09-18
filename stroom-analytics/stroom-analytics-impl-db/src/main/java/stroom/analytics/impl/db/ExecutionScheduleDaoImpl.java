@@ -11,10 +11,10 @@ import stroom.analytics.shared.ExecutionScheduleRequest;
 import stroom.analytics.shared.ExecutionTracker;
 import stroom.analytics.shared.ScheduleBounds;
 import stroom.db.util.JooqUtil;
-import stroom.db.util.StringMatchConditionUtil;
 import stroom.docref.DocRef;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
+import stroom.security.shared.FindUserContext;
 import stroom.security.user.api.UserRefLookup;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
@@ -64,8 +64,8 @@ public class ExecutionScheduleDaoImpl implements ExecutionScheduleDao {
                 Optional.ofNullable(request.getOwnerDocRef())
                         .map(DocRef::getUuid)
                         .map(EXECUTION_SCHEDULE.DOC_UUID::eq),
-                Optional.ofNullable(StringMatchConditionUtil
-                        .getCondition(EXECUTION_SCHEDULE.NODE_NAME, request.getNodeName())),
+                Optional.ofNullable(request.getNodeName())
+                        .map(EXECUTION_SCHEDULE.NODE_NAME::eq),
                 Optional.ofNullable(request.getEnabled())
                         .map(EXECUTION_SCHEDULE.ENABLED::eq));
         final Collection<OrderField<?>> orderFields = createExecutionScheduleOrderFields(request);
@@ -373,7 +373,7 @@ public class ExecutionScheduleDaoImpl implements ExecutionScheduleDao {
                 .owningDoc(docRef)
                 .runAsUser(userRefLookupProvider
                         .get()
-                        .getByUuid(record.get(EXECUTION_SCHEDULE.RUN_AS_USER_UUID))
+                        .getByUuid(record.get(EXECUTION_SCHEDULE.RUN_AS_USER_UUID), FindUserContext.RUN_AS)
                         .orElse(null))
                 .build();
     }

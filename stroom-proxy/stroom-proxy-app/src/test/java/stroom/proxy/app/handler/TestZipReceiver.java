@@ -10,6 +10,7 @@ import stroom.proxy.app.handler.ZipReceiver.ReceiveResult;
 import stroom.proxy.repo.FeedKey;
 import stroom.proxy.repo.LogStream;
 import stroom.receive.common.AttributeMapFilter;
+import stroom.receive.common.AttributeMapFilterFactory;
 import stroom.receive.common.PermissiveAttributeMapFilter;
 import stroom.receive.common.StroomStreamException;
 import stroom.test.common.DirectorySnapshot;

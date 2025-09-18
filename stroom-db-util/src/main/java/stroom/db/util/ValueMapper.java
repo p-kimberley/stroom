@@ -1,6 +1,6 @@
 package stroom.db.util;
 
-import stroom.datasource.api.v2.QueryField;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValNull;
 
@@ -51,7 +51,7 @@ public class ValueMapper {
             this.handler = handler;
         }
 
-        public Val map(Record record) {
+        public Val map(final Record record) {
             final T o = record.get(field);
             if (o != null) {
                 return handler.apply(o);

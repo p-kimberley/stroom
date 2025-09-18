@@ -21,10 +21,10 @@ import stroom.bytebuffer.ByteBufferUtils;
 import stroom.pipeline.refdata.store.FastInfosetValue;
 import stroom.pipeline.refdata.store.RefDataValue;
 import stroom.pipeline.refdata.store.offheapstore.FastInfosetByteBufferConsumer;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import net.sf.saxon.event.PipelineConfiguration;
 import net.sf.saxon.event.Receiver;
@@ -44,7 +44,7 @@ public class FastInfosetValueConsumer implements RefDataValueConsumer {
 
     @Override
     public void consume(final RefDataValue refDataValue) {
-        if (refDataValue instanceof FastInfosetValue fastInfosetValue) {
+        if (refDataValue instanceof final FastInfosetValue fastInfosetValue) {
             // Duplicate to save altering the limit/pos for other users of this buffer
             final ByteBuffer valueByteBuffer = fastInfosetValue.getByteBuffer().duplicate();
             LOGGER.trace(() -> LogUtil.message(

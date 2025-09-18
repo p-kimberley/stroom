@@ -19,7 +19,6 @@ package stroom.query.language.functions;
 import stroom.query.language.functions.ref.StoredValues;
 import stroom.query.language.functions.ref.StringListReference;
 import stroom.query.language.functions.ref.ValueReferenceIndex;
-import stroom.query.language.token.Param;
 
 import java.text.ParseException;
 import java.util.Collections;
@@ -229,7 +228,7 @@ class Distinct extends AbstractFunction {
             final List<String> list = stringListReference.get(storedValues);
             if (ascending) {
                 final StringBuilder sb = new StringBuilder();
-                for (String s : list) {
+                for (final String s : list) {
                     sb.append(s);
                     sb.append(delimiter);
                 }
@@ -289,7 +288,7 @@ class Distinct extends AbstractFunction {
 
             int totalLength = 0;
             if (ascending) {
-                for (String s : list) {
+                for (final String s : list) {
                     totalLength += s.length();
                     trimSize++;
                     if (totalLength >= maxStringLength) {

@@ -19,6 +19,7 @@ package stroom.security.impl;
 
 
 import stroom.docref.DocRef;
+import stroom.security.api.UserService;
 import stroom.security.impl.db.SecurityDbConnProvider;
 import stroom.security.impl.db.SecurityTestUtil;
 import stroom.security.shared.DocumentPermission;
@@ -180,7 +181,7 @@ class TestDocumentPermissionsServiceImpl {
     }
 
     private User createUser(final String name) {
-        User userRef = userService.getOrCreateUser(name);
+        final User userRef = userService.getOrCreateUser(name);
         assertThat(userRef).isNotNull();
         final Optional<User> user = userService.loadByUuid(userRef.getUuid());
         assertThat(user).isPresent();
@@ -188,7 +189,7 @@ class TestDocumentPermissionsServiceImpl {
     }
 
     private User createUserGroup(final String name) {
-        User userRef = userService.getOrCreateUserGroup(name);
+        final User userRef = userService.getOrCreateUserGroup(name);
         assertThat(userRef).isNotNull();
         final Optional<User> user = userService.loadByUuid(userRef.getUuid());
         assertThat(user).isPresent();

@@ -17,8 +17,8 @@
 package stroom.meta.impl.db;
 
 import stroom.meta.shared.Status;
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -51,7 +51,7 @@ class MetaStatusId {
         try {
             final Status status = Status.valueOf(statusName.toUpperCase());
             return getPrimitiveValue(status);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             throw new RuntimeException(LogUtil.message("'{}' is not a valid status value. Valid values are: '{}'",
                     statusName,
                     Arrays.stream(Status.values())
@@ -60,7 +60,7 @@ class MetaStatusId {
         }
     }
 
-    static Status getStatus(byte primitiveValue) {
+    static Status getStatus(final byte primitiveValue) {
         return switch (primitiveValue) {
             case 0 -> Status.UNLOCKED;
             case 1 -> Status.LOCKED;

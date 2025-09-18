@@ -8,6 +8,7 @@ import stroom.proxy.repo.LogStream;
 import stroom.proxy.repo.LogStream.EventType;
 import stroom.proxy.repo.ProxyServices;
 import stroom.security.api.UserIdentityFactory;
+import stroom.test.common.MockMetrics;
 import stroom.test.common.TestResourceLocks;
 import stroom.util.io.CommonDirSetup;
 import stroom.util.logging.LambdaLogger;
@@ -119,12 +120,13 @@ class TestHttpSender {
                 .when(mockHttpClient)
                 .execute(Mockito.any(HttpPost.class), Mockito.any(HttpClientResponseHandler.class));
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 mockHttpClient,
+                new MockMetrics(),
                 mockProxyServices);
         final AttributeMap attributeMap = new AttributeMap(Map.of(
                 StandardHeaderArguments.FEED, "MY_FEED"
@@ -192,12 +194,13 @@ class TestHttpSender {
                 .when(mockHttpClient)
                 .execute(Mockito.any(HttpPost.class), Mockito.any(HttpClientResponseHandler.class));
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 mockHttpClient,
+                new MockMetrics(),
                 mockProxyServices);
         final AttributeMap attributeMap = new AttributeMap(Map.of(
                 StandardHeaderArguments.FEED, "MY_FEED"
@@ -261,12 +264,13 @@ class TestHttpSender {
                 .when(mockHttpClient)
                 .execute(Mockito.any(HttpPost.class), Mockito.any(HttpClientResponseHandler.class));
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 mockHttpClient,
+                new MockMetrics(),
                 mockProxyServices);
         final AttributeMap attributeMap = new AttributeMap(Map.of(
                 StandardHeaderArguments.FEED, "MY_FEED"
@@ -332,12 +336,13 @@ class TestHttpSender {
                 .when(mockHttpClient)
                 .execute(Mockito.any(HttpPost.class), Mockito.any(HttpClientResponseHandler.class));
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 mockHttpClient,
+                new MockMetrics(),
                 mockProxyServices);
         final AttributeMap attributeMap = new AttributeMap(Map.of(
                 StandardHeaderArguments.FEED, "MY_FEED"
@@ -378,12 +383,13 @@ class TestHttpSender {
                         Mockito.any(HttpPost.class),
                         Mockito.any(HttpClientResponseHandler.class));
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 mockHttpClient,
+                new MockMetrics(),
                 mockProxyServices);
         final AttributeMap attributeMap = new AttributeMap(Map.of(
                 StandardHeaderArguments.FEED, "MY_FEED"
@@ -422,12 +428,13 @@ class TestHttpSender {
 
         final HttpClient httpClient = buildRealHttpClient();
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 httpClient,
+                new MockMetrics(),
                 mockProxyServices);
 
         assertLivenessCheck(httpSender, true);
@@ -445,12 +452,13 @@ class TestHttpSender {
 
         final HttpClient httpClient = buildRealHttpClient();
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 httpClient,
+                new MockMetrics(),
                 mockProxyServices);
 
         assertLivenessCheck(httpSender, true);
@@ -468,12 +476,13 @@ class TestHttpSender {
 
         final HttpClient httpClient = buildRealHttpClient();
 
-        HttpSender httpSender = new HttpSender(
+        final HttpSender httpSender = new HttpSender(
                 mockLogStream,
                 config,
                 "my-user-agent",
                 mockUserIdentityFactory,
                 httpClient,
+                new MockMetrics(),
                 mockProxyServices);
 
         assertLivenessCheck(httpSender, false);
@@ -488,7 +497,7 @@ class TestHttpSender {
         try {
             Assertions.assertThat(httpSender.performLivenessCheck())
                     .isEqualTo(isLive);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             if (isLive) {
                 Assertions.fail(LogUtil.message("Expecting {} to be live", httpSender));
             }

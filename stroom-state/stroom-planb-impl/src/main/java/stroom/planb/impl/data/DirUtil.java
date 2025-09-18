@@ -1,10 +1,10 @@
 package stroom.planb.impl.data;
 
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.string.StringIdUtil;
 
 import java.io.IOException;
@@ -327,14 +327,7 @@ public class DirUtil {
             // Just record the first case we find
             incompletePath.compareAndSet(null, path);
         }
-//        if (mode == Mode.MAX && dirId == null) {
-//            // It is less of an issue for MIN as there is no risk of using the same ID as a partial branch.
-//            throw new IllegalStateException(
-//                    LogUtil.message(
-//                            "Incomplete directory ID path found '{}'. This implies that " +
-//                            "an ID has previously been allocated with this branch so we cannot be sure what the " +
-//                            "maximum ID is.", LogUtil.path(path)));
-//        }
+
         LOGGER.trace("getDirId - returning dirId {}", dirId);
         return dirId;
     }

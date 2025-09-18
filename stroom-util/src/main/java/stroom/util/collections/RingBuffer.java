@@ -16,7 +16,7 @@
 
 package stroom.util.collections;
 
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.collect.ForwardingQueue;
 
@@ -46,12 +46,12 @@ public class RingBuffer<E> extends ForwardingQueue<E> {
     }
 
     @Override
-    public boolean offer(E e) {
+    public boolean offer(final E e) {
         return add(e);
     }
 
     @Override
-    public boolean add(E e) {
+    public boolean add(final E e) {
         Objects.requireNonNull(e);
         if (maxSize == 0) {
             return true;

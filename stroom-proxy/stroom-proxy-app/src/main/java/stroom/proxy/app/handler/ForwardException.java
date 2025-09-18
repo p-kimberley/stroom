@@ -4,7 +4,7 @@ import stroom.meta.api.AttributeMap;
 import stroom.meta.api.StandardHeaderArguments;
 import stroom.proxy.StroomStatusCode;
 import stroom.proxy.app.handler.HttpSender.ResponseStatus;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.util.Objects;
 

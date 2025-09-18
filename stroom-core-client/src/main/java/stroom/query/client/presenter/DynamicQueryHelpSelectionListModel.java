@@ -16,12 +16,10 @@
 
 package stroom.query.client.presenter;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch;
-import stroom.item.client.SelectionList;
 import stroom.item.client.SelectionListModel;
+import stroom.query.api.datasource.IndexFieldFields;
 import stroom.query.shared.QueryHelpRequest;
 import stroom.query.shared.QueryHelpRow;
 import stroom.query.shared.QueryHelpType;
@@ -30,7 +28,7 @@ import stroom.task.client.DefaultTaskMonitorFactory;
 import stroom.task.client.HasTaskMonitorFactory;
 import stroom.task.client.TaskMonitorFactory;
 import stroom.util.shared.CriteriaFieldSort;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.PageResponse;
 import stroom.util.shared.ResultPage;
@@ -42,6 +40,7 @@ import com.google.web.bindery.event.shared.EventBus;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -62,17 +61,13 @@ public class DynamicQueryHelpSelectionListModel
     private String query;
     private Set<QueryHelpType> includedTypes = QueryHelpType.ALL_TYPES;
     private QueryHelpRequest lastRequest;
-    private SelectionList<QueryHelpRow, QueryHelpSelectionItem> selectionList;
+    private ResultPage<QueryHelpRow> lastResponse;
 
     @Inject
     public DynamicQueryHelpSelectionListModel(final EventBus eventBus,
                                               final RestFactory restFactory) {
         this.eventBus = eventBus;
         this.restFactory = restFactory;
-    }
-
-    public void setSelectionList(final SelectionList<QueryHelpRow, QueryHelpSelectionItem> selectionList) {
-        this.selectionList = selectionList;
     }
 
     @Override
@@ -88,9 +83,8 @@ public class DynamicQueryHelpSelectionListModel
             parentId = "";
         }
 
-        final StringMatch stringMatch = StringMatch.contains(filter);
         final CriteriaFieldSort sort = new CriteriaFieldSort(
-                FindFieldCriteria.SORT_BY_NAME,
+                IndexFieldFields.NAME,
                 false,
                 true);
         final QueryHelpRequest request = new QueryHelpRequest(
@@ -99,7 +93,7 @@ public class DynamicQueryHelpSelectionListModel
                 query,
                 dataSourceRef,
                 parentId,
-                stringMatch,
+                filter,
                 includedTypes);
 
         // Only fetch if the request has changed.
@@ -111,10 +105,12 @@ public class DynamicQueryHelpSelectionListModel
                     .method(res -> res.fetchQueryHelpItems(request))
                     .onSuccess(response -> {
                         // Only update if the request is still current.
-                        if (request == lastRequest) {
+                        if (request == lastRequest && !Objects.equals(lastResponse, response)) {
+                            lastResponse = response;
+
                             final ResultPage<QueryHelpSelectionItem> resultPage;
-                            if (GwtNullSafe.hasItems(response.getValues())) {
-                                List<QueryHelpSelectionItem> items = response
+                            if (NullSafe.hasItems(response.getValues())) {
+                                final List<QueryHelpSelectionItem> items = response
                                         .getValues()
                                         .stream()
                                         .map(this::wrap)

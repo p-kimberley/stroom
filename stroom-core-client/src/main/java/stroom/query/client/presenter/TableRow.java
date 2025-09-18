@@ -3,7 +3,7 @@ package stroom.query.client.presenter;
 import stroom.hyperlink.client.Hyperlink;
 import stroom.hyperlink.client.Hyperlink.UrlDecoder;
 import stroom.util.shared.Expander;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.SafeHtmlUtil;
 
 import com.google.gwt.core.client.GWT;
@@ -89,7 +89,7 @@ public class TableRow {
 
     public String getText(final String fieldId) {
         final Cell cell = cells.get(fieldId);
-        return GwtNullSafe.get(
+        return NullSafe.get(
                 cell,
                 Cell::getRawValue,
                 this::convertRawCellValue);
@@ -116,7 +116,7 @@ public class TableRow {
     private void appendValue(final String value, final StringBuilder sb) {
         appendValue(value, part -> {
             if (part instanceof final Hyperlink hyperlink) {
-                if (GwtNullSafe.isNonBlankString(hyperlink.getText())) {
+                if (NullSafe.isNonBlankString(hyperlink.getText())) {
                     sb.append(hyperlink.getText());
                 }
             } else if (part != null) {
@@ -131,7 +131,7 @@ public class TableRow {
                 .append("Link to: '")
                 .append(hyperlink.getHref())
                 .append("'");
-        if (GwtNullSafe.isNonBlankString(hyperlink.getType())) {
+        if (NullSafe.isNonBlankString(hyperlink.getType())) {
             sb.append(" (type: ")
                     .append(hyperlink.getType())
                     .append(")");
@@ -142,10 +142,10 @@ public class TableRow {
     private void appendValue(final String value, final SafeHtmlBuilder sb) {
         appendValue(value, part -> {
             if (part instanceof final Hyperlink hyperlink) {
-                if (GwtNullSafe.isNonBlankString(hyperlink.getText())) {
+                if (NullSafe.isNonBlankString(hyperlink.getText())) {
                     // Title for the link tells you what it is linking to
                     final String title = buildTitle(hyperlink);
-                    final SafeHtml displayValueHtml = GwtNullSafe.isNonBlankString(hyperlink.getText())
+                    final SafeHtml displayValueHtml = NullSafe.isNonBlankString(hyperlink.getText())
                             ? SafeHtmlUtils.fromString(hyperlink.getText())
                             : SafeHtmlUtil.NBSP;
                     final SafeHtml linkHtml = template.link(hyperlink.toString(), title, displayValueHtml);
@@ -159,7 +159,7 @@ public class TableRow {
     }
 
     private static void appendText(final String text, final SafeHtmlBuilder sb) {
-        if (GwtNullSafe.isBlankString(text)) {
+        if (NullSafe.isBlankString(text)) {
             // Why append an NBSP if text is empty/null
             sb.append(SafeHtmlUtil.NBSP);
         } else {
@@ -169,7 +169,7 @@ public class TableRow {
 
     private void appendValue(final String value, final Consumer<Object> partConsumer) {
         final List<Object> parts = getParts(value);
-        if (GwtNullSafe.hasItems(parts)) {
+        if (NullSafe.hasItems(parts)) {
             parts.forEach(partConsumer);
         } else {
             // No parts so just consume the whole thing

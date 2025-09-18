@@ -5,7 +5,10 @@ def releaseBuildDir = 'build/release'
 
 apply plugin: 'application'
 apply plugin: 'com.gradleup.shadow'
-mainClassName = 'stroom.headless.Cli'
+
+application {
+    mainClass = 'stroom.headless.Cli'
+}
 
 dependencies {
     implementation project(':stroom-activity:stroom-activity-mock')
@@ -30,7 +33,6 @@ dependencies {
     implementation project(':stroom-feed:stroom-feed-impl')
     implementation project(':stroom-importexport:stroom-importexport-api')
     implementation project(':stroom-importexport:stroom-importexport-impl')
-    implementation project(':stroom-legacy:stroom-legacy-impex_6_1')
     implementation project(':stroom-node:stroom-node-api')
     implementation project(':stroom-pipeline')
     implementation project(':stroom-processor:stroom-processor-impl')
@@ -43,11 +45,11 @@ dependencies {
     implementation project(':stroom-util')
     implementation project(':stroom-util-shared')
 
+    implementation libs.dropwizard.metrics.core
     implementation libs.guice
     implementation libs.jackson.annotations
     implementation libs.jakarta.el
     implementation libs.jakarta.inject
-    implementation libs.jaxb.api
     implementation libs.saxon.he
     implementation libs.slf4j.api
 
@@ -79,7 +81,7 @@ shadowJar {
     dependsOn test
 
     // Allows us to build fat jars with lots of files
-    zip64 true
+    zip64 = true
 
     // A transformer to merges files in META-INF/services
     mergeServiceFiles()
@@ -115,9 +117,9 @@ tasks.register('copyJar', Copy) {
 //    doLast {
 //        // This is a sym-link so it seems to go into the zip with +x perms
 //        // which we don't want
-//        exec {
+//        providers.exec {
 //            commandLine 'chmod', '644', "${releaseBuildDir}/config/config.yml"
-//        }
+//        }.result.get()
 //    }
 //}
 

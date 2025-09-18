@@ -16,37 +16,37 @@
 
 package stroom.query.common.v2;
 
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.DestroyReason;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.FindResultStoreCriteria;
-import stroom.query.api.v2.FlatResult;
-import stroom.query.api.v2.LifespanInfo;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Param;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.Result;
-import stroom.query.api.v2.ResultStoreInfo;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchResponse;
-import stroom.query.api.v2.TableResult;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.DestroyReason;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.FindResultStoreCriteria;
+import stroom.query.api.FlatResult;
+import stroom.query.api.LifespanInfo;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Param;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.Result;
+import stroom.query.api.ResultStoreInfo;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchResponse;
+import stroom.query.api.TableResult;
+import stroom.query.api.TimeRange;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.language.functions.ParamKeys;
 import stroom.security.api.SecurityContext;
 import stroom.security.user.api.UserRefLookup;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
-import stroom.util.NullSafe;
 import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
@@ -176,7 +176,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
 
     public RequestAndStore getResultStore(final SearchRequest searchRequest) {
         if (LOGGER.isDebugEnabled()) {
-            String json = JsonUtil.writeValueAsString(searchRequest);
+            final String json = JsonUtil.writeValueAsString(searchRequest);
             LOGGER.debug("/search called with searchRequest:\n{}", json);
         }
 
@@ -293,7 +293,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
             final QueryField partitionTimeField = optionalPartitionTimeField.get();
             final TimeRange timeRange = result.getQuery().getTimeRange();
             if (timeRange != null && (timeRange.getFrom() != null || timeRange.getTo() != null)) {
-                ExpressionOperator.Builder and = ExpressionOperator.builder().op(Op.AND);
+                final ExpressionOperator.Builder and = ExpressionOperator.builder().op(Op.AND);
                 if (timeRange.getFrom() != null) {
                     and.addDateTerm(
                             partitionTimeField,
@@ -346,7 +346,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
 
         } catch (final RuntimeException e) {
             // Create an error response.
-            List<Result> results;
+            final List<Result> results;
             if (request.getResultRequests() != null) {
                 results = request.getResultRequests().stream()
                         .map(resultRequest -> new TableResult(
@@ -371,7 +371,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
     }
 
     private String getResponseInfoForLogging(final SearchRequest request, final SearchResponse searchResponse) {
-        String resultInfo;
+        final String resultInfo;
 
         if (searchResponse.getResults() != null) {
             resultInfo = "\n" + searchResponse.getResults().stream()
@@ -409,7 +409,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
 
     public Boolean exists(final QueryKey queryKey) {
         if (LOGGER.isDebugEnabled()) {
-            String json = JsonUtil.writeValueAsString(queryKey);
+            final String json = JsonUtil.writeValueAsString(queryKey);
             LOGGER.debug("/exists called with queryKey:\n{}", json);
         }
 
@@ -434,7 +434,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
      */
     public Boolean terminate(final QueryKey queryKey) {
         if (LOGGER.isDebugEnabled()) {
-            String json = JsonUtil.writeValueAsString(queryKey);
+            final String json = JsonUtil.writeValueAsString(queryKey);
             LOGGER.debug("/terminate called with queryKey:\n{}", json);
         }
 
@@ -468,7 +468,7 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
     public Boolean destroy(final QueryKey queryKey,
                            final DestroyReason destroyReason) {
         if (LOGGER.isDebugEnabled()) {
-            String json = JsonUtil.writeValueAsString(queryKey);
+            final String json = JsonUtil.writeValueAsString(queryKey);
             LOGGER.debug("/destroy called with queryKey:\n{}", json);
         }
 
@@ -514,7 +514,8 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
         try {
             return completableFuture.get();
         } catch (final InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e.getMessage(), e);
+            LOGGER.debug(e::getMessage, e);
+            return false;
         }
     }
 
@@ -522,48 +523,50 @@ public final class ResultStoreManager implements Clearable, HasResultStoreInfo {
      * Evicts any expired result stores.
      */
     public void evictExpiredElements() {
-        taskContextFactory.current().info(() -> "Evicting expired search responses");
-        final Instant now = Instant.now();
-        resultStoreMap.forEach((queryKey, resultStore) -> {
-            try {
-                final ResultStoreSettings settings = resultStore.getResultStoreSettings();
-                final Instant createTime = resultStore.getCreationTime();
-                final Instant accessTime = resultStore.getLastAccessTime();
-                final UserRef userRef = resultStore.getUserRef();
+        securityContext.asProcessingUser(() -> {
+            taskContextFactory.current().info(() -> "Evicting expired search responses");
+            final Instant now = Instant.now();
+            resultStoreMap.forEach((queryKey, resultStore) -> {
+                try {
+                    final ResultStoreSettings settings = resultStore.getResultStoreSettings();
+                    final Instant createTime = resultStore.getCreationTime();
+                    final Instant accessTime = resultStore.getLastAccessTime();
+                    final UserRef userRef = resultStore.getUserRef();
 
-                if (settings.getStoreLifespan().getTimeToLive() != null &&
-                    now.isAfter(createTime.plus(settings.getStoreLifespan().getTimeToLive()))) {
-                    LOGGER.debug("Destroying resultStore for queryKey {} for user {} that is beyond the store TTL",
-                            queryKey, resultStore);
-                    destroyAndRemove(queryKey, resultStore);
-                } else if (settings.getStoreLifespan().getTimeToIdle() != null &&
-                           now.isAfter(accessTime.plus(settings.getStoreLifespan().getTimeToIdle()))) {
-                    LOGGER.debug("Destroying resultStore for queryKey {} for user {} that is beyond the store TTI",
-                            queryKey, resultStore);
-                    destroyAndRemove(queryKey, resultStore);
-                } else if (settings.getSearchProcessLifespan().getTimeToLive() != null &&
-                           now.isAfter(createTime.plus(settings.getSearchProcessLifespan().getTimeToLive()))) {
-                    LOGGER.debug("Terminating resultStore for queryKey {} for user {} that is beyond the " +
-                                 "search process TTL", queryKey, resultStore);
-                    resultStore.terminate();
-                } else if (settings.getSearchProcessLifespan().getTimeToIdle() != null &&
-                           now.isAfter(accessTime.plus(settings.getSearchProcessLifespan().getTimeToIdle()))) {
-                    LOGGER.debug("Terminating resultStore for queryKey {} for user {} that is beyond the " +
-                                 "search process TTI", queryKey, resultStore);
-                    resultStore.terminate();
-                } else {
-                    final String ownerUuid = NullSafe.get(userRef, UserRef::getUuid);
-                    final Optional<UserRef> optUserRef = userRefLookup.getByUuid(ownerUuid);
-                    if (optUserRef.isEmpty()) {
-                        // User has been deleted so destroy the store
-                        LOGGER.debug("Destroying resultStore for queryKey {} for deleted user {}",
+                    if (settings.getStoreLifespan().getTimeToLive() != null &&
+                        now.isAfter(createTime.plus(settings.getStoreLifespan().getTimeToLive()))) {
+                        LOGGER.debug("Destroying resultStore for queryKey {} for user {} that is beyond the store TTL",
                                 queryKey, resultStore);
                         destroyAndRemove(queryKey, resultStore);
+                    } else if (settings.getStoreLifespan().getTimeToIdle() != null &&
+                               now.isAfter(accessTime.plus(settings.getStoreLifespan().getTimeToIdle()))) {
+                        LOGGER.debug("Destroying resultStore for queryKey {} for user {} that is beyond the store TTI",
+                                queryKey, resultStore);
+                        destroyAndRemove(queryKey, resultStore);
+                    } else if (settings.getSearchProcessLifespan().getTimeToLive() != null &&
+                               now.isAfter(createTime.plus(settings.getSearchProcessLifespan().getTimeToLive()))) {
+                        LOGGER.debug("Terminating resultStore for queryKey {} for user {} that is beyond the " +
+                                     "search process TTL", queryKey, resultStore);
+                        resultStore.terminate();
+                    } else if (settings.getSearchProcessLifespan().getTimeToIdle() != null &&
+                               now.isAfter(accessTime.plus(settings.getSearchProcessLifespan().getTimeToIdle()))) {
+                        LOGGER.debug("Terminating resultStore for queryKey {} for user {} that is beyond the " +
+                                     "search process TTI", queryKey, resultStore);
+                        resultStore.terminate();
+                    } else {
+                        final String ownerUuid = NullSafe.get(userRef, UserRef::getUuid);
+                        final Optional<UserRef> optUserRef = userRefLookup.getByUuid(ownerUuid);
+                        if (optUserRef.isEmpty()) {
+                            // User has been deleted so destroy the store
+                            LOGGER.debug("Destroying resultStore for queryKey {} for deleted user {}",
+                                    queryKey, resultStore);
+                            destroyAndRemove(queryKey, resultStore);
+                        }
                     }
+                } catch (final RuntimeException e) {
+                    LOGGER.error(e::getMessage, e);
                 }
-            } catch (final RuntimeException e) {
-                LOGGER.error(e::getMessage, e);
-            }
+            });
         });
     }
 

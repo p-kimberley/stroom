@@ -19,15 +19,15 @@ package stroom.query.client.presenter;
 import stroom.dashboard.shared.DashboardSearchResponse;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.DestroyReason;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Param;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.Result;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.DestroyReason;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Param;
+import stroom.query.api.QueryKey;
+import stroom.query.api.Result;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TimeRange;
 import stroom.query.shared.QueryContext;
 import stroom.query.shared.QueryResource;
 import stroom.query.shared.QuerySearchRequest;
@@ -35,7 +35,7 @@ import stroom.query.shared.QueryTablePreferences;
 import stroom.task.client.DefaultTaskMonitorFactory;
 import stroom.task.client.HasTaskMonitorFactory;
 import stroom.task.client.TaskMonitorFactory;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.TokenError;
 
 import com.google.gwt.core.client.GWT;
@@ -277,9 +277,9 @@ public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
         final QuerySearchRequest search = currentSearch;
         if (search != null && polling) {
             final ResultComponent tablePresenter = resultComponents.get(TABLE_COMPONENT_ID);
-            final Set<String> openGroups = GwtNullSafe
+            final Set<String> openGroups = NullSafe
                     .getOrElse(tablePresenter, ResultComponent::getOpenGroups, Collections.emptySet());
-            final OffsetRange requestedRange = GwtNullSafe
+            final OffsetRange requestedRange = NullSafe
                     .getOrElse(tablePresenter, ResultComponent::getRequestedRange, OffsetRange.UNBOUNDED);
 
             final QuerySearchRequest request = currentSearch

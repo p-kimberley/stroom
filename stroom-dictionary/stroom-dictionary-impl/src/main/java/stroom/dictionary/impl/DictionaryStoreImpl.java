@@ -31,11 +31,11 @@ import stroom.docstore.api.StoreFactory;
 import stroom.docstore.api.UniqueNameUtil;
 import stroom.importexport.shared.ImportSettings;
 import stroom.importexport.shared.ImportState;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.Message;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.string.StringUtil;
 
@@ -101,7 +101,7 @@ class DictionaryStoreImpl implements DictionaryStore, WordListProvider {
     }
 
     @Override
-    public DocRefInfo info(DocRef docRef) {
+    public DocRefInfo info(final DocRef docRef) {
         return store.info(docRef);
     }
 
@@ -136,7 +136,7 @@ class DictionaryStoreImpl implements DictionaryStore, WordListProvider {
                         .getImports()
                         .stream()
                         .map(dependencyRemapper::remap)
-                        .collect(Collectors.toList());
+                        .toList();
                 doc.setImports(replacedDocRefImports);
             }
         };
@@ -184,7 +184,7 @@ class DictionaryStoreImpl implements DictionaryStore, WordListProvider {
         } else {
             try {
                 return docRefDecorator.decorate(docRef, true);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 // Likely docRef doesn't exist, so we will just leave it as is, i.e.
                 // a broken dep
                 LOGGER.debug(() -> LogUtil.message("Unable to decorate docRef {}: {}",
@@ -231,7 +231,7 @@ class DictionaryStoreImpl implements DictionaryStore, WordListProvider {
     }
 
     @Override
-    public Set<DocRef> findAssociatedNonExplorerDocRefs(DocRef docRef) {
+    public Set<DocRef> findAssociatedNonExplorerDocRefs(final DocRef docRef) {
         return null;
     }
 

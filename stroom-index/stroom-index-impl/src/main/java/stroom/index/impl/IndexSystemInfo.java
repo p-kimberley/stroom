@@ -4,7 +4,7 @@ import stroom.index.shared.IndexShard;
 import stroom.index.shared.LuceneVersion;
 import stroom.index.shared.LuceneVersionUtil;
 import stroom.node.api.NodeInfo;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.sysinfo.HasSystemInfo;
 import stroom.util.sysinfo.SystemInfoResult;
 
@@ -101,7 +101,7 @@ public class IndexSystemInfo implements HasSystemInfo {
                         .addDetail("Owned", false)
                         .build();
             }
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             return SystemInfoResult.builder(this)
                     .addError(e)
                     .build();

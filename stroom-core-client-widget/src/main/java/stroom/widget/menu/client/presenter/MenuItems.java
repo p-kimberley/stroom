@@ -19,7 +19,6 @@ package stroom.widget.menu.client.presenter;
 import com.google.inject.Singleton;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,7 +52,7 @@ public class MenuItems {
             final Set<Item> items = entry.getValue();
             // Sort the items.
             final List<Item> sortedItems = new ArrayList<>(items);
-            Collections.sort(sortedItems, new ItemComparator());
+            sortedItems.sort(new ItemComparator());
 
             final List<Item> compressedItems = new ArrayList<>();
             for (final Item item : sortedItems) {
@@ -63,15 +62,15 @@ public class MenuItems {
             }
 
             // Cleanse the child items.
-            if (compressedItems.size() > 0) {
+            if (!compressedItems.isEmpty()) {
                 // Remove leading separators.
-                while (compressedItems.size() > 0 && compressedItems.get(0) instanceof Separator) {
+                while (!compressedItems.isEmpty() && compressedItems.get(0) instanceof Separator) {
                     compressedItems.remove(0);
                 }
 
                 // Remove trailing separators.
-                while (compressedItems.size() > 0
-                        && compressedItems.get(compressedItems.size() - 1) instanceof Separator) {
+                while (!compressedItems.isEmpty()
+                       && compressedItems.get(compressedItems.size() - 1)  instanceof Separator) {
                     compressedItems.remove(compressedItems.size() - 1);
                 }
 
@@ -108,7 +107,7 @@ public class MenuItems {
     @Override
     public String toString() {
         final List<MenuKey> keys = new ArrayList<>(menuItems.keySet());
-        Collections.sort(keys, new MenuKeyComparator());
+        keys.sort(new MenuKeyComparator());
 
         final StringBuilder sb = new StringBuilder();
         for (final MenuKey key : keys) {
@@ -119,7 +118,7 @@ public class MenuItems {
             final Set<Item> items = menuItems.get(key);
             // Sort the items.
             final List<Item> sortedItems = new ArrayList<>(items);
-            Collections.sort(sortedItems, new ItemComparator());
+            sortedItems.sort(new ItemComparator());
 
             for (final Item item : sortedItems) {
                 sb.append("    - ");

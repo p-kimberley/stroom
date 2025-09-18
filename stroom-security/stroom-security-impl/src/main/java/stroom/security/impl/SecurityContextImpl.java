@@ -329,7 +329,7 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public <T> T asUserResult(final UserIdentity userIdentity, final Supplier<T> supplier) {
-        T result;
+        final T result;
         boolean success = false;
         try {
             pushUser(userIdentity);
@@ -397,7 +397,13 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public <T> T asProcessingUserResult(final Supplier<T> supplier) {
-        return asUserResult(userIdentityFactory.getServiceUserIdentity(), supplier);
+        final UserIdentity serviceUserIdentity;
+        try {
+            serviceUserIdentity = userIdentityFactory.getServiceUserIdentity();
+        } catch (final Exception e) {
+            throw new RuntimeException("Error running as processing user - " + LogUtil.exceptionMessage(e), e);
+        }
+        return asUserResult(serviceUserIdentity, supplier);
     }
 
     /**
@@ -405,7 +411,13 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public void asProcessingUser(final Runnable runnable) {
-        asUser(userIdentityFactory.getServiceUserIdentity(), runnable);
+        final UserIdentity serviceUserIdentity;
+        try {
+            serviceUserIdentity = userIdentityFactory.getServiceUserIdentity();
+        } catch (final Exception e) {
+            throw new RuntimeException("Error running as processing user - " + LogUtil.exceptionMessage(e), e);
+        }
+        asUser(serviceUserIdentity, runnable);
     }
 
     /**
@@ -413,7 +425,7 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public <T> T useAsReadResult(final Supplier<T> supplier) {
-        T result;
+        final T result;
         boolean success = false;
         try {
             elevatePermissions();
@@ -481,7 +493,7 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public <T> T secureResult(final AppPermission permission, final Supplier<T> supplier) {
-        T result;
+        final T result;
 
         // Initiate current check type.
         final Boolean currentCheckType = checkTypeThreadLocal.get();
@@ -548,7 +560,7 @@ class SecurityContextImpl implements SecurityContext {
      */
     @Override
     public <T> T secureResult(final Supplier<T> supplier) {
-        T result;
+        final T result;
 
         // Initiate current check type.
         final Boolean currentCheckType = checkTypeThreadLocal.get();
@@ -635,5 +647,32 @@ class SecurityContextImpl implements SecurityContext {
         } finally {
             checkTypeThreadLocal.set(currentCheckType);
         }
+    }
+
+    @Override
+    public boolean inGroup(final String groupName) {
+        return inGroup(getUserRef(), groupName, new HashSet<>());
+    }
+
+    private boolean inGroup(final UserRef userRef,
+                            final String groupName,
+                            final Set<UserRef> examined) {
+        final Set<UserRef> userGroups = userGroupsCache.getGroups(userRef);
+        if (userGroups != null) {
+            for (final UserRef userGroup : userGroups) {
+                if (userGroup.getSubjectId().equals(groupName)) {
+                    return true;
+                }
+
+                // Recurse into parent groups.
+                if (!examined.contains(userGroup)) {
+                    examined.add(userGroup);
+                    if (inGroup(userGroup, groupName, examined)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

@@ -23,12 +23,13 @@ import stroom.meta.shared.MetaExpressionUtil;
 import stroom.meta.shared.MetaFields;
 import stroom.meta.shared.SelectionSummary;
 import stroom.meta.shared.Status;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.util.collections.BatchingCollector;
 import stroom.util.date.DateUtil;
@@ -108,6 +109,7 @@ class TestMetaServiceImpl {
                         new MockCollectionModule(),
                         new MockDocRefInfoModule(),
                         new MockWordListProviderModule(),
+                        new MockMetricsModule(),
                         new CacheModule(),
                         new DbTestModule(),
                         new MetaTestModule(),
@@ -133,7 +135,7 @@ class TestMetaServiceImpl {
                 .build();
         final FindMetaCriteria criteria = new FindMetaCriteria(expression);
 
-        int deleted = metaService.updateStatus(
+        final int deleted = metaService.updateStatus(
                 criteria, null, Status.DELETED);
         assertThat(deleted)
                 .isEqualTo(1);
@@ -161,7 +163,7 @@ class TestMetaServiceImpl {
                 meta4.getId()));
         final FindMetaCriteria criteria = new FindMetaCriteria(expression);
 
-        int deleted = metaService.updateStatus(
+        final int deleted = metaService.updateStatus(
                 criteria, null, Status.DELETED);
 
 //        TestMetaDaoImpl.dumpMetaTable(metaDbConnProvider);
@@ -203,7 +205,7 @@ class TestMetaServiceImpl {
                 .build();
         final FindMetaCriteria criteria = new FindMetaCriteria(expression);
 
-        int deleted = metaService.updateStatus(
+        final int deleted = metaService.updateStatus(
                 criteria, null, Status.DELETED);
 
         assertThat(deleted)
@@ -241,7 +243,7 @@ class TestMetaServiceImpl {
         assertThat(selectionSummary.getItemCount()).isEqualTo(2);
         assertThat(selectionSummary.getStatusCount()).isEqualTo(1);
 
-        int deleted = metaService.updateStatus(
+        final int deleted = metaService.updateStatus(
                 new FindMetaCriteria(expression), null, Status.DELETED);
         assertThat(deleted).isEqualTo(1);
 
@@ -253,9 +255,9 @@ class TestMetaServiceImpl {
 
     @Test
     void testRetentionDelete_noRules() {
-        List<DataRetentionRuleAction> ruleActions = Collections.emptyList();
+        final List<DataRetentionRuleAction> ruleActions = Collections.emptyList();
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         setupRetentionData();
 
@@ -271,7 +273,7 @@ class TestMetaServiceImpl {
     void testRetentionDelete_allData() {
 
         // Testing a true condition
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(
                         1,
                         ExpressionOperator.builder().build(),
@@ -281,7 +283,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -293,7 +295,7 @@ class TestMetaServiceImpl {
     void testRetentionDelete_emptyNot() {
 
         // Testing a true condition
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(
                         1,
                         ExpressionOperator.builder().op(Op.NOT).build(),
@@ -303,7 +305,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         // A NOT with no children does nothing.
         metaService.delete(ruleActions, period);
@@ -315,13 +317,13 @@ class TestMetaServiceImpl {
     @Test
     void testRetentionDelete_retainAll() {
 
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.RETAIN),
                 buildRuleAction(2, FEED_2, RetentionRuleOutcome.RETAIN),
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.RETAIN)
         );
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         setupRetentionData();
 
@@ -336,7 +338,7 @@ class TestMetaServiceImpl {
     @Test
     void testRetentionDelete_deleteAll_locked() {
 
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.DELETE),
                 buildRuleAction(2, FEED_2, RetentionRuleOutcome.DELETE),
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.DELETE)
@@ -346,7 +348,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.LOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -357,7 +359,7 @@ class TestMetaServiceImpl {
     @Test
     void testRetentionDelete_deleteAll() {
 
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.DELETE),
                 buildRuleAction(2, FEED_2, RetentionRuleOutcome.DELETE),
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.DELETE)
@@ -367,7 +369,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -378,7 +380,7 @@ class TestMetaServiceImpl {
     @Test
     void testRetentionDelete_deleteSome() {
 
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.RETAIN),
                 buildRuleAction(2, FEED_2, RetentionRuleOutcome.DELETE),
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.RETAIN)
@@ -388,7 +390,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -401,7 +403,7 @@ class TestMetaServiceImpl {
     void testRetentionDelete_noMatch() {
 
         // Testing a true condition
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(
                         1,
                         "NOT_FOUND_FEED",
@@ -411,7 +413,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
+        final TimePeriod period = TimePeriod.between(Instant.EPOCH, Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -423,7 +425,7 @@ class TestMetaServiceImpl {
     void testRetentionDelete_caseFallThrough() {
 
         // Two rules for same expression, rule 2 will never match
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.RETAIN),
                 buildRuleAction(2, FEED_1, RetentionRuleOutcome.DELETE),
                 buildRuleAction(3, FEED_2, RetentionRuleOutcome.DELETE),
@@ -434,7 +436,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.fromEpochTo(Instant.now());
+        final TimePeriod period = TimePeriod.fromEpochTo(Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -447,7 +449,7 @@ class TestMetaServiceImpl {
     void testRetentionDelete_caseFallThrough2() {
 
         // Two rules for same expression, rule 3 will never match
-        List<DataRetentionRuleAction> ruleActions = List.of(
+        final List<DataRetentionRuleAction> ruleActions = List.of(
                 buildRuleAction(1, FEED_1, RetentionRuleOutcome.DELETE),
                 buildRuleAction(2, FEED_1, RetentionRuleOutcome.RETAIN),
                 buildRuleAction(3, FEED_2, RetentionRuleOutcome.DELETE),
@@ -458,7 +460,7 @@ class TestMetaServiceImpl {
 
         assertTotalRowCount(3, Status.UNLOCKED);
 
-        TimePeriod period = TimePeriod.fromEpochTo(Instant.now());
+        final TimePeriod period = TimePeriod.fromEpochTo(Instant.now());
 
         metaService.delete(ruleActions, period);
 
@@ -476,7 +478,7 @@ class TestMetaServiceImpl {
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.DELETE)
         );
 
-        Instant now = Instant.now();
+        final Instant now = Instant.now();
 
         setupRetentionData(Status.UNLOCKED, now.minus(3, ChronoUnit.DAYS));
         setupRetentionData(Status.UNLOCKED, now.minus(2, ChronoUnit.DAYS));
@@ -485,7 +487,7 @@ class TestMetaServiceImpl {
         assertTotalRowCount(9, Status.UNLOCKED);
 
         // Period should cover set of data
-        TimePeriod period = TimePeriod.between(
+        final TimePeriod period = TimePeriod.between(
                 now.minus(2, ChronoUnit.DAYS)
                         .minus(1, ChronoUnit.HOURS),
                 now.minus(2, ChronoUnit.DAYS)
@@ -507,7 +509,7 @@ class TestMetaServiceImpl {
                 buildRuleAction(3, FEED_3, RetentionRuleOutcome.DELETE)
         );
 
-        Instant now = Instant.now();
+        final Instant now = Instant.now();
 
         setupRetentionData(Status.UNLOCKED, now.minus(3, ChronoUnit.DAYS));
         setupRetentionData(Status.UNLOCKED, now.minus(2, ChronoUnit.DAYS));
@@ -516,7 +518,7 @@ class TestMetaServiceImpl {
         assertTotalRowCount(9, Status.UNLOCKED);
 
         // Period should cover set of data
-        TimePeriod period = TimePeriod.between(
+        final TimePeriod period = TimePeriod.between(
                 Instant.EPOCH,
                 now.minus(1, ChronoUnit.DAYS));
 
@@ -561,7 +563,7 @@ class TestMetaServiceImpl {
         IntStream.range(0, totalDays)
                 .boxed()
                 .flatMap(i -> {
-                    Instant createTime = now.minus(i, ChronoUnit.DAYS);
+                    final Instant createTime = now.minus(i, ChronoUnit.DAYS);
                     return IntStream.rangeClosed(1, feedCount)
                             .boxed()
                             .flatMap(j -> IntStream.rangeClosed(1, rowsPerFeedPerDay)
@@ -646,7 +648,7 @@ class TestMetaServiceImpl {
         IntStream.range(0, totalDays)
                 .boxed()
                 .flatMap(i -> {
-                    Instant createTime = now.minus(i, ChronoUnit.DAYS);
+                    final Instant createTime = now.minus(i, ChronoUnit.DAYS);
                     return IntStream.rangeClosed(1, feedCount)
                             .boxed()
                             .flatMap(j -> IntStream.rangeClosed(1, rowsPerFeedPerDay)
@@ -681,7 +683,7 @@ class TestMetaServiceImpl {
                 .getValues()
                 .stream()
                 .sorted(Comparator.comparing(Meta::getCreateMs))
-                .collect(Collectors.toList());
+                .toList();
 
         LOGGER.info("meta:\n\n{}\n", AsciiTable.builder(metaList)
                 .withColumn(Column.of("ID", Meta::getId))
@@ -724,8 +726,8 @@ class TestMetaServiceImpl {
         return summaries.stream()
                 .filter(summary ->
                         summary.getRuleNumber() == ruleNo
-                                && summary.getFeed().equals(feedName)
-                                && summary.getType().equals(type))
+                        && summary.getFeed().equals(feedName)
+                        && summary.getType().equals(type))
                 .findAny()
                 .orElseThrow()
                 .getCount();
@@ -737,16 +739,16 @@ class TestMetaServiceImpl {
     @Disabled
     @Test
     void testLogExecutionTime() {
-        int iterations = 100_000_000;
-        int runs = 5;
-        AtomicLong counter = new AtomicLong();
+        final int iterations = 100_000_000;
+        final int runs = 5;
+        final AtomicLong counter = new AtomicLong();
 
         for (int j = 0; j < runs; j++) {
             counter.set(0);
-            LogExecutionTime outer = new LogExecutionTime();
+            final LogExecutionTime outer = new LogExecutionTime();
 
             for (int i = 0; i < iterations; i++) {
-                LogExecutionTime inner = new LogExecutionTime();
+                final LogExecutionTime inner = new LogExecutionTime();
                 counter.incrementAndGet();
                 LOGGER.trace("Some message ", inner);
             }
@@ -755,7 +757,7 @@ class TestMetaServiceImpl {
 
         for (int j = 0; j < runs; j++) {
             counter.set(0);
-            LogExecutionTime outer = new LogExecutionTime();
+            final LogExecutionTime outer = new LogExecutionTime();
             for (int i = 0; i < iterations; i++) {
                 LOGGER.logDurationIfTraceEnabled(() -> {
                     counter.incrementAndGet();
@@ -807,7 +809,7 @@ class TestMetaServiceImpl {
     }
 
     private void assertTotalRowCount(final int expectedRowCount, final Status status) {
-        FindMetaCriteria criteria = new FindMetaCriteria();
+        final FindMetaCriteria criteria = new FindMetaCriteria();
         criteria.setExpression(ExpressionOperator.builder()
                 .addTextTerm(MetaFields.STATUS, Condition.EQUALS, status.getDisplayValue())
                 .build());
@@ -818,7 +820,7 @@ class TestMetaServiceImpl {
     }
 
     private void assertTotalRowCount(final int expectedRowCount) {
-        FindMetaCriteria criteria = new FindMetaCriteria();
+        final FindMetaCriteria criteria = new FindMetaCriteria();
         final int rowCount = metaDao.count(criteria);
 
         assertThat(rowCount)

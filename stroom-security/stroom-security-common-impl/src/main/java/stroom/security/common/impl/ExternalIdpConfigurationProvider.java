@@ -7,12 +7,12 @@ import stroom.security.openid.api.OpenIdConfiguration;
 import stroom.security.openid.api.OpenIdConfigurationResponse;
 import stroom.security.openid.api.OpenIdConfigurationResponse.Builder;
 import stroom.util.HasHealthCheck;
-import stroom.util.NullSafe;
 import stroom.util.jersey.JerseyClientFactory;
 import stroom.util.jersey.JerseyClientName;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.codahale.metrics.health.HealthCheck;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -101,7 +101,7 @@ public class ExternalIdpConfigurationProvider
             // Even if we already have the config from it, if we can't see the IDP we have problems.
             try {
                 resultBuilder.withDetail("configUri", configurationEndpoint);
-                OpenIdConfigurationResponse response = fetchOpenIdConfigurationResponse(
+                final OpenIdConfigurationResponse response = fetchOpenIdConfigurationResponse(
                         configurationEndpoint, abstractOpenIdConfig);
                 if (response != null) {
                     resultBuilder.healthy();
@@ -109,7 +109,7 @@ public class ExternalIdpConfigurationProvider
                     resultBuilder.unhealthy()
                             .withMessage("Null response");
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 resultBuilder.unhealthy(e)
                         .withMessage("Error fetching Open ID Connect configuration from " +
                                      configurationEndpoint + ". Is the identity provider down?");
@@ -175,7 +175,7 @@ public class ExternalIdpConfigurationProvider
                 final WebTarget webTarget = jerseyClientFactory.getNamedClient(JerseyClientName.OPEN_ID)
                         .target(configurationEndpoint);
 
-                try (Response response = webTarget.request(MediaType.APPLICATION_JSON).get()) {
+                try (final Response response = webTarget.request(MediaType.APPLICATION_JSON).get()) {
                     if (response.getStatus() == HttpServletResponse.SC_OK) {
                         // According to the spec, the response may contain unexpected props so as we don't easily
                         // have access to configure the client to relax jackson, do it manually.
@@ -195,11 +195,11 @@ public class ExternalIdpConfigurationProvider
                                                           " from " + configurationEndpoint);
                     }
                 }
-            } catch (AuthenticationException e) {
+            } catch (final AuthenticationException e) {
                 // This is not a connection issue so just bubble it up and likely crash the app
                 // if this is happening as part of the guice injector init.
                 throw e;
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 // The app is pretty dead without a connection to the IDP so keep retrying
                 LOGGER.warn(LogUtil.message(
                         "Unable to establish connection to the identity provider at {} to fetch Open ID " +
@@ -242,7 +242,7 @@ public class ExternalIdpConfigurationProvider
             openIdConfigurationResponse = mapper.readValue(
                     msg,
                     OpenIdConfigurationResponse.class);
-        } catch (JsonProcessingException e) {
+        } catch (final JsonProcessingException e) {
             throw new AuthenticationException(LogUtil.message("Unable to parse open ID configuration " +
                                                               "from {}. {}", configurationEndpoint, e.getMessage()), e);
         }
@@ -341,8 +341,13 @@ public class ExternalIdpConfigurationProvider
     }
 
     @Override
-    public boolean isValidateAudience() {
-        return localOpenIdConfigProvider.get().isValidateAudience();
+    public Set<String> getAllowedAudiences() {
+        return localOpenIdConfigProvider.get().getAllowedAudiences();
+    }
+
+    @Override
+    public boolean isAudienceClaimRequired() {
+        return localOpenIdConfigProvider.get().isAudienceClaimRequired();
     }
 
     @Override
@@ -361,6 +366,11 @@ public class ExternalIdpConfigurationProvider
     }
 
     @Override
+    public String getFullNameClaimTemplate() {
+        return localOpenIdConfigProvider.get().getFullNameClaimTemplate();
+    }
+
+    @Override
     public String getLogoutRedirectParamName() {
         return localOpenIdConfigProvider.get().getLogoutRedirectParamName();
     }
@@ -368,5 +378,10 @@ public class ExternalIdpConfigurationProvider
     @Override
     public Set<String> getExpectedSignerPrefixes() {
         return localOpenIdConfigProvider.get().getExpectedSignerPrefixes();
+    }
+
+    @Override
+    public String getPublicKeyUriPattern() {
+        return localOpenIdConfigProvider.get().getPublicKeyUriPattern();
     }
 }

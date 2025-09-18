@@ -4,7 +4,7 @@ import stroom.db.util.ExpressionMapper;
 import stroom.db.util.ExpressionMapperFactory;
 import stroom.db.util.GenericDao;
 import stroom.db.util.JooqUtil;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.api.SecurityContext;
 import stroom.security.impl.HashedApiKeyParts;
 import stroom.security.impl.UserCache;
@@ -16,10 +16,10 @@ import stroom.security.shared.FindApiKeyCriteria;
 import stroom.security.shared.HashAlgorithm;
 import stroom.security.shared.HashedApiKey;
 import stroom.security.shared.User;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
@@ -226,7 +226,7 @@ public class ApiKeyDaoImpl implements ApiKeyDao {
                     .returning(API_KEY.ID)
                     .fetchOne()
             );
-        } catch (DataAccessException e) {
+        } catch (final DataAccessException e) {
             final Throwable rootCause = ExceptionUtils.getRootCause(e);
             if (rootCause instanceof final SQLIntegrityConstraintViolationException constraintException) {
                 LOGGER.debug(constraintException.getMessage());
@@ -260,7 +260,7 @@ public class ApiKeyDaoImpl implements ApiKeyDao {
     public HashedApiKey update(final HashedApiKey apiKey) {
         try {
             return genericDao.update(apiKey);
-        } catch (DataAccessException e) {
+        } catch (final DataAccessException e) {
             final Throwable rootCause = ExceptionUtils.getRootCause(e);
             if (rootCause instanceof SQLIntegrityConstraintViolationException &&
                 rootCause.getMessage().contains(API_KEY.NAME.getName())) {

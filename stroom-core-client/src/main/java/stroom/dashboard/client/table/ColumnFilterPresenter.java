@@ -19,8 +19,8 @@ package stroom.dashboard.client.table;
 import stroom.dashboard.client.table.ColumnFilterPresenter.ColumnFilterView;
 import stroom.editor.client.presenter.EditorPresenter;
 import stroom.editor.client.presenter.EditorView;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ColumnFilter;
+import stroom.query.api.Column;
+import stroom.query.api.ColumnFilter;
 import stroom.widget.popup.client.event.ShowPopupEvent;
 import stroom.widget.popup.client.presenter.PopupSize;
 import stroom.widget.popup.client.presenter.PopupType;
@@ -82,7 +82,7 @@ public class ColumnFilterPresenter extends MyPresenterWidget<ColumnFilterView> {
     public ColumnFilter getColumnFilter() {
         ColumnFilter filter = null;
 
-        String expression = editorPresenter.getText().trim();
+        final String expression = editorPresenter.getText().trim();
         if (expression.length() > 0) {
             filter = new ColumnFilter(expression);
         }

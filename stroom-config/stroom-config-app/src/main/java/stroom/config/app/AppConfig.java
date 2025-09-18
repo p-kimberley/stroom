@@ -27,11 +27,13 @@ import stroom.config.common.CommonDbConfig;
 import stroom.config.common.NodeUriConfig;
 import stroom.config.common.PublicUriConfig;
 import stroom.config.common.UiUriConfig;
+import stroom.core.receive.AutoContentCreationConfig;
 import stroom.dashboard.impl.DashboardConfig;
 import stroom.docstore.impl.db.DocStoreConfig;
 import stroom.event.logging.impl.LoggingConfig;
 import stroom.explorer.impl.ExplorerConfig;
 import stroom.feed.impl.FeedConfig;
+import stroom.gitrepo.impl.GitRepoConfigImpl;
 import stroom.importexport.impl.ContentPackImportConfig;
 import stroom.importexport.impl.ExportConfig;
 import stroom.index.impl.IndexConfig;
@@ -39,7 +41,6 @@ import stroom.index.impl.IndexFieldDbConfig;
 import stroom.index.impl.selection.VolumeConfig;
 import stroom.job.impl.JobSystemConfig;
 import stroom.kafka.impl.KafkaConfig;
-import stroom.legacy.db.LegacyConfig;
 import stroom.lifecycle.impl.LifecycleConfig;
 import stroom.lmdb.LmdbLibraryConfig;
 import stroom.node.impl.NodeConfig;
@@ -79,6 +80,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     public static final String PROP_NAME_ANNOTATION = "annotation";
     public static final String PROP_NAME_ANALYTICS = "analytics";
     public static final String PROP_NAME_AUTHENTICATION = "authentication";
+    public static final String PROP_NAME_AUTO_CONTENT_CREATION = "autoContentCreation";
     public static final String PROP_NAME_BENCHMARK = "benchmark";
     public static final String PROP_NAME_BYTE_BUFFER_POOL = "byteBufferPool";
     public static final String PROP_NAME_CLUSTER = "cluster";
@@ -94,6 +96,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     public static final String PROP_NAME_EXPLORER = "explorer";
     public static final String PROP_NAME_EXPORT = "export";
     public static final String PROP_NAME_FEED = "feed";
+    public static final String PROP_NAME_GIT_REPO = "gitRepo";
     public static final String PROP_NAME_HALT_BOOT_ON_CONFIG_VALIDATION_FAILURE = "haltBootOnConfigValidationFailure";
     public static final String PROP_NAME_INDEX = "index";
     public static final String PROP_NAME_JOB = "job";
@@ -130,12 +133,12 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     private final ActivityConfig activityConfig;
     private final AnalyticsConfig analyticsConfig;
     private final AnnotationConfig annotationConfig;
+    private final AutoContentCreationConfig autoContentCreationConfig;
     private final ByteBufferPoolConfig byteBufferPoolConfig;
     private final ClusterConfig clusterConfig;
     private final ClusterLockConfig clusterLockConfig;
     private final CommonDbConfig commonDbConfig;
     private final ContentPackImportConfig contentPackImportConfig;
-    private final LegacyConfig legacyConfig;
     private final DashboardConfig dashboardConfig;
     private final DataConfig dataConfig;
     private final DocStoreConfig docStoreConfig;
@@ -143,6 +146,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     private final ExplorerConfig explorerConfig;
     private final ExportConfig exportConfig;
     private final FeedConfig feedConfig;
+    private final GitRepoConfigImpl gitRepoConfig;
     private final IndexConfig indexConfig;
     private final JobSystemConfig jobSystemConfig;
     private final KafkaConfig kafkaConfig;
@@ -181,12 +185,12 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
                 new ActivityConfig(),
                 new AnalyticsConfig(),
                 new AnnotationConfig(),
+                new AutoContentCreationConfig(),
                 new ByteBufferPoolConfig(),
                 new ClusterConfig(),
                 new ClusterLockConfig(),
                 new CommonDbConfig(),
                 new ContentPackImportConfig(),
-                new LegacyConfig(),
                 new DashboardConfig(),
                 new DataConfig(),
                 new DocStoreConfig(),
@@ -194,6 +198,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
                 new ExplorerConfig(),
                 new ExportConfig(),
                 new FeedConfig(),
+                new GitRepoConfigImpl(),
                 new IndexConfig(),
                 new JobSystemConfig(),
                 new KafkaConfig(),
@@ -231,12 +236,12 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
                      @JsonProperty(PROP_NAME_ACTIVITY) final ActivityConfig activityConfig,
                      @JsonProperty(PROP_NAME_ANALYTICS) final AnalyticsConfig analyticsConfig,
                      @JsonProperty(PROP_NAME_ANNOTATION) final AnnotationConfig annotationConfig,
+                     @JsonProperty(PROP_NAME_AUTO_CONTENT_CREATION) final AutoContentCreationConfig autoContentCreationConfig,
                      @JsonProperty(PROP_NAME_BYTE_BUFFER_POOL) final ByteBufferPoolConfig byteBufferPoolConfig,
                      @JsonProperty(PROP_NAME_CLUSTER) final ClusterConfig clusterConfig,
                      @JsonProperty(PROP_NAME_CLUSTER_LOCK) final ClusterLockConfig clusterLockConfig,
                      @JsonProperty(PROP_NAME_COMMON_DB_DETAILS) final CommonDbConfig commonDbConfig,
                      @JsonProperty(PROP_NAME_CONTENT_PACK_IMPORT) final ContentPackImportConfig contentPackImportConfig,
-                     @JsonProperty(PROP_NAME_CORE) final LegacyConfig legacyConfig,
                      @JsonProperty(PROP_NAME_DASHBOARD) final DashboardConfig dashboardConfig,
                      @JsonProperty(PROP_NAME_DATA) final DataConfig dataConfig,
                      @JsonProperty(PROP_NAME_DOCSTORE) final DocStoreConfig docStoreConfig,
@@ -244,6 +249,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
                      @JsonProperty(PROP_NAME_EXPLORER) final ExplorerConfig explorerConfig,
                      @JsonProperty(PROP_NAME_EXPORT) final ExportConfig exportConfig,
                      @JsonProperty(PROP_NAME_FEED) final FeedConfig feedConfig,
+                     @JsonProperty(PROP_NAME_GIT_REPO) final GitRepoConfigImpl gitRepoConfig,
                      @JsonProperty(PROP_NAME_INDEX) final IndexConfig indexConfig,
                      @JsonProperty(PROP_NAME_JOB) final JobSystemConfig jobSystemConfig,
                      @JsonProperty(PROP_NAME_KAFKA) final KafkaConfig kafkaConfig,
@@ -277,12 +283,12 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
         this.activityConfig = activityConfig;
         this.analyticsConfig = analyticsConfig;
         this.annotationConfig = annotationConfig;
+        this.autoContentCreationConfig = autoContentCreationConfig;
         this.byteBufferPoolConfig = byteBufferPoolConfig;
         this.clusterConfig = clusterConfig;
         this.clusterLockConfig = clusterLockConfig;
         this.commonDbConfig = commonDbConfig;
         this.contentPackImportConfig = contentPackImportConfig;
-        this.legacyConfig = legacyConfig;
         this.dashboardConfig = dashboardConfig;
         this.dataConfig = dataConfig;
         this.docStoreConfig = docStoreConfig;
@@ -290,6 +296,7 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
         this.explorerConfig = explorerConfig;
         this.exportConfig = exportConfig;
         this.feedConfig = feedConfig;
+        this.gitRepoConfig = gitRepoConfig;
         this.indexConfig = indexConfig;
         this.jobSystemConfig = jobSystemConfig;
         this.kafkaConfig = kafkaConfig;
@@ -352,6 +359,11 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
         return annotationConfig;
     }
 
+    @JsonProperty(PROP_NAME_AUTO_CONTENT_CREATION)
+    public AutoContentCreationConfig getAutoContentCreationConfig() {
+        return autoContentCreationConfig;
+    }
+
     @JsonProperty(PROP_NAME_BYTE_BUFFER_POOL)
     public ByteBufferPoolConfig getByteBufferPoolConfig() {
         return byteBufferPoolConfig;
@@ -379,12 +391,6 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     @JsonProperty(PROP_NAME_CONTENT_PACK_IMPORT)
     public ContentPackImportConfig getContentPackImportConfig() {
         return contentPackImportConfig;
-    }
-
-    @JsonProperty(PROP_NAME_CORE)
-    @JsonPropertyDescription("Configuration for the core stroom DB")
-    public LegacyConfig getLegacyConfig() {
-        return legacyConfig;
     }
 
     @JsonProperty(PROP_NAME_DASHBOARD)
@@ -422,6 +428,11 @@ public class AppConfig extends AbstractConfig implements IsStroomConfig {
     @JsonProperty(PROP_NAME_EXPORT)
     public ExportConfig getExportConfig() {
         return exportConfig;
+    }
+
+    @JsonProperty(PROP_NAME_GIT_REPO)
+    public GitRepoConfigImpl getGitRepoConfig() {
+        return gitRepoConfig;
     }
 
     @JsonProperty(PROP_NAME_INDEX)

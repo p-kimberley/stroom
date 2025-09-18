@@ -27,7 +27,6 @@ import stroom.explorer.impl.DocRefInfoModule;
 import stroom.explorer.impl.MockExplorerModule;
 import stroom.feed.impl.FeedModule;
 import stroom.importexport.impl.ImportExportModule;
-import stroom.legacy.impex_6_1.LegacyImpexModule;
 import stroom.meta.mock.MockMetaModule;
 import stroom.meta.statistics.api.MetaStatistics;
 import stroom.node.api.NodeInfo;
@@ -47,10 +46,13 @@ import stroom.util.io.PathConfig;
 import stroom.util.io.StreamCloser;
 import stroom.util.io.StroomPathConfig;
 import stroom.util.jersey.MockJerseyModule;
+import stroom.util.metrics.Metrics;
+import stroom.util.metrics.MetricsImpl;
 import stroom.util.pipeline.scope.PipelineScopeModule;
 import stroom.util.pipeline.scope.PipelineScoped;
 import stroom.util.servlet.MockServletModule;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 
@@ -77,7 +79,6 @@ public class CliModule extends AbstractModule {
         install(new FeedModule());
         install(new PipelineScopeModule());
         install(new ImportExportModule());
-        install(new LegacyImpexModule());
 //        install(new stroom.jobsystem.JobSystemModule());
 //        install(new stroom.lifecycle.LifecycleModule());
         install(new stroom.event.logging.impl.EventLoggingModule());
@@ -120,6 +121,8 @@ public class CliModule extends AbstractModule {
 
         // Only needed for feed import so not an issue for Cli
         bind(FsVolumeGroupService.class).to(MockFsVolumeGroupService.class);
+
+        bind(Metrics.class).toInstance(new MetricsImpl(new MetricRegistry()));
     }
 
     @Provides

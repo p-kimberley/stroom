@@ -1,9 +1,9 @@
 package stroom.util.exception;
 
-import stroom.util.NullSafe;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -34,7 +34,7 @@ public interface InterruptibleFunction<T, R> {
         return t -> {
             try {
                 return function.apply(t);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 LOGGER.debug(() ->
                                 NullSafe.getOrElse(
                                         debugMsgSupplier,

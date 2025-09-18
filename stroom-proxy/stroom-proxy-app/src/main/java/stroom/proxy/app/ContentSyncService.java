@@ -8,13 +8,13 @@ import stroom.importexport.shared.ImportState;
 import stroom.proxy.app.handler.FeedStatusConfig;
 import stroom.security.api.UserIdentityFactory;
 import stroom.util.HasHealthCheck;
-import stroom.util.NullSafe;
 import stroom.util.authentication.DefaultOpenIdCredentials;
 import stroom.util.jersey.JerseyClientFactory;
 import stroom.util.jersey.JerseyClientName;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.codahale.metrics.health.HealthCheck;
 import io.dropwizard.lifecycle.Managed;
@@ -106,7 +106,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
             contentSyncConfig.getUpstreamUrl().forEach((type, url) -> {
                 final ImportExportActionHandler importHandler = typeToHandlerMap.get(type);
                 if (importHandler == null) {
-                    String knownHandlers = importExportActionHandlers.stream()
+                    final String knownHandlers = importExportActionHandlers.stream()
                             .map(handler -> handler.getType() + "(" + handler.getClass().getSimpleName() + ")")
                             .collect(Collectors.joining(", "));
                     LOGGER.error("No import handler found for type {} with url {}. Known handlers {}",
@@ -115,7 +115,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
                     try {
                         if (url != null) {
                             LOGGER.info("Syncing content from '" + url + "'");
-                            try (Response response = createClient(url, "/list", contentSyncConfig).get()) {
+                            try (final Response response = createClient(url, "/list", contentSyncConfig).get()) {
                                 if (response.getStatusInfo().getStatusCode() != Status.OK.getStatusCode()) {
                                     LOGGER.error(response.getStatusInfo().getReasonPhrase());
                                 } else {
@@ -127,7 +127,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
                                 }
                             }
                         }
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         LOGGER.error("Error syncing content of type {}", type, e);
                     }
                 }
@@ -140,7 +140,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
                                 final ImportExportActionHandler importExportActionHandler,
                                 final ContentSyncConfig contentSyncConfig) {
         LOGGER.info("Fetching " + docRef.getType() + " " + docRef.getName() + " " + docRef.getUuid());
-        try (Response response = createClient(url, "/export", contentSyncConfig).post(Entity.json(docRef))) {
+        try (final Response response = createClient(url, "/export", contentSyncConfig).post(Entity.json(docRef))) {
             if (response.getStatusInfo().getStatusCode() != Status.OK.getStatusCode()) {
                 LOGGER.error(response.getStatusInfo().getReasonPhrase());
             } else {
@@ -189,7 +189,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
 
     @Override
     public HealthCheck.Result getHealth() {
-        HealthCheck.ResultBuilder resultBuilder = HealthCheck.Result.builder();
+        final HealthCheck.ResultBuilder resultBuilder = HealthCheck.Result.builder();
 
         final AtomicBoolean allHealthy = new AtomicBoolean(true);
         final Map<String, Object> postResults = new ConcurrentHashMap<>();
@@ -198,7 +198,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
 
         // parallelStream so we can hit multiple URLs concurrently
         if (contentSyncConfig.isContentSyncEnabled()
-                && NullSafe.hasEntries(contentSyncConfig.getUpstreamUrl())) {
+            && NullSafe.hasEntries(contentSyncConfig.getUpstreamUrl())) {
 
             contentSyncConfig.getUpstreamUrl()
                     .entrySet()
@@ -212,7 +212,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
                         if (!"200".equals(msg)) {
                             allHealthy.set(false);
                         }
-                        Map<String, String> detailMap = new HashMap<>();
+                        final Map<String, String> detailMap = new HashMap<>();
                         detailMap.put("type", entry.getKey());
                         detailMap.put("url", entry.getValue() + path);
                         detailMap.put("result", msg);
@@ -242,7 +242,7 @@ public class ContentSyncService implements Managed, HasHealthCheck {
                         response.getStatusInfo().getStatusCode(),
                         response.getStatusInfo().getReasonPhrase());
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return LogUtil.message("Error: [{}]", e.getMessage());
         }
     }

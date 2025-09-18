@@ -16,23 +16,23 @@
 
 package stroom.query.common.v2;
 
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.Format;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.ParamSubstituteUtil;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.Sort;
-import stroom.query.api.v2.Sort.SortDirection;
-import stroom.query.api.v2.TableResult;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.Format;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.ParamUtil;
+import stroom.query.api.QueryKey;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.Sort;
+import stroom.query.api.Sort.SortDirection;
+import stroom.query.api.TableResult;
+import stroom.query.api.TableSettings;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValLong;
 import stroom.query.language.functions.ValString;
-import stroom.util.logging.Metrics;
+import stroom.util.logging.SimpleMetrics;
 import stroom.util.shared.ModelStringUtil;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -50,7 +50,7 @@ abstract class AbstractDataStoreTest {
 
     @BeforeAll
     static void beforeAll() {
-        Metrics.setEnabled(true);
+        SimpleMetrics.setEnabled(true);
     }
 
     void basicTest() {
@@ -60,7 +60,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .format(Format.TEXT)
                         .build())
                 .build();
@@ -88,7 +88,7 @@ abstract class AbstractDataStoreTest {
                 .build();
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                 dataStore,
                 tableResultRequest);
@@ -102,7 +102,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Col1")
                         .name("Col1")
-                        .expression(ParamSubstituteUtil.makeParam("Col1"))
+                        .expression(ParamUtil.create("Col1"))
                         .format(Format.NUMBER)
                         .group(0)
                         .sort(Sort.builder().order(0).build())
@@ -110,7 +110,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Col2")
                         .name("Col2")
-                        .expression(ParamSubstituteUtil.makeParam("Col2"))
+                        .expression(ParamUtil.create("Col2"))
                         .format(Format.NUMBER)
                         .group(1)
                         .sort(Sort.builder().order(1).build())
@@ -118,7 +118,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Col3")
                         .name("Col3")
-                        .expression(ParamSubstituteUtil.makeParam("Col3"))
+                        .expression(ParamUtil.create("Col3"))
                         .format(Format.NUMBER)
                         .group(2)
                         .sort(Sort.builder().order(2).build())
@@ -148,7 +148,7 @@ abstract class AbstractDataStoreTest {
 
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
 
         // Make sure we only get 10 results.
         ResultRequest tableResultRequest = ResultRequest.builder()
@@ -199,9 +199,9 @@ abstract class AbstractDataStoreTest {
         testRows(searchResult, 3);
     }
 
-    private void testRows(final TableResult searchResult, int maxDepth) {
+    private void testRows(final TableResult searchResult, final int maxDepth) {
         // Create expected test rows.
-        List<List<String>> expectedRows = new ArrayList<>();
+        final List<List<String>> expectedRows = new ArrayList<>();
         createRows(expectedRows, Collections.emptyList(), 1, maxDepth, 10, 3);
 
         // Test row count.
@@ -215,12 +215,12 @@ abstract class AbstractDataStoreTest {
         }
     }
 
-    private void createRows(List<List<String>> rows,
-                            List<String> parentRow,
-                            int currentDepth,
-                            int maxDepth,
-                            int count,
-                            int columns) {
+    private void createRows(final List<List<String>> rows,
+                            final List<String> parentRow,
+                            final int currentDepth,
+                            final int maxDepth,
+                            final int count,
+                            final int columns) {
         for (long i = 1; i <= count; i++) {
             final List<String> newParentRow = new ArrayList<>(parentRow);
             newParentRow.add(Long.toString(i));
@@ -270,7 +270,7 @@ abstract class AbstractDataStoreTest {
                 .build();
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                 dataStore,
                 tableResultRequest);
@@ -293,14 +293,14 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .format(Format.TEXT)
                         .group(0)
                         .build())
                 .addColumns(Column.builder()
                         .id("Text2")
                         .name("Text2")
-                        .expression(ParamSubstituteUtil.makeParam("Text2"))
+                        .expression(ParamUtil.create("Text2"))
                         .format(Format.TEXT)
                         .build())
                 .showDetail(true)
@@ -308,7 +308,7 @@ abstract class AbstractDataStoreTest {
 
         final DataStore dataStore = createUnlimitedDataStore(tableSettings);
 
-        Metrics.measure("Loaded data", () -> {
+        SimpleMetrics.measure("Loaded data", () -> {
             for (int i = 0; i < 100; i++) {
                 final String key = UUID.randomUUID().toString();
                 for (int j = 0; j < 100000; j++) {
@@ -327,21 +327,21 @@ abstract class AbstractDataStoreTest {
         }
 
         System.out.println("\nLoading data");
-        Metrics.report();
+        SimpleMetrics.report();
 
         System.out.println("\nGetting data");
-        Metrics.report();
+        SimpleMetrics.report();
 
         //Getting the runtime reference from system
-        Runtime runtime = Runtime.getRuntime();
+        final Runtime runtime = Runtime.getRuntime();
 
         runtime.gc();
 
         //Print used memory
         System.out.println("Used Memory: "
-                + ModelStringUtil.formatIECByteSizeString(runtime.totalMemory() - runtime.freeMemory()));
+                           + ModelStringUtil.formatIECByteSizeString(runtime.totalMemory() - runtime.freeMemory()));
 
-        Metrics.measure("Result", () -> {
+        SimpleMetrics.measure("Result", () -> {
             // Make sure we only get 50 results.
             final ResultRequest tableResultRequest = ResultRequest.builder()
                     .componentId("componentX")
@@ -350,7 +350,7 @@ abstract class AbstractDataStoreTest {
                     .build();
             final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                     formatterFactory,
-                    new ExpressionPredicateFactory(null));
+                    new ExpressionPredicateFactory());
             final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                     dataStore,
                     tableResultRequest);
@@ -359,7 +359,7 @@ abstract class AbstractDataStoreTest {
         });
 
         System.out.println("\nGetting results");
-        Metrics.report();
+        SimpleMetrics.report();
 
     }
 
@@ -370,7 +370,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .sort(sort)
                         .build())
                 .build();
@@ -405,7 +405,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Number")
                         .name("Number")
-                        .expression(ParamSubstituteUtil.makeParam("Number"))
+                        .expression(ParamUtil.create("Number"))
                         .sort(sort)
                         .build())
                 .build();
@@ -447,7 +447,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .group(0)
                         .build())
                 .build();
@@ -488,7 +488,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .sort(sort)
                         .group(0)
                         .build())
@@ -530,7 +530,7 @@ abstract class AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .sort(sort)
                         .group(0)
                         .build())
@@ -563,7 +563,7 @@ abstract class AbstractDataStoreTest {
     void firstLastSelectorTest() {
         final Sort sort = new Sort(0, SortDirection.ASCENDING);
 
-        final String param = ParamSubstituteUtil.makeParam("Number");
+        final String param = ParamUtil.create("Number");
         final TableSettings tableSettings = TableSettings.builder()
                 .addColumns(Column.builder()
                         .id("Group")
@@ -608,7 +608,7 @@ abstract class AbstractDataStoreTest {
         final FormatterFactory formatterFactory = new FormatterFactory(null);
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         final TableResult searchResult = (TableResult) tableComponentResultCreator.create(dataStore,
                 tableResultRequest);
 
@@ -630,7 +630,7 @@ abstract class AbstractDataStoreTest {
         // Make sure we only get 2000 results.
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         final TableResult searchResult = (TableResult) tableComponentResultCreator.create(dataStore,
                 tableResultRequest);
 

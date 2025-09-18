@@ -8,11 +8,12 @@ public interface FileTransferService {
 
     void checkSnapshotStatus(SnapshotRequest request);
 
-    void fetchSnapshot(SnapshotRequest request, OutputStream outputStream) throws IOException;
+    void fetchSnapshot(SnapshotRequest request, OutputStream outputStream);
 
     void receivePart(long createTime,
                      long metaId,
                      String fileHash,
                      String fileName,
+                     boolean synchroniseMerge,
                      InputStream inputStream) throws IOException;
 }

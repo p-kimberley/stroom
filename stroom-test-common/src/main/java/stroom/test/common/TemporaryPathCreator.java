@@ -50,7 +50,7 @@ public class TemporaryPathCreator implements PathCreator, AutoCloseable {
             tempDir = baseDir.resolve("temp");
             Files.createDirectories(homeDir);
             Files.createDirectories(tempDir);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error creating temp dir with prefix 'stroom'", e);
         }
         homeDirProvider = () -> homeDir;
@@ -116,17 +116,17 @@ public class TemporaryPathCreator implements PathCreator, AutoCloseable {
 
     @Override
     public String replace(final String path,
-                          final String type,
+                          final String var,
                           final LongSupplier replacementSupplier,
                           final int pad) {
-        return delegate.replace(path, type, replacementSupplier, pad);
+        return delegate.replace(path, var, replacementSupplier, pad);
     }
 
     @Override
-    public String replace(final String path,
-                          final String type,
+    public String replace(final String str,
+                          final String var,
                           final Supplier<String> replacementSupplier) {
-        return delegate.replace(path, type, replacementSupplier);
+        return delegate.replace(str, var, replacementSupplier);
     }
 
     @Override
@@ -157,7 +157,7 @@ public class TemporaryPathCreator implements PathCreator, AutoCloseable {
                     "0");
             final String prefix = "stroom_" + gradleWorker + "_";
             return Files.createTempDirectory(prefix);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
     }

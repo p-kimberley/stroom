@@ -21,7 +21,7 @@ import stroom.docs.shared.Description;
 import stroom.docstore.shared.Doc;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.TimeRange;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -79,7 +79,7 @@ public class QueryDoc extends Doc {
                     @JsonProperty("createUser") final String createUser,
                     @JsonProperty("updateUser") final String updateUser,
                     @JsonProperty("description") final String description,
-                    @JsonProperty("timeRange") TimeRange timeRange,
+                    @JsonProperty("timeRange") final TimeRange timeRange,
                     @JsonProperty("query") final String query,
                     @JsonProperty("queryTablePreferences") final QueryTablePreferences queryTablePreferences) {
         super(type, uuid, name, version, createTimeMs, updateTimeMs, createUser, updateUser);

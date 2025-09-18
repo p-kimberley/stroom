@@ -9,14 +9,16 @@ import stroom.proxy.repo.LogStream.EventType;
 import stroom.proxy.repo.ProxyServices;
 import stroom.receive.common.StroomStreamException;
 import stroom.security.api.UserIdentityFactory;
-import stroom.util.NullSafe;
 import stroom.util.io.ByteCountInputStream;
 import stroom.util.io.ByteSize;
 import stroom.util.logging.DurationTimer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.metrics.Metrics;
+import stroom.util.shared.NullSafe;
 
+import com.codahale.metrics.Timer;
 import org.apache.commons.io.IOUtils;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
@@ -68,12 +70,14 @@ public class HttpSender implements StreamDestination {
     private final String forwardUrl;
     private final String forwarderName;
     private final ProxyServices proxyServices;
+    private final Timer sendTimer;
 
     public HttpSender(final LogStream logStream,
                       final ForwardHttpPostConfig config,
                       final String userAgent,
                       final UserIdentityFactory userIdentityFactory,
                       final HttpClient httpClient,
+                      final Metrics metrics,
                       final ProxyServices proxyServices) {
         this.logStream = logStream;
         this.config = config;
@@ -83,6 +87,11 @@ public class HttpSender implements StreamDestination {
         this.forwardUrl = config.getForwardUrl();
         this.forwarderName = config.getName();
         this.proxyServices = proxyServices;
+        this.sendTimer = metrics.registrationBuilder(getClass())
+                .addNamePart(forwarderName)
+                .addNamePart("send")
+                .timer()
+                .createAndRegister();
     }
 
     @Override
@@ -112,15 +121,15 @@ public class HttpSender implements StreamDestination {
                 true));
 
         // Execute and get the response.
-        final ResponseStatus responseStatus = post(
-                httpPost, attributeMap, byteCountInputStream::getCount);
+        final ResponseStatus responseStatus = sendTimer.timeSupplier(() ->
+                post(httpPost, attributeMap, byteCountInputStream::getCount));
         LOGGER.debug("responseStatus: {}", responseStatus);
     }
 
     @Override
     public boolean performLivenessCheck() throws Exception {
         final String url = config.getLivenessCheckUrl();
-        boolean isLive;
+        final boolean isLive;
 
         if (NullSafe.isNonBlankString(url)) {
             final HttpGet httpGet = new HttpGet(url);
@@ -140,7 +149,7 @@ public class HttpSender implements StreamDestination {
                     throw new Exception(LogUtil.message("Got response code {} from livenessCheckUrl '{}'",
                             responseCode, url));
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 final String msg = LogUtil.message("Error calling livenessCheckUrl '{}': {}",
                         url, LogUtil.exceptionMessage(e));
                 LOGGER.debug(msg, e);
@@ -161,8 +170,10 @@ public class HttpSender implements StreamDestination {
         addAuthHeaders(httpPost);
 
         final AttributeMap sendHeader = AttributeMapUtil.cloneAllowable(attributeMap);
-        for (Entry<String, String> entry : sendHeader.entrySet()) {
-            httpPost.addHeader(entry.getKey(), entry.getValue());
+        for (final Entry<String, String> entry : sendHeader.entrySet()) {
+            if (!StandardHeaderArguments.HTTP_POST_EXCLUDE_SET.contains(entry.getKey())) {
+                httpPost.addHeader(entry.getKey(), entry.getValue());
+            }
         }
 
         // We may be doing an instant forward so need to pass on the compression type.
@@ -343,7 +354,7 @@ public class HttpSender implements StreamDestination {
 //                errorMsg = e.getMessage();
 //                throw e;
 //            }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug(() ->
                     LogUtil.message("'{}' - Exception reading response {}",
                             forwarderName, LogUtil.exceptionMessage(e), e));
@@ -391,7 +402,7 @@ public class HttpSender implements StreamDestination {
             if (value != null) {
                 return Integer.parseInt(value);
             }
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             LOGGER.error(e::getMessage, e);
         }
         return def;
@@ -406,7 +417,7 @@ public class HttpSender implements StreamDestination {
                 final int code = Integer.parseInt(value);
                 return StroomStatusCode.fromCode(code);
             }
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             LOGGER.error("Error parsing stroom status code from header '{}' with value '{}': {}",
                     header, value, LogUtil.exceptionMessage(e), e);
         }
@@ -423,9 +434,9 @@ public class HttpSender implements StreamDestination {
     public ResponseStatus checkConnectionResponse(final ClassicHttpResponse response,
                                                   final AttributeMap attributeMap) {
         StroomStatusCode stroomStatusCode;
-        int httpResponseCode;
-        String receiptId;
-        String responseMessage;
+        final int httpResponseCode;
+        final String receiptId;
+        final String responseMessage;
         try {
             httpResponseCode = response.getCode();
             responseMessage = NullSafe.nonBlankStringElseGet(

@@ -3,9 +3,9 @@ package stroom.app.commands;
 import stroom.config.app.Config;
 import stroom.event.logging.api.StroomEventLoggingService;
 import stroom.security.api.SecurityContext;
+import stroom.security.api.UserService;
 import stroom.security.identity.account.AccountService;
 import stroom.security.identity.shared.CreateAccountRequest;
-import stroom.security.impl.UserService;
 import stroom.util.logging.LogUtil;
 
 import com.google.inject.Injector;
@@ -157,7 +157,7 @@ public class CreateAccountCommand extends AbstractStroomAppCommand {
 
         LOGGER.info("Creating account for user '{}'", username);
 
-        CreateAccountRequest createAccountRequest = new CreateAccountRequest(
+        final CreateAccountRequest createAccountRequest = new CreateAccountRequest(
                 firstName,
                 lastName,
                 username,

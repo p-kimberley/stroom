@@ -17,7 +17,6 @@
 package stroom.processor.impl.db;
 
 import stroom.analytics.shared.AnalyticRuleDoc;
-import stroom.datasource.api.v2.QueryField;
 import stroom.db.util.ExpressionMapper;
 import stroom.db.util.ExpressionMapperFactory;
 import stroom.db.util.JooqUtil;
@@ -45,8 +44,9 @@ import stroom.processor.shared.ProcessorTaskFields;
 import stroom.processor.shared.ProcessorTaskSummary;
 import stroom.processor.shared.ProcessorType;
 import stroom.processor.shared.TaskStatus;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.DateExpressionParser;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.Val;
@@ -55,11 +55,11 @@ import stroom.query.language.functions.ValLong;
 import stroom.query.language.functions.ValNull;
 import stroom.query.language.functions.ValString;
 import stroom.query.language.functions.ValuesConsumer;
-import stroom.util.NullSafe;
 import stroom.util.logging.DurationTimer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 
@@ -96,7 +96,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static java.util.Map.entry;
 import static stroom.processor.impl.db.jooq.tables.Processor.PROCESSOR;
@@ -440,7 +439,7 @@ class ProcessorTaskDaoImpl implements ProcessorTaskDao {
                 if (allBindValues.length > 0) {
 
                     // Insert tasks.
-                    DurationTimer durationTimer = DurationTimer.start();
+                    final DurationTimer durationTimer = DurationTimer.start();
                     try {
                         insertTasks(context, allBindValues);
                         creationState.totalTasksCreated = allBindValues.length;
@@ -1164,7 +1163,7 @@ class ProcessorTaskDaoImpl implements ProcessorTaskDao {
         return docRefInfoService.findByNames(PipelineDoc.TYPE, pipelineNames, true)
                 .stream()
                 .map(DocRef::getUuid)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -1192,7 +1191,7 @@ class ProcessorTaskDaoImpl implements ProcessorTaskDao {
     public int logicalDeleteByProcessorId(final int processorId) {
         final int count = JooqUtil.withDeadlockRetries(
                 () -> JooqUtil.contextResult(processorDbConnProvider, context -> {
-                    var query = context
+                    final var query = context
                             .update(PROCESSOR_TASK)
                             .set(PROCESSOR_TASK.STATUS, TaskStatus.DELETED.getPrimitiveValue())
                             .set(PROCESSOR_TASK.VERSION, PROCESSOR_TASK.VERSION.plus(1))

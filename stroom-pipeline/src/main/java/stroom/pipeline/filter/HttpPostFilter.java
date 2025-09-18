@@ -23,10 +23,10 @@ import stroom.pipeline.factory.PipelineProperty;
 import stroom.pipeline.shared.data.PipelineElementType;
 import stroom.pipeline.writer.HTTPAppender;
 import stroom.svg.shared.SvgImage;
-import stroom.util.NullSafe;
 import stroom.util.jersey.JerseyClientFactory;
 import stroom.util.jersey.JerseyClientName;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import jakarta.inject.Inject;
@@ -72,7 +72,7 @@ public class HttpPostFilter extends AbstractSamplingFilter {
     @Override
     public void endDocument() throws SAXException {
         super.endDocument();
-        String xml = getOutput();
+        final String xml = getOutput();
 
         final String deprecatedMsg = LogUtil.message("{} is deprecated. Use {} instead.",
                 HttpPostFilter.class.getSimpleName(),
@@ -86,7 +86,7 @@ public class HttpPostFilter extends AbstractSamplingFilter {
         } else {
             try {
                 final Client client = jerseyClientFactory.getNamedClient(JerseyClientName.HTTP_POST_FILTER);
-                try (Response response = client
+                try (final Response response = client
                         .target(receivingApiUrl)
                         .request()
                         .accept(MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON)

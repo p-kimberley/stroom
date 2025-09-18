@@ -16,18 +16,18 @@
 
 package stroom.statistics.impl.sql.search;
 
-import stroom.datasource.api.v2.ConditionSet;
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchTaskProgress;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchTaskProgress;
+import stroom.query.api.datasource.ConditionSet;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.ResultStore;
 import stroom.query.common.v2.ResultStoreFactory;
 import stroom.query.common.v2.SearchProcess;
@@ -43,9 +43,9 @@ import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.TaskProgress;
 import stroom.ui.config.shared.UiConfig;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import com.google.common.base.Preconditions;
@@ -74,6 +74,7 @@ public class SqlStatisticSearchProvider implements SearchProvider {
     private final CoprocessorsFactory coprocessorsFactory;
     private final ResultStoreFactory resultStoreFactory;
     private final Statistics statistics;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public SqlStatisticSearchProvider(final StatisticStoreStore statisticStoreStore,
@@ -86,7 +87,8 @@ public class SqlStatisticSearchProvider implements SearchProvider {
                                       final UiConfig clientConfig,
                                       final CoprocessorsFactory coprocessorsFactory,
                                       final ResultStoreFactory resultStoreFactory,
-                                      final Statistics statistics) {
+                                      final Statistics statistics,
+                                      final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.statisticStoreStore = statisticStoreStore;
         this.statisticStoreCache = statisticStoreCache;
         this.statisticsSearchService = statisticsSearchService;
@@ -96,16 +98,16 @@ public class SqlStatisticSearchProvider implements SearchProvider {
         this.coprocessorsFactory = coprocessorsFactory;
         this.resultStoreFactory = resultStoreFactory;
         this.statistics = statistics;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
-        final FieldInfoResultPageBuilder builder = FieldInfoResultPageBuilder.builder(criteria);
         final StatisticStoreDoc entity = statisticStoreCache.getStatisticsDataSource(criteria.getDataSourceRef());
-        if (entity != null) {
-            builder.addAll(buildFields(entity));
+        if (entity == null) {
+            return ResultPage.empty();
         }
-        return builder.build();
+        return fieldInfoResultPageFactory.create(criteria, buildFields(entity));
     }
 
     @Override
@@ -285,14 +287,14 @@ public class SqlStatisticSearchProvider implements SearchProvider {
         return resultStore;
     }
 
-    private Sizes extractValues(String value) {
+    private Sizes extractValues(final String value) {
         if (value != null) {
             try {
                 return Sizes.create(Arrays.stream(value.split(","))
                         .map(String::trim)
                         .map(Long::valueOf)
                         .collect(Collectors.toList()));
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.warn(e.getMessage());
             }
         }

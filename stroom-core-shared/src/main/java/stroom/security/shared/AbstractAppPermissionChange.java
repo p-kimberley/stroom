@@ -2,6 +2,7 @@ package stroom.security.shared;
 
 import stroom.security.shared.AbstractAppPermissionChange.AddAppPermission;
 import stroom.security.shared.AbstractAppPermissionChange.RemoveAppPermission;
+import stroom.util.shared.SerialisationTestConstructor;
 import stroom.util.shared.UserRef;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -22,7 +23,7 @@ import java.util.Objects;
         @JsonSubTypes.Type(value = AddAppPermission.class, name = "AddAppPermission"),
         @JsonSubTypes.Type(value = RemoveAppPermission.class, name = "RemoveAppPermission"),
 })
-public abstract class AbstractAppPermissionChange {
+public abstract sealed class AbstractAppPermissionChange permits AddAppPermission, RemoveAppPermission {
 
     @JsonProperty
     private final UserRef userRef;
@@ -47,7 +48,7 @@ public abstract class AbstractAppPermissionChange {
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class AddAppPermission extends AbstractAppPermissionChange {
+    public static final class AddAppPermission extends AbstractAppPermissionChange {
 
 
         @JsonCreator
@@ -55,15 +56,25 @@ public abstract class AbstractAppPermissionChange {
                                 @JsonProperty("permission") final AppPermission permission) {
             super(userRef, permission);
         }
+
+        @SerialisationTestConstructor
+        private AddAppPermission() {
+            this(UserRef.builder().build(), AppPermission.ADMINISTRATOR);
+        }
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class RemoveAppPermission extends AbstractAppPermissionChange {
+    public static final class RemoveAppPermission extends AbstractAppPermissionChange {
 
         @JsonCreator
         public RemoveAppPermission(@JsonProperty("userRef") final UserRef userRef,
                                    @JsonProperty("permission") final AppPermission permission) {
             super(userRef, permission);
+        }
+
+        @SerialisationTestConstructor
+        private RemoveAppPermission() {
+            this(UserRef.builder().build(), AppPermission.ADMINISTRATOR);
         }
     }
 }

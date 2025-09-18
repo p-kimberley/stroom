@@ -18,8 +18,6 @@ package stroom.pipeline.refdata;
 
 import stroom.bytebuffer.ByteBufferPool;
 import stroom.data.shared.StreamTypeNames;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
@@ -37,13 +35,16 @@ import stroom.pipeline.refdata.store.RefDataValueProxyConsumerFactory.Factory;
 import stroom.pipeline.refdata.store.RefStoreEntry;
 import stroom.pipeline.shared.ReferenceDataFields;
 import stroom.pipeline.shared.data.PipelineReference;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.DateExpressionParser;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValDate;
@@ -57,13 +58,13 @@ import stroom.security.shared.AppPermission;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
-import stroom.util.NullSafe;
 import stroom.util.PredicateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.pipeline.scope.PipelineScopeRunnable;
 import stroom.util.rest.RestUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.ResultPage;
@@ -143,6 +144,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
     private final NodeService nodeService;
     private final WordListProvider wordListProvider;
     private final DocRefInfoService docRefInfoService;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public ReferenceDataServiceImpl(final RefDataStoreFactory refDataStoreFactory,
@@ -156,7 +158,8 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                     final ByteBufferPool byteBufferPool,
                                     final NodeService nodeService,
                                     final WordListProvider wordListProvider,
-                                    final DocRefInfoService docRefInfoService) {
+                                    final DocRefInfoService docRefInfoService,
+                                    final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.refDataStore = refDataStoreFactory.getOffHeapStore();
         this.refDataStoreFactory = refDataStoreFactory;
         this.securityContext = securityContext;
@@ -170,6 +173,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
         this.nodeService = nodeService;
         this.wordListProvider = wordListProvider;
         this.docRefInfoService = docRefInfoService;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
@@ -199,7 +203,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                 }
 
                 entries = refDataStore.list(limit, predicate);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error listing reference data", e);
                 throw e;
             }
@@ -234,7 +238,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                 }
 
                 entries = refDataStore.listProcessingInfo(limit, predicate);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error listing ref stream processing info data", e);
                 throw e;
             }
@@ -614,7 +618,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
             }
 
             return stringWriter.toString();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // Errors for unknown keys are to be expected
             if (!(e instanceof NotFoundException)) {
                 LOGGER.error("Error looking up {}", refDataLookupRequest, e);
@@ -704,9 +708,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
         if (!ReferenceDataFields.REF_STORE_PSEUDO_DOC_REF.equals(criteria.getDataSourceRef())) {
             return ResultPage.empty();
         }
-        return FieldInfoResultPageBuilder.builder(criteria)
-                .addAll(getFields())
-                .build();
+        return fieldInfoResultPageFactory.create(criteria, getFields());
     }
 
     private List<QueryField> getFields() {
@@ -719,7 +721,10 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
     }
 
     @Override
-    public void search(final ExpressionCriteria criteria, final FieldIndex fieldIndex, final ValuesConsumer consumer) {
+    public void search(final ExpressionCriteria criteria,
+                       final FieldIndex fieldIndex,
+                       final DateTimeSettings dateTimeSettings,
+                       final ValuesConsumer consumer) {
         withPermissionCheck(() -> LOGGER.logDurationIfInfoEnabled(
                 () -> taskContextFactory.context("Querying reference data store", taskContext ->
                                 doSearch(criteria, fieldIndex, consumer, taskContext))
@@ -814,7 +819,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
             } else {
                 return refStoreEntry -> true;
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error building predicate for {}", expressionCriteria, e);
             throw e;
         }
@@ -878,7 +883,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
 
                 // expecting all list items to be non null
                 for (final Predicate<T> childPredicate : childPredicates) {
-                    boolean testResult = childPredicate.test(val);
+                    final boolean testResult = childPredicate.test(val);
 
                     compoundResult = compoundResult && testResult;
 
@@ -903,7 +908,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
 
                 // expecting all list items to be non null
                 for (final Predicate<T> childPredicate : childPredicates) {
-                    boolean testResult = childPredicate.test(val);
+                    final boolean testResult = childPredicate.test(val);
 
                     compoundResult = compoundResult || testResult;
 
@@ -929,7 +934,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                 // expecting all list items to be non null
                 for (final Predicate<T> childPredicate : childPredicates) {
                     // treat NOT(x, y) as AND(NOT(x), NOT(y))
-                    boolean testResult = !childPredicate.test(val);
+                    final boolean testResult = !childPredicate.test(val);
 
                     if (compoundResult == null) {
                         compoundResult = testResult;
@@ -959,7 +964,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
 
         // name => field
         // field => fieldType
-        QueryField abstractField = FIELD_NAME_TO_FIELD_MAP.get(expressionTerm.getField());
+        final QueryField abstractField = FIELD_NAME_TO_FIELD_MAP.get(expressionTerm.getField());
 
         return switch (abstractField.getFldType()) {
             case TEXT -> buildTextFieldPredicate(expressionTerm, refStoreEntry ->

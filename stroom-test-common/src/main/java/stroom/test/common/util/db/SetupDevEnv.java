@@ -2,7 +2,6 @@ package stroom.test.common.util.db;
 
 import stroom.config.common.ConnectionConfig;
 import stroom.util.ConsoleColour;
-import stroom.util.NullSafe;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.exception.ThrowingFunction;
 import stroom.util.io.FileUtil;
@@ -10,6 +9,7 @@ import stroom.util.io.PathConfig;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.yaml.YamlUtil;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -86,7 +86,7 @@ public class SetupDevEnv {
     private static final String PROXY_TMP_BASE = "/tmp/stroom-proxy/";
     private static final String YES_NO_OPTION_STR = ConsoleColour.green("(y/n/yes/no)");
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         new SetupDevEnv().run();
     }
 
@@ -95,6 +95,7 @@ public class SetupDevEnv {
         LOGGER.debug("repo dir: {}", REPO_ROOT_PATH);
 
         log("Enter the name for this environment, e.g. '7.5', or 'master' (blank for un-named):");
+        log("The entered name will be prefixed with 'stroom_' and 'stroom-proxy_'");
         final String envName = inputScanner.nextLine();
         final String stroomEnvName = buildDbName(envName);
         final String proxyEnvName = stroomEnvName.replace("stroom", "stroom-proxy");
@@ -154,7 +155,7 @@ public class SetupDevEnv {
         ensureAndClearDir(proxyTempEnvBase, shouldClearDirs);
 
         final AtomicInteger count = new AtomicInteger();
-        try (Stream<Path> fileStream = Files.list(REPO_ROOT_PATH)) {
+        try (final Stream<Path> fileStream = Files.list(REPO_ROOT_PATH)) {
             fileStream.filter(file ->
                             CONFIG_FILE_NAMES.containsKey(file.getFileName().toString()))
                     .forEach(configFile -> {
@@ -247,7 +248,7 @@ public class SetupDevEnv {
         }
         try {
             Files.createDirectories(path);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -275,8 +276,8 @@ public class SetupDevEnv {
             }
             // Make the name friendly for use as a db name
             dbName = dbName
-                    .replace(".", "_")
-                    .replace("-", "_");
+                    .replace('.', '_')
+                    .replace('-', '_');
             dbName = "stroom_" + dbName;
             return dbName;
         }
@@ -309,7 +310,7 @@ public class SetupDevEnv {
 
             // write YAML file back out
             Files.writeString(configFile, yamlStr, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             LOGGER.error("Error parsing/writing yaml file '{}': {}", configFile.toAbsolutePath(), e.getMessage(), e);
             throw new RuntimeException(e);
         }
@@ -454,21 +455,21 @@ public class SetupDevEnv {
     }
 
     private String makeJdbcUrl(final String dbName) {
-        String url = ConnectionConfig.DEFAULT_JDBC_DRIVER_URL;
+        final String url = ConnectionConfig.DEFAULT_JDBC_DRIVER_URL;
         final Matcher matcher = DB_NAME_IN_URL_PATTERN.matcher(url);
         return matcher.replaceFirst(dbName);
     }
 
-    private static void log(final String msg, Object... args) {
+    private static void log(final String msg, final Object... args) {
         System.out.println(LogUtil.message(msg, args));
     }
 
-    private static void logWithColouredArgs(final String msg, Object... args) {
+    private static void logWithColouredArgs(final String msg, final Object... args) {
         if (NullSafe.isEmptyArray(args)) {
             System.out.println(msg);
         } else {
             final Object[] colouredArgs = Arrays.stream(args)
-                    .map(arg -> arg instanceof String str
+                    .map(arg -> arg instanceof final String str
                             ? ConsoleColour.cyan(str)
                             : ConsoleColour.cyan(arg.toString()))
                     .toArray(Object[]::new);

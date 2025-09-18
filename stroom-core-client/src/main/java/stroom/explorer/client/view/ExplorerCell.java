@@ -10,7 +10,7 @@ import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.ExplorerNode.NodeInfo;
 import stroom.explorer.shared.NodeFlag;
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.SvgImageUtil;
 
 import com.google.gwt.cell.client.AbstractCell;
@@ -68,7 +68,7 @@ public class ExplorerCell extends AbstractCell<ExplorerNode> {
         if (node != null) {
             final SafeHtmlBuilder content = new SafeHtmlBuilder();
 
-            int expanderPadding = 4;
+            final int expanderPadding = 4;
 
             SvgImage expanderIcon = null;
             if (node.hasNodeFlag(NodeFlag.OPEN)) {
@@ -82,7 +82,7 @@ public class ExplorerCell extends AbstractCell<ExplorerNode> {
             final SafeStyles paddingLeft = SafeStylesUtils.fromTrustedString("padding-left:" + indent + "px;");
 
             // Add expander.
-            SafeHtml expanderIconSafeHtml;
+            final SafeHtml expanderIconSafeHtml;
             String className = getCellClassName() + "-expander";
             if (expanderIcon != null) {
                 expanderIconSafeHtml = SafeHtmlUtils.fromTrustedString(expanderIcon.getSvg());
@@ -164,10 +164,10 @@ public class ExplorerCell extends AbstractCell<ExplorerNode> {
             if (explorerNode.hasNodeFlag(NodeFlag.DESCENDANT_NODE_INFO)) {
                 return DESCENDANT_ISSUES_MSG;
             } else if (explorerNode.hasNodeInfo()) {
-                return GwtNullSafe.get(
+                return NullSafe.get(
                         explorerNode,
                         ExplorerNode::getNodeInfoList,
-                        nodeInfoList -> GwtNullSafe.stream(nodeInfoList)
+                        nodeInfoList -> NullSafe.stream(nodeInfoList)
                                 .sorted()
                                 .map(NodeInfo::toString)
                                 .collect(Collectors.joining("\n")));

@@ -3,6 +3,7 @@ package stroom.security.impl;
 import stroom.node.api.FindNodeCriteria;
 import stroom.node.api.NodeInfo;
 import stroom.node.api.NodeService;
+import stroom.security.mock.MockSecurityContext;
 import stroom.security.shared.SessionListResponse;
 import stroom.security.shared.SessionResource;
 import stroom.task.api.SimpleTaskContextFactory;
@@ -30,6 +31,7 @@ class TestSessionListListener extends AbstractMultiNodeResourceTest<SessionResou
 
     private static final int BASE_PORT = 7030;
 
+
     public TestSessionListListener() {
         super(createNodeList(BASE_PORT));
     }
@@ -44,9 +46,9 @@ class TestSessionListListener extends AbstractMultiNodeResourceTest<SessionResou
 
         initNodes();
 
-        SessionListService sessionListService1 = sessionListServiceMap.get("node1");
+        final SessionListService sessionListService1 = sessionListServiceMap.get("node1");
 
-        SessionListResponse sessionListResponse = sessionListService1.listSessions();
+        final SessionListResponse sessionListResponse = sessionListService1.listSessions();
 
         Thread.sleep(50);
 
@@ -65,9 +67,9 @@ class TestSessionListListener extends AbstractMultiNodeResourceTest<SessionResou
     void testListSessions_oneNode() throws InterruptedException {
         initNodes();
 
-        SessionListService sessionListService1 = sessionListServiceMap.get("node1");
+        final SessionListService sessionListService1 = sessionListServiceMap.get("node1");
 
-        SessionListResponse sessionListResponse = sessionListService1.listSessions("node2");
+        final SessionListResponse sessionListResponse = sessionListService1.listSessions("node2");
 
         Thread.sleep(50);
 
@@ -119,7 +121,9 @@ class TestSessionListListener extends AbstractMultiNodeResourceTest<SessionResou
                 nodeInfo,
                 nodeService,
                 new SimpleTaskContextFactory(),
-                webTargetFactory());
+                webTargetFactory(),
+                Mockito.mock(StroomUserIdentityFactory.class),
+                new MockSecurityContext());
 
         sessionListServiceMap.put(node.getNodeName(), sessionListService);
 
@@ -128,6 +132,7 @@ class TestSessionListListener extends AbstractMultiNodeResourceTest<SessionResou
                 TestUtil.mockProvider(HttpServletRequest.class),
                 TestUtil.mockProvider(AuthenticationEventLog.class),
                 () -> sessionListService,
-                TestUtil.mockProvider(StroomUserIdentityFactory.class));
+                TestUtil.mockProvider(StroomUserIdentityFactory.class),
+                MockSecurityContext::new);
     }
 }

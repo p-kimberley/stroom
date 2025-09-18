@@ -24,6 +24,7 @@ import stroom.activity.impl.db.ActivityConfig.ActivityDbConfig;
 import stroom.activity.shared.Activity;
 import stroom.activity.shared.Activity.Prop;
 import stroom.activity.shared.ActivityValidationResult;
+import stroom.query.common.v2.ExpressionPredicateFactory;
 import stroom.security.api.SecurityContext;
 import stroom.security.mock.MockSecurityContext;
 import stroom.test.common.util.db.DbTestUtil;
@@ -54,9 +55,10 @@ class TestActivityServiceImpl {
     void before() {
         final ActivityDbConnProvider activityDbConnProvider = DbTestUtil.getTestDbDatasource(
                 new ActivityDbModule(), new ActivityDbConfig());
+        final ExpressionPredicateFactory expressionPredicateFactory = new ExpressionPredicateFactory();
 
         final ActivityDao activityDao = new ActivityDaoImpl(activityDbConnProvider);
-        activityService = new ActivityServiceImpl(securityContext, activityDao);
+        activityService = new ActivityServiceImpl(securityContext, activityDao, expressionPredicateFactory);
     }
 
     @Test
@@ -74,7 +76,7 @@ class TestActivityServiceImpl {
         // Update 1
         activity1.getDetails().add(createProp("foo"), "bar");
         activity1.getDetails().add(createProp("this"), "that");
-        Activity updatedActivity1 = activityService.update(activity1);
+        final Activity updatedActivity1 = activityService.update(activity1);
 
         final Activity oldActivity = activity1;
         assertThatThrownBy(() -> {
@@ -121,14 +123,14 @@ class TestActivityServiceImpl {
         final UserRef userRef = UserRef.builder().uuid(UUID.randomUUID().toString()).subjectId("test").build();
 
         // Save 1
-        Activity activity1 = Activity.create();
+        final Activity activity1 = Activity.create();
         activity1.getDetails().add(createProp("foo", "\\w{3,}"), "bar");
         activity1.getDetails().add(createProp("this", "\\w{4,}"), "that");
         activity1.setUserRef(userRef);
         final ActivityValidationResult activityValidationResult1 = activityService.validate(activity1);
         assertThat(activityValidationResult1.isValid()).isTrue();
 
-        Activity activity2 = Activity.create();
+        final Activity activity2 = Activity.create();
         activity2.getDetails().add(createProp("foo", ".{3,}"), "bar");
         activity2.getDetails().add(createProp("this", ".{80,}"), "that");
         activity2.setUserRef(userRef);

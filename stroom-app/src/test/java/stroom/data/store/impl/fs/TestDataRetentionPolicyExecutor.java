@@ -32,8 +32,8 @@ import stroom.meta.api.MetaProperties;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.MetaFields;
 import stroom.node.api.NodeInfo;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.test.AbstractCoreIntegrationTest;
 import stroom.test.common.util.test.FileSystemTestUtil;
 import stroom.util.shared.time.TimeUnit;
@@ -115,13 +115,13 @@ class TestDataRetentionPolicyExecutor extends AbstractCoreIntegrationTest {
                 .createMs(newDate.toInstant().toEpochMilli())
                 .build();
 
-        Meta oldFileMeta;
+        final Meta oldFileMeta;
         try (final Target oldFileTarget = streamStore.openTarget(oldFile)) {
             oldFileMeta = oldFileTarget.getMeta();
             TargetUtil.write(oldFileTarget, "MyTest");
         }
 
-        Meta newFileMeta;
+        final Meta newFileMeta;
         try (final Target newFileTarget = streamStore.openTarget(newFile)) {
             newFileMeta = newFileTarget.getMeta();
             TargetUtil.write(newFileTarget, "MyTest");
@@ -154,7 +154,7 @@ class TestDataRetentionPolicyExecutor extends AbstractCoreIntegrationTest {
 
     private void setupDataRetentionRules(final String feedName) {
         final DocRef docRef = dataRetentionRulesService.createDocument("test");
-        DataRetentionRules dataRetentionRules = dataRetentionRulesService.readDocument(docRef);
+        final DataRetentionRules dataRetentionRules = dataRetentionRulesService.readDocument(docRef);
 
         final ExpressionOperator.Builder builder = ExpressionOperator.builder();
         builder.addTextTerm(MetaFields.FEED, Condition.EQUALS, feedName);

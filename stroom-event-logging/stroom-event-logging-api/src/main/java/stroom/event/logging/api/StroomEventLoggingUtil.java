@@ -1,16 +1,14 @@
 package stroom.event.logging.api;
 
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.QueryKey;
-import stroom.util.shared.GwtNullSafe;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.QueryKey;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageResponse;
-import stroom.util.shared.QuickFilterResultPage;
-import stroom.util.shared.RestResource;
 import stroom.util.shared.Selection;
 import stroom.util.shared.UserDesc;
 import stroom.util.shared.UserRef;
@@ -28,7 +26,6 @@ import event.logging.OtherObject;
 import event.logging.Query;
 import event.logging.Query.Builder;
 import event.logging.ResultPage;
-import event.logging.SearchEventAction;
 import event.logging.SimpleQuery;
 import event.logging.Term;
 import event.logging.TermCondition;
@@ -39,7 +36,6 @@ import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class StroomEventLoggingUtil {
@@ -47,7 +43,7 @@ public class StroomEventLoggingUtil {
     private StroomEventLoggingUtil() {
     }
 
-    public static <T extends RestResource> String buildTypeId(final T restResource, final String method) {
+    public static <T> String buildTypeId(final T restResource, final String method) {
         return String.join(".",
                 Objects.requireNonNull(restResource.getClass().getSimpleName()),
                 Objects.requireNonNull(method));
@@ -199,7 +195,7 @@ public class StroomEventLoggingUtil {
     public static Query convertExpression(final QueryKey queryKey,
                                           final ExpressionItem expressionItem) {
         final Builder<Void> builder = Query.builder();
-        GwtNullSafe.consume(queryKey, key -> builder.withId(key.getUuid()));
+        NullSafe.consume(queryKey, key -> builder.withId(key.getUuid()));
         appendExpression(builder, expressionItem);
         return builder.build();
     }
@@ -213,15 +209,6 @@ public class StroomEventLoggingUtil {
                     .withQueryItems(advancedQueryItem)
                     .build());
         }
-    }
-
-    public static <T> SearchEventAction createSearchEventAction(final QuickFilterResultPage<T> resultPage,
-                                                                final Supplier<Query> querySupplier) {
-        return SearchEventAction.builder()
-                .withQuery(querySupplier.get())
-                .withResultPage(StroomEventLoggingUtil.createResultPage(resultPage))
-                .withTotalResults(BigInteger.valueOf(resultPage.size()))
-                .build();
     }
 
     private static AdvancedQueryItem convertItem(final ExpressionItem expressionItem) {

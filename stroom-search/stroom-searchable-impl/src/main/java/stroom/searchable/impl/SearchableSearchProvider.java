@@ -16,14 +16,14 @@
 
 package stroom.searchable.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchTaskProgress;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchTaskProgress;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
@@ -39,10 +39,10 @@ import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.TaskProgress;
 import stroom.ui.config.shared.UiConfig;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 
@@ -57,7 +57,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 @SuppressWarnings("unused")
 class SearchableSearchProvider implements SearchProvider {
@@ -161,7 +160,12 @@ class SearchableSearchProvider implements SearchProvider {
         Preconditions.checkNotNull(searchRequest);
         Preconditions.checkNotNull(searchable);
 
-        final DocRef docRef = searchable.getDataSourceDocRefs().getFirst();
+        final List<DocRef> docRefs = searchable.getDataSourceDocRefs();
+        if (docRefs == null || docRefs.isEmpty()) {
+            throw new RuntimeException("Unable to access data source");
+        }
+
+        final DocRef docRef = docRefs.getFirst();
         final Sizes defaultMaxResultsSizes = getDefaultMaxResultsSizes();
         final int resultHandlerBatchSize = getResultHandlerBatchSize();
 
@@ -183,7 +187,7 @@ class SearchableSearchProvider implements SearchProvider {
 
         final FindFieldCriteria findFieldInfoCriteria = new FindFieldCriteria(
                 new PageRequest(0, 1000),
-                null,
+                FindFieldCriteria.DEFAULT_SORT_LIST,
                 docRef);
         final ResultPage<QueryField> resultPage = searchable.getFieldInfo(findFieldInfoCriteria);
         final Runnable runnable = taskContextFactory.context(taskName, taskContext -> {
@@ -224,7 +228,11 @@ class SearchableSearchProvider implements SearchProvider {
                 final Instant queryStart = Instant.now();
                 try {
                     // Give the data array to each of our coprocessors
-                    searchable.search(criteria, coprocessors.getFieldIndex(), coprocessors);
+                    searchable.search(
+                            criteria,
+                            coprocessors.getFieldIndex(),
+                            searchRequest.getDateTimeSettings(),
+                            coprocessors);
 
                 } catch (final RuntimeException e) {
                     LOGGER.debug(e::getMessage, e);
@@ -266,13 +274,13 @@ class SearchableSearchProvider implements SearchProvider {
         return 5000;
     }
 
-    private Sizes extractValues(String value) {
+    private Sizes extractValues(final String value) {
         if (value != null) {
             try {
                 return Sizes.create(Arrays.stream(value.split(","))
                         .map(String::trim)
                         .map(Long::valueOf)
-                        .collect(Collectors.toList()));
+                        .toList());
             } catch (final Exception e) {
                 LOGGER.warn(e.getMessage());
             }

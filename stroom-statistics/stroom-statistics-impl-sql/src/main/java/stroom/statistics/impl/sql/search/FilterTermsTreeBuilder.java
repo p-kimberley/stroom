@@ -16,10 +16,10 @@
 
 package stroom.statistics.impl.sql.search;
 
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.statistics.impl.sql.search.FilterTermsTree.OperatorNode;
 import stroom.statistics.impl.sql.search.FilterTermsTree.TermNode;
 
@@ -81,7 +81,7 @@ public class FilterTermsTreeBuilder {
     }
 
     private static PrintableNode convertTermNode(final ExpressionTerm oldNode, final Set<String> fieldBlackList) {
-        PrintableNode newNode;
+        final PrintableNode newNode;
 
         if (fieldBlackList != null && fieldBlackList.contains(oldNode.getField())) {
             // this term is black listed so ignore it

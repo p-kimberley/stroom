@@ -1,6 +1,6 @@
 package stroom.security.client.presenter;
 
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.SafeHtmlUtil;
 
 import com.google.gwt.safehtml.shared.SafeHtmlUtils;
@@ -13,7 +13,7 @@ public class ClassNameBuilder {
     private final List<String> classes = new ArrayList<>();
 
     public ClassNameBuilder addClassName(final String className) {
-        if (GwtNullSafe.isNonBlankString(className)) {
+        if (NullSafe.isNonBlankString(className)) {
             classes.add(className.trim());
         }
         return this;

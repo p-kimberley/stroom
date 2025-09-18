@@ -2,7 +2,7 @@ package stroom.analytics.impl;
 
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
 import stroom.pipeline.filter.XMLFilter;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import jakarta.inject.Inject;
@@ -144,7 +144,7 @@ public class DetectionWriter implements DetectionConsumer {
         }
     }
 
-    private void writeValues(List<DetectionValue> values) throws SAXException {
+    private void writeValues(final List<DetectionValue> values) throws SAXException {
         if (NullSafe.hasItems(values)) {
             for (final DetectionValue value : values) {
                 writeValue(value);

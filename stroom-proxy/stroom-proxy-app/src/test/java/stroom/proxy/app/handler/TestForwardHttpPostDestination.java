@@ -2,12 +2,12 @@ package stroom.proxy.app.handler;
 
 import stroom.meta.api.AttributeMap;
 import stroom.meta.api.AttributeMapUtil;
-import stroom.util.NullSafe;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +40,7 @@ class TestForwardHttpPostDestination {
     private CleanupDirQueue cleanupDirQueue;
 
     @BeforeEach
-    void setUp(@TempDir Path baseDir) {
+    void setUp(@TempDir final Path baseDir) {
         this.dataDir = baseDir.resolve("data");
         this.sourcesDir = baseDir.resolve("sources");
         this.cleanupDirQueue = new CleanupDirQueue(this::getDataDir);
@@ -188,7 +188,7 @@ class TestForwardHttpPostDestination {
                 final AttributeMap attributeMap = new AttributeMap(attrs);
                 AttributeMapUtil.write(attributeMap, meta);
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
         return sourceDir;
@@ -198,7 +198,7 @@ class TestForwardHttpPostDestination {
         try {
             Assertions.assertThat(forwardDestination.performLivenessCheck())
                     .isEqualTo(isLive);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             if (isLive) {
                 Assertions.fail(LogUtil.message("Expecting {} to be live", forwardDestination));
             }

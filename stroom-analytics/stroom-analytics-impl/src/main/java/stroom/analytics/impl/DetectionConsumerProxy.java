@@ -2,9 +2,9 @@ package stroom.analytics.impl;
 
 import stroom.analytics.shared.AbstractAnalyticRuleDoc;
 import stroom.analytics.shared.ExecutionSchedule;
-import stroom.expression.api.DateTimeSettings;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
-import stroom.query.api.v2.Column;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
 import stroom.query.common.v2.CompiledColumn;
 import stroom.query.common.v2.CompiledColumns;
 import stroom.query.common.v2.format.ColumnFormatter;
@@ -15,8 +15,8 @@ import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValuesConsumer;
 import stroom.query.language.functions.ref.StoredValues;
 import stroom.search.extraction.ProcessLifecycleAware;
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import jakarta.inject.Inject;
@@ -117,8 +117,8 @@ public class DetectionConsumerProxy implements ValuesConsumer, ProcessLifecycleA
         // Analytics generation search extraction - create records when filters match
         if (values == null || values.length == 0) {
             log(Severity.WARNING, "Rules error: Query " +
-                    analyticRuleDoc.getUuid() +
-                    ". No values to extract from ", null);
+                                  analyticRuleDoc.getUuid() +
+                                  ". No values to extract from ", null);
             return;
         }
 

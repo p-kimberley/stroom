@@ -12,6 +12,7 @@ import stroom.proxy.repo.FeedKey.FeedKeyInterner;
 import stroom.proxy.repo.LogStream;
 import stroom.proxy.repo.LogStream.EventType;
 import stroom.receive.common.AttributeMapFilter;
+import stroom.receive.common.AttributeMapFilterFactory;
 import stroom.receive.common.StroomStreamException;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.ByteCountInputStream;
@@ -72,7 +73,7 @@ public class ZipReceiver implements Receiver {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ZipReceiver.class);
     private static final Logger RECEIVE_LOG = LoggerFactory.getLogger("receive");
 
-    private final AttributeMapFilter attributeMapFilter;
+    private final AttributeMapFilterFactory attributeMapFilterFactory;
     private final NumberedDirProvider receivingDirProvider;
     private final ZipSplitter zipSplitter;
     private final LogStream logStream;
@@ -83,7 +84,7 @@ public class ZipReceiver implements Receiver {
                        final DataDirProvider dataDirProvider,
                        final LogStream logStream,
                        final ZipSplitter zipSplitter) {
-        this.attributeMapFilter = attributeMapFilterFactory.create();
+        this.attributeMapFilterFactory = attributeMapFilterFactory;
         this.logStream = logStream;
         this.zipSplitter = zipSplitter;
 
@@ -200,6 +201,7 @@ public class ZipReceiver implements Receiver {
     private Map<FeedKey, List<ZipEntryGroup>> filterAllowedEntries(final AttributeMap attributeMap,
                                                                    final ReceiveResult receiveResult) {
         final Map<FeedKey, List<ZipEntryGroup>> allowed = new HashMap<>();
+        final AttributeMapFilter attributeMapFilter = attributeMapFilterFactory.create();
         receiveResult.feedGroups.forEach((feedKey, zipEntryGroups) -> {
             final AttributeMap entryAttributeMap = AttributeMapUtil.cloneAllowable(attributeMap);
             AttributeMapUtil.addFeedAndType(entryAttributeMap, feedKey.feed(), feedKey.type());
@@ -222,7 +224,7 @@ public class ZipReceiver implements Receiver {
                     .forEach(zipEntryGroup -> {
                         try {
                             zipEntryGroup.write(writer);
-                        } catch (IOException e) {
+                        } catch (final IOException e) {
                             throw new UncheckedIOException(LogUtil.message(
                                     "Error writing entries to {}: {}", entriesFile, LogUtil.exceptionMessage(e)), e);
                         }
@@ -410,7 +412,7 @@ public class ZipReceiver implements Receiver {
         } finally {
             try {
                 Files.delete(stagingZipFilePath);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 LOGGER.error("Error deleting stagingZipFilePath {}, msg: {}",
                         stagingZipFilePath, LogUtil.exceptionMessage(e), e);
             }
@@ -479,7 +481,7 @@ public class ZipReceiver implements Receiver {
                 }
             }
             return size;
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
     }
@@ -542,7 +544,7 @@ public class ZipReceiver implements Receiver {
             try (final ByteCountInputStream byteCountInputStream = ByteCountInputStream.wrap(inputStream)) {
                 Files.copy(byteCountInputStream, zipFilePath);
                 return byteCountInputStream.getCount();
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new UncheckedIOException(LogUtil.message(
                         "Error writing inputStream to file {}: {}",
                         zipFilePath, LogUtil.exceptionMessage(e)), e);
@@ -561,13 +563,13 @@ public class ZipReceiver implements Receiver {
         final long size;
         if (ZipUtil.hasKnownUncompressedSize(sourceEntry)) {
             // We know the size so can just write the raw entry without having to de-compress/compress it
-            try (InputStream rawInputStream = sourceZipFile.getRawInputStream(sourceEntry)) {
+            try (final InputStream rawInputStream = sourceZipFile.getRawInputStream(sourceEntry)) {
                 zipWriter.writeRawStream(sourceEntry, rawInputStream);
                 size = sourceEntry.getSize();
             }
         } else {
             // We don't know the uncompressed size, so have to effectively de-compress/compress it to find out
-            try (InputStream inputStream = sourceZipFile.getInputStream(sourceEntry)) {
+            try (final InputStream inputStream = sourceZipFile.getInputStream(sourceEntry)) {
                 size = zipWriter.writeStream(sourceEntry.getName(), inputStream);
             }
         }

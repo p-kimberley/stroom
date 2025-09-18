@@ -37,19 +37,19 @@ import stroom.data.store.api.Store;
 import stroom.data.store.api.Target;
 import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
-import stroom.expression.api.DateTimeSettings;
 import stroom.meta.api.MetaProperties;
 import stroom.node.api.NodeInfo;
 import stroom.pipeline.errorhandler.ErrorReceiverProxy;
-import stroom.query.api.v2.DestroyReason;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.Result;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TableResultBuilder;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.DestroyReason;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Query;
+import stroom.query.api.Result;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TableResultBuilder;
 import stroom.query.common.v2.DataStore;
 import stroom.query.common.v2.ErrorConsumerImpl;
 import stroom.query.common.v2.ExpressionContextFactory;
@@ -65,6 +65,7 @@ import stroom.security.api.SecurityContext;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
 import stroom.ui.config.shared.ReportUiDefaultConfig;
+import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.date.DateUtil;
 import stroom.util.io.StreamUtil;
 import stroom.util.io.TempDirProvider;
@@ -189,7 +190,7 @@ public class ReportExecutor extends AbstractScheduledQueryExecutor<ReportDoc> {
                     DateTimeSettings.builder().referenceTime(effectiveExecutionTime.toEpochMilli()).build(),
                     false);
             final ExpressionContext expressionContext = expressionContextFactory.createContext(sampleRequest);
-            SearchRequest mappedRequest = searchRequestFactory.create(query, sampleRequest, expressionContext);
+            final SearchRequest mappedRequest = searchRequestFactory.create(query, sampleRequest, expressionContext);
 
             // Fix table result requests.
             final List<ResultRequest> resultRequests = mappedRequest.getResultRequests();
@@ -280,9 +281,13 @@ public class ReportExecutor extends AbstractScheduledQueryExecutor<ReportDoc> {
                 LOGGER.error(e2::getMessage, e2);
             }
 
-            // Disable future execution.
-            LOGGER.info(() -> LogUtil.message("Disabling: {}", RuleUtil.getRuleIdentity(reportDoc)));
-            executionScheduleDao.updateExecutionSchedule(executionSchedule.copy().enabled(false).build());
+            // Disable future execution if the error was not an interrupted exception.
+            if (!(e instanceof InterruptedException) &&
+                !(e instanceof UncheckedInterruptedException)) {
+                // Disable future execution.
+                LOGGER.info(() -> LogUtil.message("Disabling: {}", RuleUtil.getRuleIdentity(reportDoc)));
+                executionScheduleDao.updateExecutionSchedule(executionSchedule.copy().enabled(false).build());
+            }
 
         } finally {
             // Record the execution.
@@ -481,7 +486,7 @@ public class ReportExecutor extends AbstractScheduledQueryExecutor<ReportDoc> {
         //  we can pass some kind of json path query to the persistence layer that the DBPersistence
         //  can translate to a MySQL json path query.
         final List<ReportDoc> currentRules = new ArrayList<>();
-        List<DocRef> docRefs = reportStore.list();
+        final List<DocRef> docRefs = reportStore.list();
         for (final DocRef docRef : docRefs) {
             try {
                 final ReportDoc doc = reportStore.readDocument(docRef);

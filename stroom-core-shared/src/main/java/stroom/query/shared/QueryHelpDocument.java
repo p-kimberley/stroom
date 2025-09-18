@@ -17,7 +17,7 @@
 package stroom.query.shared;
 
 import stroom.docref.DocRef;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -29,7 +29,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder(alphabetic = true)
 @JsonInclude(Include.NON_NULL)
-public class QueryHelpDocument extends QueryHelpData {
+public final class QueryHelpDocument extends QueryHelpData {
 
     @JsonProperty
     @JsonPropertyDescription("The document reference of the document.")
@@ -47,6 +47,6 @@ public class QueryHelpDocument extends QueryHelpData {
 
     @JsonIgnore
     public String getType() {
-        return GwtNullSafe.get(docRef, DocRef::getType);
+        return NullSafe.get(docRef, DocRef::getType);
     }
 }

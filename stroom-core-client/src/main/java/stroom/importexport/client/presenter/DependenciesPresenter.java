@@ -42,7 +42,7 @@ import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
 import stroom.svg.shared.SvgImage;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 import stroom.widget.menu.client.presenter.Item;
@@ -108,6 +108,7 @@ public class DependenciesPresenter
                                 final Consumer<ResultPage<Dependency>> dataConsumer,
                                 final RestErrorHandler errorHandler) {
                 CriteriaUtil.setRange(criteria, range);
+                CriteriaUtil.setSortList(criteria, dataGrid.getColumnSortList());
                 restFactory
                         .create(CONTENT_RESOURCE)
                         .method(res -> res.fetchDependencies(criteria))
@@ -120,6 +121,11 @@ public class DependenciesPresenter
         dataProvider.addDataDisplay(dataGrid);
         this.menuPresenter = menuPresenter;
         initColumns();
+    }
+
+    @Override
+    protected void onBind() {
+        registerHandler(dataGrid.addColumnSortHandler(event -> dataProvider.refresh()));
     }
 
     private void initColumns() {
@@ -190,7 +196,6 @@ public class DependenciesPresenter
                 60);
 
         DataGridUtil.addEndColumn(dataGrid);
-        DataGridUtil.addColumnSortHandler(dataGrid, criteria, dataProvider::refresh);
     }
 
     private void addActionButtonColumn(final Function<Dependency, DocRef> docRefSelector,
@@ -294,7 +299,7 @@ public class DependenciesPresenter
         final DocRef docRef = docRefExtractor.apply(row);
         if (docRef != null) {
             if (from || (openableTypes.contains(docRef.getType()) && row.isOk())) {
-                final String name = GwtNullSafe.requireNonNullElseGet(
+                final String name = NullSafe.requireNonNullElseGet(
                         docRef.getName(),
                         docRef::getUuid);
                 return new CommandLink(

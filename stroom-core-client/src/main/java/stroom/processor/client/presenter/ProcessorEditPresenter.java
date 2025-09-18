@@ -3,7 +3,6 @@ package stroom.processor.client.presenter;
 import stroom.alert.client.event.AlertEvent;
 import stroom.alert.client.event.ConfirmEvent;
 import stroom.data.client.presenter.EditExpressionPresenter;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
@@ -14,14 +13,16 @@ import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.ProcessorFilterResource;
 import stroom.processor.shared.ProcessorType;
 import stroom.processor.shared.QueryData;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.client.presenter.DateTimeSettingsFactory;
 import stroom.query.client.presenter.SimpleFieldSelectionListModel;
 import stroom.query.shared.ExpressionResource;
 import stroom.query.shared.ValidateExpressionRequest;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
+import stroom.security.shared.FindUserContext;
 import stroom.util.shared.UserRef;
 import stroom.widget.popup.client.event.HidePopupRequestEvent;
 import stroom.widget.popup.client.event.ShowPopupEvent;
@@ -69,7 +70,7 @@ public class ProcessorEditPresenter
         this.clientSecurityContext = clientSecurityContext;
         view.setExpressionView(editExpressionPresenter.getView());
         view.setRunAsUserView(userRefSelectionBoxPresenter.getView());
-        userRefSelectionBoxPresenter.showActiveUsersOnly(true);
+        userRefSelectionBoxPresenter.setContext(FindUserContext.RUN_AS);
     }
 
     public void read(final ExpressionOperator expression,
@@ -127,7 +128,7 @@ public class ProcessorEditPresenter
 
         final boolean existingFilter = filter != null && filter.getId() != null;
         final QueryData queryData = getOrCreateQueryData(filter, defaultExpression);
-        final List<QueryField> fields = MetaFields.getAllFields();
+        final List<QueryField> fields = MetaFields.getProcessorFilterFields();
         read(
                 queryData.getExpression(),
                 MetaFields.STREAM_STORE_DOC_REF,
@@ -161,9 +162,9 @@ public class ProcessorEditPresenter
                                     ConfirmEvent.fire(
                                             ProcessorEditPresenter.this,
                                             "You are about to update an existing filter. Any streams that " +
-                                                    "might now be included by this filter but are older than the " +
-                                                    "current tracker position will not be processed. " +
-                                                    "Are you sure you wish to do this?",
+                                            "might now be included by this filter but are older than the " +
+                                            "current tracker position will not be processed. " +
+                                            "Are you sure you wish to do this?",
                                             result -> {
                                                 if (result) {
                                                     validateFeed(
@@ -234,8 +235,8 @@ public class ProcessorEditPresenter
         final int parentStreamIdCount = termCount(queryData, MetaFields.PARENT_ID);
 
         if (streamIdCount == 0
-                && parentStreamIdCount == 0
-                && feedCount == 0) {
+            && parentStreamIdCount == 0
+            && feedCount == 0) {
             ConfirmEvent.fire(this,
                     "You are about to process all feeds. Are you sure you wish to do this?", result -> {
                         if (result) {
@@ -259,8 +260,8 @@ public class ProcessorEditPresenter
         final int parentStreamIdCount = termCount(queryData, MetaFields.PARENT_ID);
 
         if (streamIdCount == 0
-                && parentStreamIdCount == 0
-                && streamTypeCount == 0) {
+            && parentStreamIdCount == 0
+            && streamTypeCount == 0) {
             ConfirmEvent.fire(this,
                     "You are about to process all stream types. Are you sure you wish to do this?",
                     result -> {
@@ -323,6 +324,10 @@ public class ProcessorEditPresenter
                     .exec();
         }
     }
+
+
+    // --------------------------------------------------------------------------------
+
 
     public interface ProcessorEditView extends View {
 

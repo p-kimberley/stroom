@@ -18,18 +18,18 @@
 package stroom.query.common.v2;
 
 import stroom.bytebuffer.impl6.ByteBufferFactory;
-import stroom.expression.api.DateTimeSettings;
 import stroom.lmdb2.LmdbDb;
 import stroom.lmdb2.LmdbEnv;
 import stroom.lmdb2.ReadTxn;
 import stroom.lmdb2.WriteTxn;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TableSettings;
-import stroom.query.api.v2.TimeFilter;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.QueryKey;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TableSettings;
+import stroom.query.api.TimeFilter;
 import stroom.query.common.v2.CompiledWindow.WindowProcessor;
 import stroom.query.common.v2.SearchProgressLog.SearchPhase;
 import stroom.query.language.functions.ChildData;
@@ -49,8 +49,8 @@ import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
-import stroom.util.logging.Metrics;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.logging.SimpleMetrics;
+import stroom.util.shared.NullSafe;
 
 import com.esotericsoftware.kryo.io.ByteBufferInput;
 import com.esotericsoftware.kryo.io.Input;
@@ -311,7 +311,7 @@ public class LmdbDataStore implements DataStore {
     }
 
     private void transfer() {
-        Metrics.measure("Transfer", () -> {
+        SimpleMetrics.measure("Transfer", () -> {
             transferState.setThread(Thread.currentThread());
             try {
                 env.write(writeTxn -> {
@@ -446,7 +446,7 @@ public class LmdbDataStore implements DataStore {
                         final LmdbDb db,
                         final LmdbKV lmdbKV) {
         SearchProgressLog.increment(queryKey, SearchPhase.LMDB_DATA_STORE_INSERT);
-        Metrics.measure("Insert", () -> {
+        SimpleMetrics.measure("Insert", () -> {
             try {
                 LOGGER.trace(() -> "insert");
 
@@ -738,7 +738,7 @@ public class LmdbDataStore implements DataStore {
     }
 
     private void putLong(final ByteBuffer valueBuffer, final Long l) {
-        valueBuffer.putLong(GwtNullSafe.requireNonNullElse(l, -1L));
+        valueBuffer.putLong(NullSafe.requireNonNullElse(l, -1L));
     }
 
     public CurrentDbState sync() {
@@ -795,7 +795,7 @@ public class LmdbDataStore implements DataStore {
 
         } else {
             env.read(readTxn ->
-                    Metrics.measure("fetch", () -> {
+                    SimpleMetrics.measure("fetch", () -> {
                         try {
                             final FetchState fetchState = new FetchState();
                             fetchState.countRows = totalRowCountConsumer != null;
@@ -831,7 +831,7 @@ public class LmdbDataStore implements DataStore {
     private <R> void getChildren(final LmdbReadContext readContext,
                                  final Key parentKey,
                                  final int depth,
-                                 long limit,
+                                 final long limit,
                                  final boolean trimTop,
                                  final OpenGroups openGroups,
                                  final TimeFilter timeFilter,
@@ -1170,7 +1170,7 @@ public class LmdbDataStore implements DataStore {
         public Val createValue(final Key key,
                                final StoredValues storedValues,
                                final int index) {
-            Val val;
+            final Val val;
             if (!dataStore.compiledDepths.getValueIndicesByDepth()[key.getDepth()][index]) {
                 val = ValNull.INSTANCE;
 

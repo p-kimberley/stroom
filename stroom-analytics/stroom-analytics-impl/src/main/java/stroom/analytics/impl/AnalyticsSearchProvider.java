@@ -16,26 +16,26 @@
 
 package stroom.analytics.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.explorer.api.IsSpecialExplorerDataSource;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.Query;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.ResultStore;
 import stroom.query.common.v2.ResultStoreFactory;
 import stroom.query.common.v2.SearchProvider;
 import stroom.search.impl.FederatedSearchExecutor;
 import stroom.search.impl.FederatedSearchTask;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import jakarta.inject.Inject;
@@ -51,26 +51,24 @@ public class AnalyticsSearchProvider implements SearchProvider, IsSpecialExplore
     private final ResultStoreFactory resultStoreFactory;
     private final FederatedSearchExecutor federatedSearchExecutor;
     private final AnalyticsNodeSearchTaskCreator nodeSearchTaskCreator;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public AnalyticsSearchProvider(final CoprocessorsFactory coprocessorsFactory,
                                    final ResultStoreFactory resultStoreFactory,
                                    final FederatedSearchExecutor federatedSearchExecutor,
-                                   final AnalyticsNodeSearchTaskCreator nodeSearchTaskCreator) {
+                                   final AnalyticsNodeSearchTaskCreator nodeSearchTaskCreator,
+                                   final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.coprocessorsFactory = coprocessorsFactory;
         this.resultStoreFactory = resultStoreFactory;
         this.federatedSearchExecutor = federatedSearchExecutor;
         this.nodeSearchTaskCreator = nodeSearchTaskCreator;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
-//        if (!getType().equals(criteria.getDataSourceRef().getType())) {
-//            return ResultPage.empty();
-//        }
-        return FieldInfoResultPageBuilder.builder(criteria)
-                .addAll(AnalyticFields.getFields())
-                .build();
+        return fieldInfoResultPageFactory.create(criteria, AnalyticFields.getFields());
     }
 
     @Override
@@ -137,7 +135,7 @@ public class AnalyticsSearchProvider implements SearchProvider, IsSpecialExplore
      */
     private Set<String> getHighlights(final ExpressionOperator expression,
                                       final DateTimeSettings dateTimeSettings) {
-        Set<String> highlights = Collections.emptySet();
+        final Set<String> highlights = Collections.emptySet();
 
 //        try {
 //            // Create a map of index fields keyed by name.

@@ -34,12 +34,12 @@ import stroom.node.api.NodeCallException;
 import stroom.node.api.NodeCallUtil;
 import stroom.node.api.NodeInfo;
 import stroom.node.api.NodeService;
-import stroom.util.NullSafe;
 import stroom.util.jersey.UriBuilderUtil;
 import stroom.util.jersey.WebTargetFactory;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.scheduler.Schedule;
 
@@ -110,7 +110,7 @@ class JobNodeResourceImpl implements JobNodeResource {
     public JobNodeAndInfoListResponse find(final FindJobNodeCriteria findJobNodeCriteria) {
         JobNodeAndInfoListResponse response = null;
 
-        And.Builder<Void> andBuilder = And.builder();
+        final And.Builder<Void> andBuilder = And.builder();
 
         if (findJobNodeCriteria.getJobName().isConstrained()) {
             andBuilder.addTerm(Term.builder()
@@ -199,7 +199,7 @@ class JobNodeResourceImpl implements JobNodeResource {
                             () ->
                                     doFind(criteria),
                             builder -> builder.post(Entity.json(criteria)));
-        } catch (NodeCallException e) {
+        } catch (final NodeCallException e) {
             LOGGER.debug(() -> LogUtil.message("Error calling node {}: {}", nodeName, e.getMessage(), e));
             // Node likely down so just return the jobNode from the DB without the node's in-mem state
             return doFind(criteria);
@@ -208,7 +208,7 @@ class JobNodeResourceImpl implements JobNodeResource {
 
     @Override
     public JobNodeInfo info(final String jobName, final String nodeName) {
-        JobNodeInfo jobNodeInfo;
+        final JobNodeInfo jobNodeInfo;
         // If this is the node that was contacted then just return our local info.
         if (NodeCallUtil.shouldExecuteLocally(nodeInfoProvider.get(), nodeName)) {
             jobNodeInfo = jobNodeServiceProvider.get().getInfo(jobName);
@@ -216,7 +216,7 @@ class JobNodeResourceImpl implements JobNodeResource {
         } else {
             final String url = NodeCallUtil.getBaseEndpointUrl(nodeInfoProvider.get(),
                     nodeServiceProvider.get(), nodeName) +
-                    ResourcePaths.buildAuthenticatedApiPath(JobNodeResource.INFO_PATH);
+                               ResourcePaths.buildAuthenticatedApiPath(JobNodeResource.INFO_PATH);
             try {
                 WebTarget webTarget = webTargetFactoryProvider.get().create(url);
                 webTarget = UriBuilderUtil.addParam(webTarget, "nodeName", nodeName);
@@ -318,7 +318,7 @@ class JobNodeResourceImpl implements JobNodeResource {
                                             .build())
                                     .build();
                             return ComplexLoggedOutcome.success(eventActionCopy);
-                        } catch (Exception e) {
+                        } catch (final Exception e) {
                             LOGGER.debug("Error setting schedule for IDs {}, schedule: {}",
                                     batchScheduleRequest.getJobNodeIds(), batchScheduleRequest.getSchedule(), e);
                             throw new RuntimeException(
@@ -384,7 +384,7 @@ class JobNodeResourceImpl implements JobNodeResource {
                         return true;
                     },
                     builder -> builder.post(null));
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error executing job {} on node {}: {}",
                     jobNode.getJobName(), jobNode.getNodeName(), LogUtil.exceptionMessage(e), e);
             throw new RuntimeException(e);
@@ -392,7 +392,7 @@ class JobNodeResourceImpl implements JobNodeResource {
     }
 
     private void modifyJobNode(final int id, final Consumer<JobNode> mutation) {
-        JobNode jobNode;
+        final JobNode jobNode;
         JobNode before = null;
         JobNode after = null;
 

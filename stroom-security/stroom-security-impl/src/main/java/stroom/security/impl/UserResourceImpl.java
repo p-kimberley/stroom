@@ -4,12 +4,13 @@ import stroom.event.logging.api.StroomEventLoggingService;
 import stroom.event.logging.api.StroomEventLoggingUtil;
 import stroom.event.logging.rs.api.AutoLogged;
 import stroom.event.logging.rs.api.AutoLogged.OperationType;
+import stroom.security.api.UserService;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.FindUserDependenciesCriteria;
 import stroom.security.shared.User;
 import stroom.security.shared.UserResource;
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserDependency;
 import stroom.util.shared.UserDesc;
@@ -24,7 +25,6 @@ import jakarta.ws.rs.NotFoundException;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 @AutoLogged
 public class UserResourceImpl implements UserResource {
@@ -56,7 +56,7 @@ public class UserResourceImpl implements UserResource {
     }
 
     @Override
-    public User fetch(String userUuid) {
+    public User fetch(final String userUuid) {
         return userServiceProvider.get().loadByUuid(userUuid)
                 .orElseThrow(() -> new NotFoundException("User " + userUuid + " does not exist"));
     }
@@ -115,13 +115,13 @@ public class UserResourceImpl implements UserResource {
                 .withDefaultEventAction(CreateEventAction.builder()
                         .withObjects(NullSafe.stream(externalUsers)
                                 .map(StroomEventLoggingUtil::createUser)
-                                .collect(Collectors.toList()))
+                                .toList())
                         .build())
                 .withSimpleLoggedResult(() -> {
                     final UserService userService = userServiceProvider.get();
                     return NullSafe.stream(externalUsers)
                             .map(userService::getOrCreateUser)
-                            .collect(Collectors.toList());
+                            .toList();
                 })
                 .getResultAndLog();
     }
@@ -209,7 +209,7 @@ public class UserResourceImpl implements UserResource {
                     result,
                     null);
             return result;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             authorisationEventLogProvider.get().removePermission(
                     userIdForLogging.asRef(),
                     groupIdForLogging.asRef().toDisplayString(),

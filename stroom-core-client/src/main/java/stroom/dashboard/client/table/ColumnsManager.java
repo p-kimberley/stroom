@@ -20,18 +20,20 @@ import stroom.alert.client.event.AlertEvent;
 import stroom.dashboard.client.main.UniqueUtil;
 import stroom.data.grid.client.Heading;
 import stroom.data.grid.client.HeadingListener;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ColumnFilter;
-import stroom.query.api.v2.Sort;
-import stroom.query.api.v2.Sort.SortDirection;
+import stroom.query.api.Column;
+import stroom.query.api.ColumnFilter;
+import stroom.query.api.ColumnValueSelection;
+import stroom.query.api.Sort;
+import stroom.query.api.Sort.SortDirection;
 import stroom.query.client.presenter.ColumnHeaderHtmlUtil;
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.menu.client.presenter.HideMenuEvent;
 import stroom.widget.menu.client.presenter.IconMenuItem;
 import stroom.widget.menu.client.presenter.IconParentMenuItem;
 import stroom.widget.menu.client.presenter.Item;
 import stroom.widget.menu.client.presenter.ShowMenuEvent;
+import stroom.widget.popup.client.event.HidePopupRequestEvent;
 import stroom.widget.popup.client.presenter.PopupPosition;
 import stroom.widget.popup.client.presenter.PopupPosition.PopupLocation;
 import stroom.widget.util.client.ElementUtil;
@@ -39,6 +41,7 @@ import stroom.widget.util.client.Rect;
 
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.NativeEvent;
+import com.google.gwt.user.cellview.client.SortIcon;
 import com.google.gwt.user.client.Timer;
 import com.google.inject.Provider;
 
@@ -49,90 +52,129 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class ColumnsManager implements HeadingListener, HasValueFilter {
+public class ColumnsManager implements HeadingListener, FilterCellManager {
 
     private final TablePresenter tablePresenter;
     private final Provider<RenameColumnPresenter> renameColumnPresenterProvider;
     private final Provider<ColumnFunctionEditorPresenter> expressionPresenterProvider;
     private final FormatPresenter formatPresenter;
     private final TableFilterPresenter tableFilterPresenter;
+    private final ColumnValuesFilterPresenter columnValuesFilterPresenter;
     private int columnsStartIndex;
-    private int currentColIndex = -1;
-    private boolean ignoreNext;
+    private int currentMenuColIndex = -1;
+    private int currentFilterColIndex = -1;
+    private boolean moving;
 
     public ColumnsManager(final TablePresenter tablePresenter,
                           final Provider<RenameColumnPresenter> renameColumnPresenterProvider,
                           final Provider<ColumnFunctionEditorPresenter> expressionPresenterProvider,
                           final FormatPresenter formatPresenter,
-                          final TableFilterPresenter tableFilterPresenter) {
+                          final TableFilterPresenter tableFilterPresenter,
+                          final ColumnValuesFilterPresenter columnValuesFilterPresenter) {
         this.tablePresenter = tablePresenter;
         this.renameColumnPresenterProvider = renameColumnPresenterProvider;
         this.expressionPresenterProvider = expressionPresenterProvider;
         this.formatPresenter = formatPresenter;
         this.tableFilterPresenter = tableFilterPresenter;
+        this.columnValuesFilterPresenter = columnValuesFilterPresenter;
     }
 
     @Override
-    public void onMouseDown(NativeEvent event, Heading heading) {
-        int colIndex = -1;
-        if (heading != null) {
-            final Element element = Element.as(event.getEventTarget());
-            final Element columnTop = ElementUtil.findParent(element, "column-top", 3);
-            if (columnTop != null) {
-                colIndex = heading.getColIndex();
+    public void onMoveStart(final NativeEvent event, final Supplier<Heading> headingSupplier) {
+        moving = true;
+
+        if (currentMenuColIndex != -1 || currentFilterColIndex != -1) {
+            final Heading heading = headingSupplier.get();
+            if (heading != null) {
+                final Element element = Element.as(event.getEventTarget());
+                final Element columnTop = ElementUtil.findParent(element, "column-top", 3);
+                if (columnTop != null) {
+                    final int colIndex = heading.getColIndex();
+                    if (currentMenuColIndex == colIndex) {
+                        HideMenuEvent
+                                .builder()
+                                .fire(tablePresenter);
+                    }
+                    if (currentFilterColIndex == colIndex) {
+                        columnValuesFilterPresenter.hide();
+                    }
+                }
             }
         }
-
-        ignoreNext = currentColIndex == colIndex;
-        HideMenuEvent
-                .builder()
-                .fire(tablePresenter);
     }
 
     @Override
-    public void onMouseUp(final NativeEvent event, final Heading heading) {
-        if (heading != null && heading.getColIndex() >= columnsStartIndex) {
-            final int colIndex = heading.getColIndex();
+    public void onMoveEnd(final NativeEvent event, final Supplier<Heading> headingSupplier) {
+        moving = false;
+    }
 
-            final Column column = getColumn(colIndex);
-            if (column != null && !ignoreNext) {
-                new Timer() {
-                    @Override
-                    public void run() {
-                        if (currentColIndex == colIndex) {
-                            HideMenuEvent.builder().fire(tablePresenter);
+    @Override
+    public void onShowMenu(final NativeEvent event, final Supplier<Heading> headingSupplier) {
+        if (!moving) {
+            final Heading heading = headingSupplier.get();
+            if (heading != null && heading.getColIndex() >= columnsStartIndex) {
+                final int colIndex = heading.getColIndex();
 
-                        } else {
-                            currentColIndex = colIndex;
-                            final Element target = heading.getElement();
+                final Column column = getColumn(colIndex);
+                if (column != null) {
+                    new Timer() {
+                        @Override
+                        public void run() {
+                            final Element th = heading.getElement();
+                            final Element button = ElementUtil.findChild(th, "column-valueFilterIcon");
+                            final Element target = event.getEventTarget().cast();
+                            final boolean isFilterButton = button.isOrHasChild(target);
 
-                            final List<Item> menuItems = getMenuItems(column);
+                            if (currentFilterColIndex == colIndex) {
+                                HidePopupRequestEvent.builder(columnValuesFilterPresenter).fire();
 
-                            Element element = event.getEventTarget().cast();
-                            while (!element.getTagName().equalsIgnoreCase("th")) {
-                                element = element.getParentElement();
+                            } else if (isFilterButton) {
+                                currentFilterColIndex = colIndex;
+                                columnValuesFilterPresenter.show(
+                                        button,
+                                        th,
+                                        tablePresenter.getDataSupplier(column),
+                                        hideEvent -> resetFilterColIndex(),
+                                        column.getColumnValueSelection(),
+                                        ColumnsManager.this);
                             }
 
-                            Rect relativeRect = new Rect(element);
-                            relativeRect = relativeRect.grow(3);
-                            final PopupPosition popupPosition = new PopupPosition(relativeRect, PopupLocation.BELOW);
+                            if (currentMenuColIndex == colIndex) {
+                                HideMenuEvent.builder().fire(tablePresenter);
 
-                            ShowMenuEvent
-                                    .builder()
-                                    .items(menuItems)
-                                    .popupPosition(popupPosition)
-                                    .addAutoHidePartner(element)
-                                    .onHide(e2 -> currentColIndex = -1)
-                                    .fire(tablePresenter);
+                            } else if (!isFilterButton) {
+                                currentMenuColIndex = colIndex;
+                                final List<Item> menuItems = getMenuItems(column);
+
+                                Rect relativeRect = new Rect(th);
+                                relativeRect = relativeRect.grow(3);
+                                final PopupPosition popupPosition = new PopupPosition(relativeRect,
+                                        PopupLocation.BELOW);
+
+                                ShowMenuEvent
+                                        .builder()
+                                        .items(menuItems)
+                                        .popupPosition(popupPosition)
+                                        .addAutoHidePartner(th)
+                                        .onHide(e2 -> resetMenuColIndex())
+                                        .fire(tablePresenter);
+                            }
                         }
-                    }
-                }.schedule(0);
+                    }.schedule(0);
+                }
             }
         }
+    }
 
-        ignoreNext = false;
+    private void resetFilterColIndex() {
+        currentFilterColIndex = -1;
+    }
+
+    private void resetMenuColIndex() {
+        currentMenuColIndex = -1;
     }
 
     @Override
@@ -257,8 +299,8 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
             replaceColumn(oldField, newField);
 
             if (newField.getColumnFilter() != null &&
-                GwtNullSafe.isNonBlankString(newField.getColumnFilter().getFilter())) {
-                if (!tablePresenter.getTableSettings().applyValueFilters()) {
+                NullSafe.isNonBlankString(newField.getColumnFilter().getFilter())) {
+                if (!tablePresenter.getTableComponentSettings().applyValueFilters()) {
                     tablePresenter.toggleApplyValueFilters();
                 }
             }
@@ -359,7 +401,7 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
     public void setValueFilter(final Column column,
                                final String valueFilter) {
         ColumnFilter columnFilter = null;
-        if (GwtNullSafe.isNonBlankString(valueFilter)) {
+        if (NullSafe.isNonBlankString(valueFilter)) {
             // TODO : Add case sensitive option.
             columnFilter = new ColumnFilter(valueFilter);
         }
@@ -372,6 +414,21 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
             replaceColumn(column, column.copy().columnFilter(columnFilter).build());
             tablePresenter.setFocused(false);
             tablePresenter.setDirty(true);
+            tablePresenter.onColumnFilterChange();
+        }
+    }
+
+    @Override
+    public void setValueSelection(final Column column, final ColumnValueSelection columnValueSelection) {
+        if (!Objects.equals(column.getColumnValueSelection(), columnValueSelection)) {
+            // Required to replace column filter in place so we don't need to re-render the table which would lose
+            // focus from column filter textbox.
+            column.setColumnValueSelection(columnValueSelection);
+
+            replaceColumn(column, column.copy().columnValueSelection(columnValueSelection).build());
+            tablePresenter.setFocused(false);
+            tablePresenter.setDirty(true);
+            tablePresenter.updateColumns();
             tablePresenter.onColumnFilterChange();
         }
     }
@@ -417,7 +474,7 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
     private Column getColumn(final int colIndex) {
         final List<Column> columns = getColumns();
         int index = columnsStartIndex;
-        for (Column column : columns) {
+        for (final Column column : columns) {
             if (column.isVisible()) {
                 if (index == colIndex) {
                     return column;
@@ -459,7 +516,7 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
         menuItems.add(createHideMenu(column));
 
         // Create show menu.
-        Item showMenu = createShowMenu();
+        final Item showMenu = createShowMenu();
         if (showMenu != null) {
             menuItems.add(showMenu);
         }
@@ -485,7 +542,7 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
             String expression = column.getExpression();
             expression = expression.replaceAll("\\$\\{[^\\{\\}]*\\}", "");
             expression = expression.trim();
-            if (expression.length() > 0) {
+            if (!expression.isEmpty()) {
                 highlight = true;
             }
         }
@@ -504,20 +561,20 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
         menuItems.add(
                 createSortOption(column,
                         0,
-                        SvgImage.FIELDS_SORTAZ,
-                        "Sort A to Z",
+                        SortIcon.SORT_ASCENDING_ICON,
+                        SortIcon.SORT_ASCENDING,
                         SortDirection.ASCENDING));
         menuItems.add(
                 createSortOption(column,
                         1,
-                        SvgImage.FIELDS_SORTZA,
-                        "Sort Z to A",
+                        SortIcon.SORT_DESCENDING_ICON,
+                        SortIcon.SORT_DESCENDING,
                         SortDirection.DESCENDING));
-        menuItems.add(createSortOption(column, 2, null, "Unsorted", null));
+        menuItems.add(createSortOption(column, 2, SortIcon.SORT_NONE, SortIcon.UNSORTED, null));
         return new IconParentMenuItem.Builder()
                 .priority(2)
-                .icon(SvgImage.FIELDS_SORTAZ)
-                .text("Sort")
+                .icon(SortIcon.SORT_ASCENDING_ICON)
+                .text(SortIcon.SORT)
                 .children(menuItems)
                 .highlight(column.getSort() != null)
                 .build();
@@ -647,13 +704,13 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
                 .text("Filter")
                 .command(() -> filterColumn(column))
                 .highlight((column.getFilter() != null
-                           && ((column.getFilter().getIncludes() != null
-                                && column.getFilter().getIncludes().trim().length() > 0)
-                               || (column.getFilter().getExcludes() != null
-                                   && column.getFilter().getExcludes().trim().length() > 0))) ||
-                               (column.getColumnFilter() != null
-                           && ((column.getColumnFilter().getFilter() != null
-                                && column.getColumnFilter().getFilter().trim().length() > 0))))
+                            && ((column.getFilter().getIncludes() != null
+                                 && !column.getFilter().getIncludes().trim().isEmpty())
+                                || (column.getFilter().getExcludes() != null
+                                    && !column.getFilter().getExcludes().trim().isEmpty()))) ||
+                           (column.getColumnFilter() != null
+                            && ((column.getColumnFilter().getFilter() != null
+                                 && !column.getColumnFilter().getFilter().trim().isEmpty()))))
                 .build();
     }
 
@@ -720,7 +777,7 @@ public class ColumnsManager implements HeadingListener, HasValueFilter {
             }
         }
 
-        if (menuItems.size() == 0) {
+        if (menuItems.isEmpty()) {
             return null;
         }
 

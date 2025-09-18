@@ -3,8 +3,8 @@ package stroom.pipeline.writer;
 import stroom.meta.api.AttributeMap;
 import stroom.pipeline.errorhandler.ProcessException;
 import stroom.pipeline.state.MetaDataHolder;
-import stroom.util.NullSafe;
 import stroom.util.io.CompressionUtil;
+import stroom.util.shared.NullSafe;
 
 import org.apache.commons.compress.compressors.CompressorException;
 import org.apache.commons.compress.compressors.CompressorStreamFactory;
@@ -64,7 +64,7 @@ public class OutputFactory {
             if (CompressionUtil.isSupportedCompressor(compressionMethod)) {
                 this.compressionMethod = compressionMethod;
             } else {
-                String errorMsg = "Unsupported compression method: " + compressionMethod;
+                final String errorMsg = "Unsupported compression method: " + compressionMethod;
                 throw ProcessException.create(errorMsg);
             }
         }

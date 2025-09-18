@@ -9,6 +9,7 @@ import stroom.security.impl.TestModule;
 import stroom.security.impl.UserDao;
 import stroom.security.shared.AppPermission;
 import stroom.security.shared.DocumentPermission;
+import stroom.security.shared.FindUserContext;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.User;
 import stroom.util.AuditUtil;
@@ -193,6 +194,90 @@ class TestUserDaoImpl {
                 .anyMatch(g -> groupName.equals(g.getSubjectId())))
                 .isTrue());
 
+    }
+
+    @Test
+    void findAnnotationAssignmentUsers() {
+        // Given
+        final List<String> userNames = IntStream.range(0, 3)
+                .mapToObj(i -> String.format("SomePerson_%s", UUID.randomUUID()))
+                .toList();
+        final String groupName = String.format("SomeGroup_%s", UUID.randomUUID());
+
+        final List<String> otherUserNames = IntStream.range(0, 3)
+                .mapToObj(i -> String.format("OtherPerson_%s", UUID.randomUUID()))
+                .toList();
+        final String otherGroupName = String.format("OtherGroup_%s", UUID.randomUUID());
+
+        // Create others.
+        final User otherGroup = createUser(otherGroupName, true);
+        final List<User> otherUsers = otherUserNames.stream()
+                .map(name -> createUser(name, false))
+                .peek(u -> userDao.addUserToGroup(u.getUuid(), otherGroup.getUuid()))
+                .toList();
+
+        // Create users.
+        final User group = createUser(groupName, true);
+        final List<User> users = userNames.stream()
+                .map(name -> createUser(name, false))
+                .peek(u -> userDao.addUserToGroup(u.getUuid(), group.getUuid()))
+                .toList();
+
+        final String otherGroupName2 = String.format("OtherGroup2_%s", UUID.randomUUID());
+        final User otherGroup2 = createUser(otherGroupName2, true);
+        users.forEach(u -> userDao.addUserToGroup(u.getUuid(), otherGroup2.getUuid()));
+
+        // Make sure we can only see users.
+        final ResultPage<User> visibleUsers = userDao
+                .findRelatedUsers(users.getFirst().getUuid(), new FindUserCriteria.Builder()
+                        .context(FindUserContext.ANNOTATION_ASSIGNMENT).build());
+
+        assertThat(visibleUsers.size()).isEqualTo(5);
+        assertThat(visibleUsers.getValues()).containsAll(users);
+        assertThat(visibleUsers.getValues()).contains(group);
+        assertThat(visibleUsers.getValues()).contains(otherGroup2);
+    }
+
+    @Test
+    void findRunAsUsers() {
+        // Given
+        final List<String> userNames = IntStream.range(0, 3)
+                .mapToObj(i -> String.format("SomePerson_%s", UUID.randomUUID()))
+                .toList();
+        final String groupName = String.format("SomeGroup_%s", UUID.randomUUID());
+
+        final List<String> otherUserNames = IntStream.range(0, 3)
+                .mapToObj(i -> String.format("OtherPerson_%s", UUID.randomUUID()))
+                .toList();
+        final String otherGroupName = String.format("OtherGroup_%s", UUID.randomUUID());
+
+        // Create others.
+        final User otherGroup = createUser(otherGroupName, true);
+        final List<User> otherUsers = otherUserNames.stream()
+                .map(name -> createUser(name, false))
+                .peek(u -> userDao.addUserToGroup(u.getUuid(), otherGroup.getUuid()))
+                .toList();
+
+        // Create users.
+        final User group = createUser(groupName, true);
+        final List<User> users = userNames.stream()
+                .map(name -> createUser(name, false))
+                .peek(u -> userDao.addUserToGroup(u.getUuid(), group.getUuid()))
+                .toList();
+
+        final String otherGroupName2 = String.format("OtherGroup2_%s", UUID.randomUUID());
+        final User otherGroup2 = createUser(otherGroupName2, true);
+        users.forEach(u -> userDao.addUserToGroup(u.getUuid(), otherGroup2.getUuid()));
+
+        // Make sure we can only see users.
+        final ResultPage<User> visibleUsers = userDao
+                .findRelatedUsers(users.getFirst().getUuid(), new FindUserCriteria.Builder()
+                        .context(FindUserContext.RUN_AS).build());
+
+        assertThat(visibleUsers.size()).isEqualTo(3);
+        assertThat(visibleUsers.getValues()).contains(users.getFirst());
+        assertThat(visibleUsers.getValues()).contains(group);
+        assertThat(visibleUsers.getValues()).contains(otherGroup2);
     }
 
     @Test
@@ -412,8 +497,8 @@ class TestUserDaoImpl {
         assertUser2Perms.run();
     }
 
-    private User createUser(final String name, boolean group) {
-        User userOrGroup = User.builder()
+    private User createUser(final String name, final boolean group) {
+        final User userOrGroup = User.builder()
                 .subjectId(name)
                 .uuid(UUID.randomUUID().toString())
                 .group(group)

@@ -1,6 +1,6 @@
 package stroom.data.grid.client;
 
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.SafeHtmlUtil;
 
 import com.google.gwt.safehtml.shared.SafeHtml;
@@ -24,7 +24,7 @@ public class HeadingBuilder {
     }
 
     public HeadingBuilder headingText(final SafeHtml headingText) {
-        this.headingText = GwtNullSafe.requireNonNullElse(headingText, SafeHtmlUtils.EMPTY_SAFE_HTML);
+        this.headingText = NullSafe.requireNonNullElse(headingText, SafeHtmlUtils.EMPTY_SAFE_HTML);
         return this;
     }
 
@@ -49,7 +49,8 @@ public class HeadingBuilder {
     }
 
     public Header<SafeHtml> build() {
-        final boolean hasToolTip = !GwtNullSafe.isBlankString(toolTip);
+
+        final boolean hasToolTip = NullSafe.isNonBlankString(toolTip);
         final boolean hasAlignment = headingAlignment != null
                                      && headingAlignment != HeadingAlignment.LEFT;
         final Header<SafeHtml> header;
@@ -70,7 +71,7 @@ public class HeadingBuilder {
         }
 
         // Apply a class to the header itself
-        GwtNullSafe.consume(headingStyle, header::setHeaderStyleNames);
+        NullSafe.consume(headingStyle, header::setHeaderStyleNames);
         return header;
     }
 }

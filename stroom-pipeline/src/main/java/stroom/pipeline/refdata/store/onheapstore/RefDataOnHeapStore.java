@@ -11,10 +11,10 @@ import stroom.pipeline.refdata.store.RefDataValue;
 import stroom.pipeline.refdata.store.RefStoreEntry;
 import stroom.pipeline.refdata.store.RefStreamDefinition;
 import stroom.pipeline.refdata.store.offheapstore.TypedByteBuffer;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Range;
 import stroom.util.time.StroomDuration;
 
@@ -96,8 +96,8 @@ public class RefDataOnHeapStore extends AbstractRefDataStore {
         // try the KV store first
 
         Optional<RefDataValue> result;
-        KeyValueMapKey keyValueMapKey = new KeyValueMapKey(mapDefinition, key);
-        RefDataValue refDataValue = keyValueMap.get(keyValueMapKey);
+        final KeyValueMapKey keyValueMapKey = new KeyValueMapKey(mapDefinition, key);
+        final RefDataValue refDataValue = keyValueMap.get(keyValueMapKey);
         if (refDataValue != null) {
             result = Optional.of(refDataValue);
         } else {
@@ -118,11 +118,11 @@ public class RefDataOnHeapStore extends AbstractRefDataStore {
                     result = Optional.empty();
                 }
 
-            } catch (NumberFormatException e) {
+            } catch (final NumberFormatException e) {
                 // key could not be converted to a long, either this mapdef has no ranges or
                 // an invalid key was used. See if we have any ranges at all for this mapdef
                 // to determine whether to error or not.
-                boolean doesStoreContainRanges = rangeValueNestedMap.containsKey(mapDefinition);
+                final boolean doesStoreContainRanges = rangeValueNestedMap.containsKey(mapDefinition);
                 if (doesStoreContainRanges) {
                     // we have ranges for this map def, so we would expect to be able to convert the key
                     throw new RuntimeException(LogUtil.message(
@@ -177,7 +177,7 @@ public class RefDataOnHeapStore extends AbstractRefDataStore {
         // create a sub-set of the map starting at the key of interest or the next smallest
         // range from value. Note the map is reverse sorted to increase confusion.
         final SortedMap<Range<Long>, RefDataValue> tailMap = rangeSubMap.tailMap(startKey);
-        for (Map.Entry<Range<Long>, RefDataValue> entry : tailMap.entrySet()) {
+        for (final Map.Entry<Range<Long>, RefDataValue> entry : tailMap.entrySet()) {
             // see if our key is in the found range
             if (entry.getKey().contains(key)) {
                 // found our entry
@@ -258,19 +258,19 @@ public class RefDataOnHeapStore extends AbstractRefDataStore {
     @Override
     public void purgeOldData() {
         throw new UnsupportedOperationException("Purge functionality is not supported for the on-heap store " +
-                "as the data is transient");
+                                                "as the data is transient");
     }
 
     @Override
     public void purgeOldData(final StroomDuration purgeAge) {
         throw new UnsupportedOperationException("Purge functionality is not supported for the on-heap store " +
-                "as the data is transient");
+                                                "as the data is transient");
     }
 
     @Override
     public void purge(final long refStreamId, final long partIndex) {
         throw new UnsupportedOperationException("Purge functionality is not supported for the on-heap store " +
-                "as the data is transient");
+                                                "as the data is transient");
     }
 
     @Override
@@ -303,7 +303,7 @@ public class RefDataOnHeapStore extends AbstractRefDataStore {
     /**
      * Intended only for testing use.
      */
-    void setLastAccessedTime(final RefStreamDefinition refStreamDefinition, long timeMs) {
+    void setLastAccessedTime(final RefStreamDefinition refStreamDefinition, final long timeMs) {
 
         processingInfoMap.compute(refStreamDefinition, (refStreamDef, refDataProcessingInfo) -> {
             if (refDataProcessingInfo != null) {

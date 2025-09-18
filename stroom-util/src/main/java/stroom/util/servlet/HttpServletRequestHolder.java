@@ -16,7 +16,6 @@
 
 package stroom.util.servlet;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
@@ -24,7 +23,6 @@ import stroom.util.logging.LogUtil;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 
 @Singleton
 public class HttpServletRequestHolder implements Provider<HttpServletRequest> {
@@ -44,15 +42,12 @@ public class HttpServletRequestHolder implements Provider<HttpServletRequest> {
             if (httpServletRequest == null) {
                 LOGGER.debug(() ->
                         LogUtil.message("Clearing held request against thread {}",
-                                Thread.currentThread().getId()));
+                                Thread.currentThread().threadId()));
             } else {
                 LOGGER.debug(() ->
                         LogUtil.message("Holding request with session id {} against thread {}",
-                                NullSafe.get(
-                                        httpServletRequest,
-                                        request -> request.getSession(false),
-                                        HttpSession::getId),
-                                Thread.currentThread().getId()));
+                                SessionUtil.getSessionId(httpServletRequest),
+                                Thread.currentThread().threadId()));
             }
         }
 

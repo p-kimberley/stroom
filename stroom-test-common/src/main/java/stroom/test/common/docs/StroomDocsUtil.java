@@ -1,11 +1,11 @@
 package stroom.test.common.docs;
 
 import stroom.test.common.ProjectPathUtil;
-import stroom.util.NullSafe;
 import stroom.util.io.DiffUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ScanResult;
@@ -133,7 +133,7 @@ public class StroomDocsUtil {
                 LOGGER.debug("File content not changed for file {}", file);
                 return false;
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(LogUtil.message("Error reading file '{}': {}",
                     file.toAbsolutePath().normalize(),
                     LogUtil.exceptionMessage(e)));
@@ -172,9 +172,10 @@ public class StroomDocsUtil {
             stroomDocsRepoDir = Paths.get(stroomDocsRepoDirStr);
         }
         if (!Files.isDirectory(stroomDocsRepoDir)) {
-            throw new RuntimeException(LogUtil.message("stroom-docs dir '{}' does not exist. " +
-                            "Expecting it to be a sibling of this stroom repo. If that is not the case, either " +
-                            "conform or set the system prop '{}' to the location of your stroom-docs repo.",
+            throw new RuntimeException(LogUtil.message(
+                    "stroom-docs dir '{}' does not exist. " +
+                    "Expecting it to be a sibling of this stroom repo. If that is not the case, either " +
+                    "conform or set the system prop '{}' to the location of your stroom-docs repo.",
                     stroomDocsRepoDir.toAbsolutePath().normalize(),
                     STROOM_DOCS_REPO_DIR_PROP_KEY));
         }
@@ -189,7 +190,7 @@ public class StroomDocsUtil {
     }
 
     public static void doWithClassScanResult(final Consumer<ScanResult> scanResultConsumer) {
-        try (ScanResult scanResult =
+        try (final ScanResult scanResult =
                 new ClassGraph()
                         .enableAllInfo()             // Scan classes, methods, fields, annotations
                         .acceptPackages(STROOM_PACKAGE_NAME)  // Scan com.xyz and subpkgs (omit to scan all packages)

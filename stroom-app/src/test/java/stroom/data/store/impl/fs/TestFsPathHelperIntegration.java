@@ -1,6 +1,7 @@
 package stroom.data.store.impl.fs;
 
 import stroom.cache.impl.CacheModule;
+import stroom.cache.service.impl.CacheServiceModule;
 import stroom.cluster.lock.mock.MockClusterLockModule;
 import stroom.data.shared.StreamTypeNames;
 import stroom.data.store.impl.fs.db.FsDataStoreDaoModule;
@@ -10,6 +11,7 @@ import stroom.meta.shared.SimpleMeta;
 import stroom.meta.shared.SimpleMetaImpl;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.test.common.util.guice.AbstractTestModule;
 import stroom.util.entityevent.EntityEventBus;
@@ -64,14 +66,14 @@ public class TestFsPathHelperIntegration {
 
         Guice.createInjector(
                         localModule,
-                        new FsTestModule(),
-//                        new FsDataStoreDbModule(),
                         new FsDataStoreDbModule(),
                         new FsDataStoreDaoModule(),
                         new MockClusterLockModule(),
                         new MockTaskModule(),
                         new MockSecurityContextModule(),
+                        new MockMetricsModule(),
                         new CacheModule(),
+                        new CacheServiceModule(),
                         new DbTestModule())
                 .injectMembers(this);
     }
@@ -95,7 +97,7 @@ public class TestFsPathHelperIntegration {
         final FsVolumeConfig fsVolumeConfig = new FsVolumeConfig();
         final String metaTypeExt = fsVolumeConfig.getMetaTypeExtension(streamType).orElseThrow();
 
-        Path rootPath = fsPathHelper.getRootPath(volPath, simpleMeta);
+        final Path rootPath = fsPathHelper.getRootPath(volPath, simpleMeta);
 
         final List<String> pathParts = new ArrayList<>(rootPath.getNameCount());
         for (final Path path : rootPath) {
@@ -107,7 +109,7 @@ public class TestFsPathHelperIntegration {
                         "some",
                         "path",
                         "store",
-                        streamType.toUpperCase().replace(" ", "_"),
+                        streamType.toUpperCase().replace(' ', '_'),
                         "2023",
                         "03",
                         "17",
@@ -150,7 +152,7 @@ public class TestFsPathHelperIntegration {
                         "some",
                         "path",
                         "store",
-                        streamType.toUpperCase().replace(" ", "_"),
+                        streamType.toUpperCase().replace(' ', '_'),
                         "2023",
                         "03",
                         "17",
@@ -185,7 +187,7 @@ public class TestFsPathHelperIntegration {
                 )
                 .collect(Collectors.toList());
 
-        DurationTimer durationTimer = DurationTimer.start();
+        final DurationTimer durationTimer = DurationTimer.start();
         for (final SimpleMeta meta : metaList) {
             rootPath = fsPathHelper.getRootPath(
                     volPath,

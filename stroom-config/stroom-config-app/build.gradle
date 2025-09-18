@@ -1,5 +1,9 @@
 ext.moduleName = 'stroom.config.app'
 
+def releaseBuildDir = "${projectDir}/../../stroom-app/build/release"
+def configDefaultsFile = "${releaseBuildDir}/config/config-defaults.yml"
+def configSchemaFile = "${releaseBuildDir}/config/config-schema.yml"
+
 dependencies {
     implementation project(':stroom-activity:stroom-activity-impl-db')
     implementation project(':stroom-analytics:stroom-analytics-impl')
@@ -27,13 +31,14 @@ dependencies {
     implementation project(':stroom-explorer:stroom-explorer-impl')
     implementation project(':stroom-explorer:stroom-explorer-impl-db')
     implementation project(':stroom-feed:stroom-feed-impl')
+    implementation project(':stroom-gitrepo:stroom-gitrepo-api')
+    implementation project(':stroom-gitrepo:stroom-gitrepo-impl')
     implementation project(':stroom-importexport:stroom-importexport-impl')
     implementation project(':stroom-index:stroom-index-impl')
     implementation project(':stroom-index:stroom-index-impl-db')
     implementation project(':stroom-job:stroom-job-impl')
     implementation project(':stroom-job:stroom-job-impl-db')
     implementation project(':stroom-kafka:stroom-kafka-impl')
-    implementation project(':stroom-legacy:stroom-legacy-db-migration')
     implementation project(':stroom-lifecycle:stroom-lifecycle-impl')
     implementation project(':stroom-lmdb')
     implementation project(':stroom-meta:stroom-meta-impl')
@@ -47,6 +52,7 @@ dependencies {
     implementation project(':stroom-search:stroom-search-impl')
     implementation project(':stroom-search:stroom-search-solr')
     implementation project(':stroom-search:stroom-searchable-impl')
+    implementation project(':stroom-security:stroom-security-common-impl')
     implementation project(':stroom-security:stroom-security-identity')
     implementation project(':stroom-security:stroom-security-impl')
     implementation project(':stroom-security:stroom-security-impl-db')
@@ -73,19 +79,20 @@ dependencies {
 
     testImplementation project(':stroom-test-common')
 
-    testImplementation libs.assertj.core
     testImplementation libs.jackson.datatype.jdk8
-    testImplementation libs.junit.jupiter.api
     testImplementation libs.mbknor.jackson.jsonSchema
     testImplementation libs.java.diff.utils
 
-    // The following logging libs are needed when running junits outside dropwizard
-    testRuntimeOnly libs.jakarta.activation
-    testRuntimeOnly libs.jaxb.impl
-    testRuntimeOnly libs.jcl.over.slf4j
-    testRuntimeOnly libs.jul.to.slf4j
-    testRuntimeOnly libs.junit.jupiter.engine
-    testRuntimeOnly libs.log4j.over.slf4j
-    testRuntimeOnly libs.logback.classic
-    testRuntimeOnly libs.logback.core
+    testImplementation libs.bundles.common.test.implementation
+    testRuntimeOnly libs.bundles.common.test.runtime
+}
+
+// Create an example yaml config file from the compile-time defaults
+tasks.register('generateConfigDefaultsYamlFile', JavaExec) {
+    dependsOn compileJava
+    dependsOn compileTestJava
+
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'stroom.config.app.GenerateExpectedYaml'
+    args = [configDefaultsFile, configSchemaFile]
 }

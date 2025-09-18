@@ -32,11 +32,12 @@ import stroom.security.identity.shared.AccountFields;
 import stroom.security.identity.shared.AccountResultPage;
 import stroom.security.identity.shared.FindAccountRequest;
 import stroom.security.shared.User;
-import stroom.util.NullSafe;
 import stroom.util.ResultPageFactory;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.CompareUtil;
+import stroom.util.shared.CompareUtil.FieldComparators;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import com.google.common.base.Strings;
@@ -159,23 +160,16 @@ class AccountDaoImpl implements AccountDao {
             entry("processingAccount", ACCOUNT.PROCESSING_ACCOUNT),
             entry(AccountFields.FIELD_NAME_STATUS, ACCOUNT_STATUS));
 
-    private static final Map<String, Comparator<Account>> FIELD_COMPARATORS = Map.of(
-            AccountFields.FIELD_NAME_USER_ID,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getUserId),
-            AccountFields.FIELD_NAME_FIRST_NAME,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getFirstName),
-            AccountFields.FIELD_NAME_LAST_NAME,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getLastName),
-            AccountFields.FIELD_NAME_EMAIL,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getEmail),
-            AccountFields.FIELD_NAME_STATUS,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getStatus),
-            AccountFields.FIELD_NAME_LAST_LOGIN_MS,
-            CompareUtil.getNullSafeComparator(Account::getLastLoginMs), // nullable
-            AccountFields.FIELD_NAME_LOGIN_FAILURES,
-            Comparator.comparingInt(Account::getLoginFailures), // not null
-            AccountFields.FIELD_NAME_COMMENTS,
-            CompareUtil.getNullSafeCaseInsensitiveComparator(Account::getComments));
+    private static final FieldComparators<Account> FIELD_COMPARATORS = FieldComparators.builder(Account.class)
+            .addStringComparator(AccountFields.FIELD_NAME_USER_ID, Account::getUserId)
+            .addStringComparator(AccountFields.FIELD_NAME_FIRST_NAME, Account::getFirstName)
+            .addStringComparator(AccountFields.FIELD_NAME_LAST_NAME, Account::getLastName)
+            .addStringComparator(AccountFields.FIELD_NAME_EMAIL, Account::getEmail)
+            .addStringComparator(AccountFields.FIELD_NAME_STATUS, Account::getStatus)
+            .addCaseLessComparator(AccountFields.FIELD_NAME_LAST_LOGIN_MS, Account::getLastLoginMs) // nullable
+            .addLongComparator(AccountFields.FIELD_NAME_LOGIN_FAILURES, Account::getLoginFailures) // not null
+            .addStringComparator(AccountFields.FIELD_NAME_COMMENTS, Account::getComments)
+            .build();
 
     private final Provider<IdentityConfig> identityConfigProvider;
     private final IdentityDbConnProvider identityDbConnProvider;
@@ -215,7 +209,7 @@ class AccountDaoImpl implements AccountDao {
                         .fetch())
                 .map(RECORD_TO_ACCOUNT_MAPPER::apply);
         return ResultPageFactory.createUnboundedList(list, (accounts, pageResponse) ->
-                new AccountResultPage(accounts, pageResponse, null));
+                new AccountResultPage(accounts, pageResponse));
     }
 
     @Override
@@ -335,11 +329,11 @@ class AccountDaoImpl implements AccountDao {
         }
 
         final AccountRecord record = optionalRecord.get();
-        boolean isPasswordCorrect = PasswordHashUtil.checkPassword(password, record.getPasswordHash());
-        boolean isDisabled = !record.getEnabled();
-        boolean isInactive = record.getInactive();
-        boolean isLocked = record.getLocked();
-        boolean isProcessingAccount = record.getProcessingAccount();
+        final boolean isPasswordCorrect = PasswordHashUtil.checkPassword(password, record.getPasswordHash());
+        final boolean isDisabled = !record.getEnabled();
+        final boolean isInactive = record.getInactive();
+        final boolean isLocked = record.getLocked();
+        final boolean isProcessingAccount = record.getProcessingAccount();
 
         return new CredentialValidationResult(
                 isPasswordCorrect, false, isLocked, isDisabled, isInactive, isProcessingAccount);
@@ -463,7 +457,7 @@ class AccountDaoImpl implements AccountDao {
     }
 
     @Override
-    public Optional<Account> get(int id) {
+    public Optional<Account> get(final int id) {
         return genericDao.fetch(id);
 
 //        Optional<AccountRecord> userQuery = JooqUtil.contextResult(authDbConnProvider, context -> context
@@ -608,7 +602,7 @@ class AccountDaoImpl implements AccountDao {
     }
 
     private Condition createCondition(final FindAccountRequest request) {
-        Condition condition = ACCOUNT.PROCESSING_ACCOUNT.isFalse();
+        final Condition condition = ACCOUNT.PROCESSING_ACCOUNT.isFalse();
 //        if (request.getQuickFilter() != null) {
 //            condition = condition.and(ACCOUNT.USER_ID.contains(request.getQuickFilter()));
 //        }

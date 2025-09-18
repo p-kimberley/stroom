@@ -16,20 +16,20 @@
 
 package stroom.search.elastic.search;
 
-import stroom.datasource.api.v2.ConditionSet;
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.IndexField;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.Query;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.datasource.ConditionSet;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.IndexFieldProvider;
 import stroom.query.common.v2.ResultStore;
 import stroom.query.common.v2.ResultStoreFactory;
@@ -46,9 +46,9 @@ import stroom.search.elastic.shared.ElasticNativeTypes;
 import stroom.search.elastic.shared.UnsupportedTypeException;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContextFactory;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -80,7 +80,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
 @SuppressWarnings("unused")
 public class ElasticSearchProvider implements SearchProvider, ElasticIndexService, IndexFieldProvider {
@@ -96,6 +95,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
     private final ElasticClusterStore elasticClusterStore;
     private final ElasticIndexStore elasticIndexStore;
     private final ElasticSearchExecutor elasticSearchExecutor;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public ElasticSearchProvider(
@@ -109,7 +109,8 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
             final ElasticClusterStore elasticClusterStore,
             final ElasticIndexStore elasticIndexStore,
             final SecurityContext securityContext,
-            final ElasticSearchExecutor elasticSearchExecutor) {
+            final ElasticSearchExecutor elasticSearchExecutor,
+            final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.elasticIndexCache = elasticIndexCache;
         this.securityContext = securityContext;
         this.coprocessorsFactory = coprocessorsFactory;
@@ -118,6 +119,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
         this.elasticClusterStore = elasticClusterStore;
         this.elasticIndexStore = elasticIndexStore;
         this.elasticSearchExecutor = elasticSearchExecutor;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
@@ -165,13 +167,12 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
     @Override
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
         return securityContext.useAsReadResult(() -> {
-            final FieldInfoResultPageBuilder builder = FieldInfoResultPageBuilder.builder(criteria);
             final ElasticIndexDoc index = elasticIndexStore.readDocument(criteria.getDataSourceRef());
-            if (index != null) {
-                final List<QueryField> fields = getDataSourceFields(index);
-                builder.addAll(fields);
+            if (index == null) {
+                return ResultPage.empty();
             }
-            return builder.build();
+            final List<QueryField> fields = getDataSourceFields(index);
+            return fieldInfoResultPageFactory.create(criteria, fields);
         });
     }
 
@@ -222,7 +223,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
     }
 
     @Override
-    public List<QueryField> getDataSourceFields(ElasticIndexDoc index) {
+    public List<QueryField> getDataSourceFields(final ElasticIndexDoc index) {
         final Map<String, FieldMapping> fieldMappings = getFieldMappings(index);
 
         return fieldMappings
@@ -242,7 +243,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                             final String aliasPath = getAliasPathFromMapping(fieldName, field.getValue());
                             final FieldMapping targetFieldMeta = fieldMappings.get(aliasPath);
                             nativeType = getFieldTypeFromMapping(aliasPath, targetFieldMeta);
-                        } catch (Exception e) {
+                        } catch (final Exception e) {
                             LOGGER.error("Could not determine mapping type for alias field '{}'", fieldName);
                         }
                     }
@@ -253,16 +254,16 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                                 ElasticNativeTypes.fromNativeType(fullName, nativeType);
 
                         return toDataSourceField(elasticFieldType, fieldName, fieldIsIndexed(field.getValue()));
-                    } catch (UnsupportedTypeException e) {
+                    } catch (final UnsupportedTypeException e) {
                         LOGGER.debug(e::getMessage, e);
                         return null;
-                    } catch (IllegalArgumentException e) {
+                    } catch (final IllegalArgumentException e) {
                         LOGGER.warn(e::getMessage, e);
                         return null;
                     }
                 })
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -335,7 +336,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                         final String aliasPath = getAliasPathFromMapping(fieldName, fieldMeta);
                         final FieldMapping targetFieldMeta = fieldMappings.get(aliasPath);
                         nativeType = getFieldTypeFromMapping(aliasPath, targetFieldMeta);
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         LOGGER.error("Could not determine mapping type for alias field '{}'", fieldName);
                     }
                 }
@@ -349,9 +350,9 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                         type,
                         nativeType,
                         indexed));
-            } catch (UnsupportedTypeException e) {
+            } catch (final UnsupportedTypeException e) {
                 LOGGER.debug(e::getMessage, e);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error(e::getMessage, e);
             }
         });
@@ -387,7 +388,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                     return true;
                 }
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return false;
         }
 

@@ -2,12 +2,12 @@ package stroom.config.global.impl;
 
 import stroom.security.impl.StroomOpenIdConfig;
 import stroom.security.openid.api.AbstractOpenIdConfig;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.AbstractConfig;
 import stroom.util.shared.IsProxyConfig;
 import stroom.util.shared.NotInjectableConfig;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
@@ -66,7 +66,7 @@ public class GenerateConfigProvidersModule {
                 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             """;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         final ConfigMapper configMapper = new ConfigMapper();
         final Set<String> simpleNames = new HashSet<>();
         final Map<String, List<String>> simpleNameToFullNamesMap = new HashMap<>();
@@ -193,7 +193,7 @@ public class GenerateConfigProvidersModule {
         final String simpleClassName = clazz.getSimpleName();
         // Fix the name for nested classes
         final String fullClassName = clazz.getName()
-                .replace("$", ".");
+                .replace('$', '.');
 
         simpleNameToFullNamesMap.computeIfAbsent(simpleClassName, k -> new ArrayList<>())
                 .add(fullClassName);
@@ -234,13 +234,13 @@ public class GenerateConfigProvidersModule {
     }
 
     private static void updateFile(final String content) {
-        Path pwd = Paths.get(".")
+        final Path pwd = Paths.get(".")
                 .toAbsolutePath()
                 .normalize();
 
         LOGGER.debug("PWD: {}", pwd.toString());
 
-        Path moduleFile = pwd.resolve("stroom-config/stroom-config-global-impl/src/main/java")
+        final Path moduleFile = pwd.resolve("stroom-config/stroom-config-global-impl/src/main/java")
                 .resolve(ConfigProvidersModule.class.getName().replace(".", File.separator) + ".java")
                 .normalize();
 
@@ -256,7 +256,7 @@ public class GenerateConfigProvidersModule {
             LOGGER.info("Writing file " + moduleFile.toAbsolutePath());
             Files.writeString(moduleFile, content);
 
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error reading content of " + moduleFile);
         }
     }

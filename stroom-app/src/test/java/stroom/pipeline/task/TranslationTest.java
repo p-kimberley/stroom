@@ -26,7 +26,7 @@ import stroom.data.store.api.TargetUtil;
 import stroom.docref.DocRef;
 import stroom.feed.api.FeedStore;
 import stroom.feed.shared.FeedDoc;
-import stroom.importexport.impl.ImportExportSerializer;
+import stroom.importexport.api.ImportExportSerializer;
 import stroom.importexport.shared.ImportSettings;
 import stroom.meta.api.AttributeMap;
 import stroom.meta.api.MetaProperties;
@@ -49,10 +49,10 @@ import stroom.processor.shared.CreateProcessFilterRequest;
 import stroom.processor.shared.ProcessorTask;
 import stroom.processor.shared.ProcessorTaskList;
 import stroom.processor.shared.QueryData;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.receive.common.ProgressHandler;
 import stroom.receive.common.StreamTargetStreamHandlers;
 import stroom.receive.common.StroomStreamProcessor;
@@ -401,7 +401,7 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
                         processedMeta.add(meta);
                     } else {
                         try (final Source errorStreamSource = streamStore.openSource(streamId)) {
-                            String errorStreamStr = SourceUtil.readString(errorStreamSource);
+                            final String errorStreamStr = SourceUtil.readString(errorStreamSource);
 
 //                            try (final InputStreamProvider inputStreamProvider = errorStreamSource.get(0)) {
                             //got an error stream so dump it to console
@@ -475,8 +475,8 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
 
         } else {
             // Add the associated data to the stream store.
-            String streamTypeName;
-            long millis;
+            final String streamTypeName;
+            final long millis;
             if (feed.isReference()) {
                 streamTypeName = StreamTypeNames.RAW_REFERENCE;
 
@@ -496,7 +496,7 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
                     .createMs(millis)
                     .build();
 
-            Meta meta;
+            final Meta meta;
             try (final Target target = streamStore.openTarget(metaProperties)) {
                 meta = target.getMeta();
                 final InputStream inputStream = new BufferedInputStream(Files.newInputStream(file));
@@ -766,7 +766,7 @@ public abstract class TranslationTest extends AbstractCoreIntegrationTest {
 
     private void compareFiles(final Path expectedFile, final Path actualFile, final List<Exception> exceptions) {
         try {
-            boolean areFilesTheSame = !DiffUtil.unifiedDiff(
+            final boolean areFilesTheSame = !DiffUtil.unifiedDiff(
                     expectedFile, actualFile, true, 3);
             if (areFilesTheSame) {
                 Files.deleteIfExists(actualFile);

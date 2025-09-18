@@ -1,8 +1,8 @@
 package stroom.test.common;
 
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathWithAttributes;
+import stroom.util.shared.NullSafe;
 
 import org.apache.commons.codec.binary.Hex;
 
@@ -115,9 +115,9 @@ public class DirectorySnapshot {
                 digest.reset();
                 final byte[] hashBytes = digest.digest(Files.readAllBytes(pathWithAttributes.path()));
                 return Hex.encodeHexString(hashBytes);
-            } catch (NoSuchAlgorithmException e) {
+            } catch (final NoSuchAlgorithmException e) {
                 throw new RuntimeException("Algorithm " + algo + " not found", e);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException("Error hashing file " + pathWithAttributes.path(), e);
             }
         } else {

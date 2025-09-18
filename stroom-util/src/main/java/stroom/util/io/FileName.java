@@ -1,6 +1,7 @@
 package stroom.util.io;
 
-import stroom.util.NullSafe;
+
+import stroom.util.shared.NullSafe;
 
 import java.util.Objects;
 

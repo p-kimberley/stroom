@@ -17,7 +17,9 @@
 package stroom.proxy.app;
 
 import stroom.dropwizard.common.AdminServlets;
+import stroom.dropwizard.common.AdminTasks;
 import stroom.dropwizard.common.DelegatingExceptionMapper;
+import stroom.dropwizard.common.DropWizardMetrics;
 import stroom.dropwizard.common.Filters;
 import stroom.dropwizard.common.HealthChecks;
 import stroom.dropwizard.common.ManagedServices;
@@ -29,7 +31,6 @@ import stroom.proxy.app.handler.ForwardHttpPostConfig;
 import stroom.proxy.app.handler.ProxyId;
 import stroom.security.openid.api.AbstractOpenIdConfig;
 import stroom.security.openid.api.IdpType;
-import stroom.util.NullSafe;
 import stroom.util.authentication.DefaultOpenIdCredentials;
 import stroom.util.config.ConfigValidator;
 import stroom.util.config.PropertyPathDecorator;
@@ -45,6 +46,7 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.BuildInfo;
 import stroom.util.shared.IsProxyConfig;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.validation.ValidationModule;
 import stroom.util.yaml.YamlUtil;
@@ -58,15 +60,11 @@ import io.dropwizard.core.setup.Bootstrap;
 import io.dropwizard.core.setup.Environment;
 import io.dropwizard.servlets.tasks.LogConfigurationTask;
 import jakarta.inject.Inject;
-import jakarta.servlet.DispatcherType;
-import jakarta.servlet.FilterRegistration;
 import jakarta.validation.ValidatorFactory;
 import org.eclipse.jetty.server.session.SessionHandler;
-import org.eclipse.jetty.servlets.CrossOriginFilter;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.EnumSet;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -74,6 +72,10 @@ public class App extends Application<Config> {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(App.class);
 
+    @Inject
+    private DropWizardMetrics dropWizardMetrics;
+    @Inject
+    private AdminTasks adminTasks;
     @Inject
     private HealthChecks healthChecks;
     @Inject
@@ -167,9 +169,6 @@ public class App extends Application<Config> {
         // Set up a session handler for Jetty
         environment.servlets().setSessionHandler(new SessionHandler());
 
-        // Configure Cross-Origin Resource Sharing.
-        configureCors(environment);
-
         LOGGER.info("Starting Stroom Proxy");
 
         final ProxyModule proxyModule = new ProxyModule(configuration, environment, configFile);
@@ -179,6 +178,12 @@ public class App extends Application<Config> {
         // Ensure we have our home/temp dirs set up
         FileUtil.ensureDirExists(homeDirProvider.get());
         FileUtil.ensureDirExists(tempDirProvider.get());
+
+        // Add DropWizard metrics
+        dropWizardMetrics.register();
+
+        // Add admin tasks
+        adminTasks.register();
 
         // Add health checks
         healthChecks.register();
@@ -239,17 +244,9 @@ public class App extends Application<Config> {
         }
     }
 
-    private static void configureCors(io.dropwizard.core.setup.Environment environment) {
-        FilterRegistration.Dynamic cors = environment.servlets().addFilter("CORS", CrossOriginFilter.class);
-        cors.addMappingForUrlPatterns(EnumSet.allOf(DispatcherType.class), true, "/*");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, "GET,PUT,POST,DELETE,OPTIONS,PATCH");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, "*");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_HEADERS_PARAM, "*");
-    }
-
     private void registerLogConfiguration(final Environment environment) {
         // Task to allow configuration of log levels at runtime
-        String path = environment.getAdminContext().getContextPath();
+        final String path = environment.getAdminContext().getContextPath();
 
         // To change the log level do one of:
         // curl -X POST -d "logger=stroom&level=DEBUG" [admin context path]/tasks/log-level
@@ -274,8 +271,8 @@ public class App extends Application<Config> {
                             ? " (INSTANT)"
                             : "";
                     final String type = switch (forwarderConfig) {
-                        case ForwardHttpPostConfig ignored -> "HTTP";
-                        case ForwardFileConfig ignored -> "FILE";
+                        case final ForwardHttpPostConfig ignored -> "HTTP";
+                        case final ForwardFileConfig ignored -> "FILE";
                     };
                     return "    " + type + ": '" + name + "' -> " + destination + instant + state;
                 })
@@ -323,7 +320,7 @@ public class App extends Application<Config> {
                         }
                     });
 
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error parsing config file " + configFile.toAbsolutePath().normalize());
         }
     }

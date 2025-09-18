@@ -1,6 +1,7 @@
 package stroom.util.sysinfo;
 
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
+import stroom.util.shared.SerialisationTestConstructor;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -14,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-@JsonInclude(Include.NON_DEFAULT)
+@JsonInclude(Include.NON_NULL)
 @JsonPropertyOrder(alphabetic = true)
 public class SystemInfoResult {
 
@@ -37,6 +38,11 @@ public class SystemInfoResult {
         this.details = Objects.requireNonNull(details);
     }
 
+    @SerialisationTestConstructor
+    private SystemInfoResult() {
+        this("test", "test", Map.of("test", "test"));
+    }
+
     public Map<String, Object> getDetails() {
         return details;
     }
@@ -52,10 +58,10 @@ public class SystemInfoResult {
     @Override
     public String toString() {
         return "SystemInfoResult{" +
-                "name='" + name + '\'' +
-                ", description='" + description + '\'' +
-                ", details=" + details +
-                '}';
+               "name='" + name + '\'' +
+               ", description='" + description + '\'' +
+               ", details=" + details +
+               '}';
     }
 
     @Override
@@ -68,8 +74,8 @@ public class SystemInfoResult {
         }
         final SystemInfoResult that = (SystemInfoResult) o;
         return name.equals(that.name) &&
-                Objects.equals(description, that.description) &&
-                details.equals(that.details);
+               Objects.equals(description, that.description) &&
+               details.equals(that.details);
     }
 
     @Override

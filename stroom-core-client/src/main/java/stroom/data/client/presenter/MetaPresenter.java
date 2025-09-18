@@ -20,7 +20,6 @@ import stroom.alert.client.event.ConfirmEvent;
 import stroom.data.client.event.DataSelectionEvent.DataSelectionHandler;
 import stroom.data.client.event.HasDataSelectionHandlers;
 import stroom.data.client.presenter.MetaPresenter.MetaView;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
 import stroom.entity.client.presenter.HasDocumentRead;
@@ -38,9 +37,10 @@ import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.stepping.StepLocation;
 import stroom.pipeline.shared.stepping.StepType;
 import stroom.pipeline.stepping.client.event.BeginPipelineSteppingEvent;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.client.presenter.DateTimeSettingsFactory;
 import stroom.query.shared.ExpressionResource;
 import stroom.security.client.api.ClientSecurityContext;
@@ -673,7 +673,7 @@ public class MetaPresenter
                               final String childStreamType) {
         // Try and get a pipeline id to use as a starting point for
         // stepping.
-        DocRef pipelineRef = null;
+        final DocRef pipelineRef = null;
 
         // We will assume that the stream list has a child stream selected.
         // This would be the case where a user chooses an event with errors

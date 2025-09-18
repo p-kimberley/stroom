@@ -16,15 +16,14 @@
 
 package stroom.query.language.functions;
 
-import stroom.query.language.token.AbstractToken;
-import stroom.query.language.token.FunctionGroup;
-import stroom.query.language.token.KeywordGroup;
-import stroom.query.language.token.Param;
+import stroom.query.api.token.AbstractToken;
+import stroom.query.api.token.FunctionGroup;
+import stroom.query.api.token.KeywordGroup;
+import stroom.query.api.token.Token;
+import stroom.query.api.token.TokenException;
+import stroom.query.api.token.TokenGroup;
+import stroom.query.api.token.TokenType;
 import stroom.query.language.token.StructureBuilder;
-import stroom.query.language.token.Token;
-import stroom.query.language.token.TokenException;
-import stroom.query.language.token.TokenGroup;
-import stroom.query.language.token.TokenType;
 import stroom.query.language.token.Tokeniser;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -247,7 +246,7 @@ public class ExpressionParser {
         final List<Param> paramList = new ArrayList<>(children.size());
 
         // Turn comma separated tokens into parameters.
-        List<Object> childSet = new ArrayList<>();
+        final List<Object> childSet = new ArrayList<>();
         for (final AbstractToken token : children) {
             if (TokenType.COMMA.equals(token.getTokenType())) {
                 // If we haven't found a parameter from the previous token or object then this comma

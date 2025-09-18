@@ -4,11 +4,12 @@ import stroom.security.api.HasJwt;
 import stroom.security.api.UserIdentity;
 import stroom.security.openid.api.OpenId;
 import stroom.security.openid.api.TokenResponse;
-import stroom.util.NullSafe;
 import stroom.util.authentication.Refreshable;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.servlet.SessionUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.servlet.http.HttpSession;
 import org.jose4j.jwt.JwtClaims;
@@ -106,7 +107,7 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
 
     @Override
     public boolean isRefreshRequired(final RefreshMode refreshMode) {
-        boolean hasPassedThreshold = System.currentTimeMillis() >= getExpireTimeWithBufferEpochMs(refreshMode);
+        final boolean hasPassedThreshold = System.currentTimeMillis() >= getExpireTimeWithBufferEpochMs(refreshMode);
         boolean isRefreshRequired = hasPassedThreshold;
         LOGGER.trace("hasPassedThreshold: {}", hasPassedThreshold);
         if (additionalRefreshCondition != null) {
@@ -123,7 +124,7 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
             didWork = false;
         } else {
             synchronized (this) {
-                final FetchTokenResult fetchTokenResult = updateFunction.apply(this);
+                final FetchTokenResult fetchTokenResult = fetchToken();
                 if (fetchTokenResult != null) {
                     try {
                         this.mutableState = createMutableState(
@@ -131,7 +132,7 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
                                 Objects.requireNonNull(fetchTokenResult.jwtClaims()));
                         NullSafe.consume(this, onRefreshAction);
                         didWork = true;
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         LOGGER.error("Error updating token for userIdentity: {}",
                                 LogUtil.typedValue(userIdentity), e);
                         throw e;
@@ -143,6 +144,16 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
             }
         }
         return didWork;
+    }
+
+    private FetchTokenResult fetchToken() {
+        try {
+            return updateFunction.apply(this);
+        } catch (final Exception e) {
+            LOGGER.error("Error fetching token - {}. Enable DEBUG for stack trace.", LogUtil.exceptionMessage(e));
+            LOGGER.debug("Error fetching token - {}.", LogUtil.exceptionMessage(e), e);
+            throw e;
+        }
     }
 
     @Override
@@ -165,7 +176,7 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
             final Instant expireTimeWithBuffer = expireTime.minusMillis(expiryBufferMs);
 
             LOGGER.debug("Updating refresh time - " +
-                            "expiryTime: {}, timeToExpire: {}, expiryBufferMs: {}, refreshTime: {}",
+                         "expiryTime: {}, timeToExpire: {}, expiryBufferMs: {}, refreshTime: {}",
                     expireTime, timeTilExpiry, expiryBufferMs, expireTimeWithBuffer);
 
             return new MutableState(
@@ -175,7 +186,7 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
                     tokenResponse,
                     jwtClaims);
 
-        } catch (MalformedClaimException e) {
+        } catch (final MalformedClaimException e) {
             throw new RuntimeException("Unable to extract expiry time from jwtClaims " + jwtClaims, e);
         }
     }
@@ -183,20 +194,21 @@ public class UpdatableToken implements Refreshable, HasJwtClaims, HasJwt {
     @Override
     public String toString() {
         return "UpdatableToken{" +
-                "sub=" + NullSafe.get(mutableState.jwtClaims, claims ->
+               "sub=" + NullSafe.get(mutableState.jwtClaims, claims ->
                 JwtUtil.getClaimValue(claims, OpenId.CLAIM__SUBJECT).orElse(null)) +
-                ", preferredUsername=" + NullSafe.get(mutableState.jwtClaims, claims ->
+               ", preferredUsername=" + NullSafe.get(mutableState.jwtClaims, claims ->
                 JwtUtil.getClaimValue(claims, OpenId.CLAIM__PREFERRED_USERNAME).orElse(null)) +
-                ", expireTimeWithBuffer=" + Instant.ofEpochMilli(mutableState.expireTimeWithBufferEpochMs) +
-                ", timeTilExpire=" + Duration.between(Instant.now(), getExpireTime()) +
-                '}';
+               ", expireTimeWithBuffer=" + Instant.ofEpochMilli(mutableState.expireTimeWithBufferEpochMs) +
+               ", timeTilExpire=" + Duration.between(Instant.now(), getExpireTime()) +
+               ", session=" + SessionUtil.getSessionId(session) +
+               '}';
     }
 
     private boolean isSessionValid(final HttpSession session) {
         try {
             session.getCreationTime();
             return true;
-        } catch (IllegalStateException e) {
+        } catch (final IllegalStateException e) {
             // session has been invalidated
             LOGGER.warn("Invalid session - {}", e.getMessage());
             return false;

@@ -61,7 +61,7 @@ public final class DocumentUserPermissionsViewImpl
     }
 
     @Override
-    public void setDocUserPermissionListView(View view) {
+    public void setDocUserPermissionListView(final View view) {
         docUserPermissionsList.setWidget(view.asWidget());
     }
 
@@ -85,6 +85,10 @@ public final class DocumentUserPermissionsViewImpl
     public SelectionBox<PermissionShowLevel> getPermissionVisibility() {
         return permissionVisibility;
     }
+
+
+    // --------------------------------------------------------------------------------
+
 
     public interface Binder extends UiBinder<Widget, DocumentUserPermissionsViewImpl> {
 

@@ -1,5 +1,7 @@
 package stroom.config.global.impl;
 
+import stroom.core.receive.AutoContentCreationConfig;
+
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 
@@ -348,14 +350,7 @@ public class ConfigProvidersModule extends AbstractModule {
                 stroom.kafka.impl.KafkaConfig.class);
     }
 
-    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
-    @Provides
-    @SuppressWarnings("unused")
-    stroom.legacy.db.LegacyConfig getLegacyConfig(
-            final ConfigMapper configMapper) {
-        return configMapper.getConfigObject(
-                stroom.legacy.db.LegacyConfig.class);
-    }
+
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
@@ -531,6 +526,15 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
+    AutoContentCreationConfig getAutoContentCreationConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                AutoContentCreationConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
     stroom.receive.common.ReceiveDataConfig getReceiveDataConfig(
             final ConfigMapper configMapper) {
         return configMapper.getConfigObject(
@@ -639,6 +643,15 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
+    stroom.security.common.impl.ContentSecurityConfig getContentSecurityConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.security.common.impl.ContentSecurityConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
     stroom.security.identity.config.EmailConfig getEmailConfig2(
             final ConfigMapper configMapper) {
         return configMapper.getConfigObject(
@@ -697,15 +710,6 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         return configMapper.getConfigObject(
                 stroom.security.impl.AuthorisationConfig.class);
-    }
-
-    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
-    @Provides
-    @SuppressWarnings("unused")
-    stroom.security.impl.ContentSecurityConfig getContentSecurityConfig(
-            final ConfigMapper configMapper) {
-        return configMapper.getConfigObject(
-                stroom.security.impl.ContentSecurityConfig.class);
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -907,7 +911,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.analytics.impl.SmtpConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -917,7 +921,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.config.common.AbstractDbConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -927,7 +931,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.config.common.ConnectionConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -937,7 +941,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.config.common.ConnectionPoolConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -947,7 +951,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.config.common.UriConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -957,7 +961,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.query.common.v2.AbstractResultStoreConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -967,7 +971,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.query.common.v2.ResultStoreLmdbConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -977,7 +981,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.query.common.v2.ResultStoreMapConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -987,7 +991,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.security.identity.config.SmtpConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -997,7 +1001,7 @@ public class ConfigProvidersModule extends AbstractModule {
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.util.shared.AbstractConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
+                + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
 }

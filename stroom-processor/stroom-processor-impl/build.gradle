@@ -3,6 +3,7 @@ ext.moduleName = 'stroom.processor.impl'
 dependencies {
     implementation project(':stroom-cache:stroom-cache-api')
     implementation project(':stroom-cluster:stroom-cluster-lock-api')
+    implementation project(':stroom-cluster:stroom-cluster-lock-mock')
     implementation project(':stroom-cluster:stroom-cluster-task-api')
     implementation project(':stroom-config:stroom-config-common')
     implementation project(':stroom-core-shared')
@@ -19,7 +20,6 @@ dependencies {
     implementation project(':stroom-node:stroom-node-api')
     implementation project(':stroom-processor:stroom-processor-api')
     implementation project(':stroom-query:stroom-query-language')
-    implementation project(':stroom-query:stroom-query-language-api')
     implementation project(':stroom-query:stroom-query-api')
     implementation project(':stroom-query:stroom-query-common') // TODO : Turn back into API
     implementation project(':stroom-search:stroom-searchable-api')
@@ -34,24 +34,14 @@ dependencies {
     implementation libs.guice
     implementation libs.jackson.annotations
     implementation libs.jakarta.inject
-    implementation libs.jaxb.api
     implementation libs.restygwt
     implementation libs.slf4j.api
     implementation libs.ws.rs.api
 
-    testImplementation libs.assertj.core
     testImplementation libs.commons.lang
-    testImplementation libs.junit.jupiter.api
 
     runtimeOnly libs.mysql.connector.java
 
-    // The following logging libs are needed when running junits outside dropwizard
-    testRuntimeOnly libs.jakarta.activation
-    testRuntimeOnly libs.jaxb.impl
-    testRuntimeOnly libs.jcl.over.slf4j
-    testRuntimeOnly libs.jul.to.slf4j
-    testRuntimeOnly libs.junit.jupiter.engine
-    testRuntimeOnly libs.log4j.over.slf4j
-    testRuntimeOnly libs.logback.classic
-    testRuntimeOnly libs.logback.core
+    testImplementation libs.bundles.common.test.implementation
+    testRuntimeOnly libs.bundles.common.test.runtime
 }

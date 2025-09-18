@@ -16,11 +16,10 @@
 
 package stroom.query.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch;
-import stroom.docref.StringMatch.MatchType;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
+import stroom.query.common.v2.ExpressionPredicateFactory;
 import stroom.query.shared.CompletionItem;
 import stroom.query.shared.CompletionValue;
 import stroom.query.shared.CompletionsRequest;
@@ -30,24 +29,23 @@ import stroom.query.shared.QueryHelpField;
 import stroom.query.shared.QueryHelpRequest;
 import stroom.query.shared.QueryHelpRow;
 import stroom.query.shared.QueryHelpType;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.resultpage.ResultPageBuilder;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 import stroom.util.string.AceStringMatcher;
 import stroom.util.string.AceStringMatcher.AceMatchResult;
-import stroom.util.string.StringMatcher;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 @Singleton
 public class Fields {
@@ -65,10 +63,13 @@ public class Fields {
             .build();
     public static final int INITIAL_SCORE = 300;
     private final Provider<QueryService> queryServiceProvider;
+    private final ExpressionPredicateFactory expressionPredicateFactory;
 
     @Inject
-    Fields(final Provider<QueryService> queryServiceProvider) {
+    Fields(final Provider<QueryService> queryServiceProvider,
+           final ExpressionPredicateFactory expressionPredicateFactory) {
         this.queryServiceProvider = queryServiceProvider;
+        this.expressionPredicateFactory = expressionPredicateFactory;
     }
 
     public void addRows(final QueryHelpRequest request,
@@ -85,17 +86,17 @@ public class Fields {
                 if (optional.isPresent()) {
                     final FindFieldCriteria criteria = new FindFieldCriteria(
                             PageRequest.oneRow(),
-                            Collections.emptyList(),
+                            FindFieldCriteria.DEFAULT_SORT_LIST,
                             optional.get(),
-                            request.getStringMatch(),
+                            request.getFilter(),
                             null);
                     hasChildren = !queryService.findFields(criteria).isEmpty();
                 }
 
-                final StringMatcher stringMatcher = new StringMatcher(request.getStringMatch());
+                final Predicate<String> predicate = expressionPredicateFactory.create(request.getFilter());
+
                 if (hasChildren ||
-                        MatchType.ANY.equals(stringMatcher.getMatchType()) ||
-                        stringMatcher.match(ROOT.getTitle()).isPresent()) {
+                    predicate.test(ROOT.getTitle())) {
                     resultPageBuilder.add(ROOT.copy().hasChildren(hasChildren).build());
                 }
 
@@ -104,9 +105,9 @@ public class Fields {
                 final FindFieldCriteria criteria = new FindFieldCriteria(
                         new PageRequest(request.getPageRequest().getOffset(),
                                 request.getPageRequest().getLength() + 1),
-                        request.getSortList(),
+                        FindFieldCriteria.DEFAULT_SORT_LIST,
                         optional.get(),
-                        request.getStringMatch(),
+                        request.getFilter(),
                         null);
                 final ResultPage<QueryField> resultPage = queryService.findFields(criteria);
                 resultPageBuilder.skip(resultPage.getPageStart());
@@ -127,7 +128,8 @@ public class Fields {
 
     public void addCompletions(final CompletionsRequest request,
                                final int maxCompletions,
-                               final List<CompletionItem> resultList) {
+                               final List<CompletionItem> resultList,
+                               final Boolean queryable) {
         try {
             final QueryService queryService = queryServiceProvider.get();
             final Optional<DocRef> optDataSourceRef = Optional.ofNullable(request.getDataSourceRef())
@@ -154,10 +156,10 @@ public class Fields {
                     // More fields than the client wants so push down the filtering
                     final List<QueryField> fields = queryService.findFields(new FindFieldCriteria(
                                     pageRequest,
-                                    null,
+                                    FindFieldCriteria.DEFAULT_SORT_LIST,
                                     dataSourceRef,
-                                    new StringMatch(MatchType.CHARS_ANYWHERE, false, pattern),
-                                    null))
+                                    pattern,
+                                    queryable))
                             .getValues();
 
                     // Score the matching fields so we get the best matches
@@ -180,10 +182,10 @@ public class Fields {
                     // Datasource has fewer fields than the limit so just get them all
                     final List<QueryField> fields = queryService.findFields(new FindFieldCriteria(
                                     PageRequest.unlimited(),
-                                    null,
+                                    FindFieldCriteria.DEFAULT_SORT_LIST,
                                     dataSourceRef,
-                                    StringMatch.any(),
-                                    null))
+                                    null,
+                                    queryable))
                             .getValues();
                     LOGGER.debug(() -> LogUtil.message("Found {} match results using offset {}, maxCompletions {}",
                             fields.size(), maxCompletions));
@@ -192,7 +194,7 @@ public class Fields {
                             .forEach(resultList::add);
                 }
             });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error adding field completions: {}", e.getMessage(), e);
         }
     }
@@ -243,8 +245,8 @@ public class Fields {
         if (FIELDS_ID.equals(row.getId())) {
             final InsertType insertType = InsertType.NOT_INSERTABLE;
             final String documentation = "A list of the fields available to 'select' from the specified data source. " +
-                    "The fields will only become available one the data source has been " +
-                    "specified using the 'from' keyword.";
+                                         "The fields will only become available one the data source has been " +
+                                         "specified using the 'from' keyword.";
             return Optional.of(new QueryHelpDetail(insertType, null, documentation));
 
         } else if (row.getId().startsWith(FIELDS_ID + ".") && row.getData() instanceof

@@ -23,7 +23,6 @@ import stroom.widget.menu.client.presenter.IconMenuItem;
 import stroom.widget.menu.client.presenter.Item;
 import stroom.widget.menu.client.presenter.ShowMenuEvent;
 import stroom.widget.popup.client.presenter.PopupPosition;
-import stroom.widget.util.client.SafeHtmlUtil;
 
 import com.google.gwt.safehtml.shared.SafeHtml;
 import com.google.gwt.user.client.Command;
@@ -72,7 +71,7 @@ public class EditorMenuPresenter {
         return menuItems;
     }
 
-    private void addMenuItem(int position, final List<Item> menuItems, final Option option) {
+    private void addMenuItem(final int position, final List<Item> menuItems, final Option option) {
         if (option.isAvailable()) {
             menuItems.add(createItem(
                     option.getText(),
@@ -81,10 +80,10 @@ public class EditorMenuPresenter {
         }
     }
 
-    private void addMenuItem(int position, final List<Item> menuItems, final Action action) {
+    private void addMenuItem(final int position, final List<Item> menuItems, final Action action) {
         if (action.isAvailable()) {
             menuItems.add(createItem(
-                    SafeHtmlUtil.getSafeHtml(action.getText()),
+                    action.getText(),
                     action::execute,
                     position));
         }

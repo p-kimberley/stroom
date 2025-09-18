@@ -25,7 +25,7 @@ import stroom.dashboard.client.main.HasParams;
 import stroom.dashboard.shared.ComponentConfig;
 import stroom.dashboard.shared.ComponentSettings;
 import stroom.dashboard.shared.TextInputComponentSettings;
-import stroom.query.api.v2.Param;
+import stroom.query.api.Param;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -78,7 +78,7 @@ public class TextInputPresenter
     public void read(final ComponentConfig componentConfig) {
         super.read(componentConfig);
 
-        ComponentSettings settings = componentConfig.getSettings();
+        final ComponentSettings settings = componentConfig.getSettings();
         if (!(settings instanceof TextInputComponentSettings)) {
             setSettings(createSettings());
         }

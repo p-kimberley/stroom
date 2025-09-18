@@ -5,6 +5,8 @@ dependencies {
     implementation project(':stroom-core-shared')
     implementation project(':stroom-event-logging:stroom-event-logging-api')
     implementation project(':stroom-event-logging-rs:stroom-event-logging-rs-api')
+    implementation project(':stroom-query:stroom-query-api')
+    implementation project(':stroom-query:stroom-query-common')
     implementation project(':stroom-security:stroom-security-api')
     implementation project(':stroom-util-shared')
     implementation project(':stroom-util')
@@ -14,7 +16,6 @@ dependencies {
     implementation libs.guice
     implementation libs.jakarta.servlet.api
     implementation libs.jakarta.inject
-    implementation libs.jaxb.api
     implementation libs.restygwt
     implementation libs.slf4j.api
 }

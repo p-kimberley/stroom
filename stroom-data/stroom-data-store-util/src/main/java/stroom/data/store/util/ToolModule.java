@@ -24,15 +24,17 @@ import stroom.node.mock.MockNodeServiceModule;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.statistics.mock.MockInternalStatisticsModule;
 import stroom.task.mock.MockTaskModule;
-import stroom.util.db.ForceLegacyMigration;
 import stroom.util.entityevent.EntityEventBus;
 import stroom.util.io.DirProvidersModule;
 import stroom.util.io.PathConfig;
 import stroom.util.io.PathCreator;
 import stroom.util.io.SimplePathCreator;
 import stroom.util.io.StroomPathConfig;
+import stroom.util.metrics.Metrics;
+import stroom.util.metrics.MetricsImpl;
 import stroom.util.servlet.MockServletModule;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 
@@ -60,12 +62,9 @@ public class ToolModule extends AbstractModule {
         install(new stroom.meta.impl.db.MetaDaoModule());
         install(new stroom.meta.impl.db.MetaDbModule());
 
-        // Not using all the DB modules so just bind to an empty anonymous class
-        bind(ForceLegacyMigration.class).toInstance(new ForceLegacyMigration() {
-        });
-
         bind(PathCreator.class).to(SimplePathCreator.class);
         bind(PathConfig.class).to(StroomPathConfig.class);
+        bind(Metrics.class).toInstance(new MetricsImpl(new MetricRegistry()));
         install(new DirProvidersModule());
     }
 

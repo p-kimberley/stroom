@@ -6,6 +6,8 @@ import stroom.collection.mock.MockCollectionModule;
 import stroom.dictionary.mock.MockWordListProviderModule;
 import stroom.docrefinfo.mock.MockDocRefInfoModule;
 import stroom.explorer.api.ExplorerService;
+import stroom.security.api.AppPermissionService;
+import stroom.security.api.UserService;
 import stroom.security.impl.db.SecurityDaoModule;
 import stroom.security.impl.db.SecurityDbModule;
 import stroom.security.impl.event.PermissionChangeEventBus;
@@ -14,10 +16,10 @@ import stroom.security.mock.MockSecurityContextModule;
 import stroom.security.mock.MockUserIdentityFactoryModule;
 import stroom.storedquery.api.StoredQueryService;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.test.common.util.guice.GuiceTestUtil;
 import stroom.ui.config.shared.UserPreferencesService;
-import stroom.util.db.ForceLegacyMigration;
 import stroom.util.entityevent.EntityEventBus;
 
 import com.google.inject.AbstractModule;
@@ -30,6 +32,7 @@ public class TestModule extends AbstractModule {
     @Override
     protected void configure() {
         install(new DbTestModule());
+        install(new MockMetricsModule());
         install(new CacheModule());
         install(new SecurityDbModule());
         install(new SecurityDaoModule());
@@ -47,10 +50,6 @@ public class TestModule extends AbstractModule {
         bind(ExplorerService.class).toInstance(mock(ExplorerService.class));
         bind(EntityEventBus.class).toInstance(mock(EntityEventBus.class));
         bind(PermissionChangeEventBus.class).toInstance(mock(PermissionChangeEventBus.class));
-
-        // Not using all the DB modules so just bind to an empty anonymous class
-        bind(ForceLegacyMigration.class).toInstance(new ForceLegacyMigration() {
-        });
 
         final StoredQueryService storedQueryService = GuiceTestUtil.bindMock(binder(), StoredQueryService.class);
         Mockito.when(storedQueryService.deleteByOwner(Mockito.any())).thenReturn(0);

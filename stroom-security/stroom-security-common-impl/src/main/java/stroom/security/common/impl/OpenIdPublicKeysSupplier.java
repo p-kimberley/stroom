@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 @Singleton
 public class OpenIdPublicKeysSupplier implements Supplier<JsonWebKeySet> {
@@ -70,7 +69,7 @@ public class OpenIdPublicKeysSupplier implements Supplier<JsonWebKeySet> {
         try {
             final PublicJsonWebKey publicJsonWebKey = Factory.newPublicJwk(json);
             return new JsonWebKeySet(publicJsonWebKey);
-        } catch (JoseException e) {
+        } catch (final JoseException e) {
             LOGGER.error("Unable to create RsaJsonWebKey from hard coded json:\n{}", json, e);
             throw new RuntimeException(e);
         }
@@ -135,9 +134,9 @@ public class OpenIdPublicKeysSupplier implements Supplier<JsonWebKeySet> {
             LOGGER.debug(() -> LogUtil.message("Fetched the following keys for uri {}\n{}",
                     jwksUri, dumpJsonWebKeySet(jsonWebKeySet)));
             return new KeySetWrapper(jsonWebKeySet, expiryEpochMs);
-        } catch (JoseException e) {
+        } catch (final JoseException e) {
             LOGGER.error("Error building JsonWebKeySet from json: {}: {}", json, e.getMessage(), e);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException(LogUtil.message(
                     "Error fetching Open ID public keys from {}: {}", jwksUri, e.getMessage()), e);
         }
@@ -157,7 +156,7 @@ public class OpenIdPublicKeysSupplier implements Supplier<JsonWebKeySet> {
                                 JsonWebKey.ALGORITHM_PARAMETER,
                                 jsonWebKey.getAlgorithm());
                     })
-                    .collect(Collectors.toList());
+                    .toList();
             return LogUtil.toPaddedMultiLine("  ", lines);
         }
     }

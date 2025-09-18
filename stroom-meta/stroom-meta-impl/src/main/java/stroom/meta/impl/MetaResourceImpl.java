@@ -29,15 +29,15 @@ import stroom.meta.shared.SelectionSummary;
 import stroom.meta.shared.SelectionSummaryRequest;
 import stroom.meta.shared.Status;
 import stroom.meta.shared.UpdateStatusRequest;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.shared.DocumentPermission;
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Range;
 import stroom.util.shared.ResultPage;
 
@@ -73,7 +73,7 @@ class MetaResourceImpl implements MetaResource {
     private final Provider<StroomEventLoggingService> eventLoggingServiceProvider;
 
     @Inject
-    MetaResourceImpl(Provider<MetaService> metaServiceProvider,
+    MetaResourceImpl(final Provider<MetaService> metaServiceProvider,
                      final Provider<StroomEventLoggingService> eventLoggingServiceProvider) {
         this.metaServiceProvider = metaServiceProvider;
         this.eventLoggingServiceProvider = eventLoggingServiceProvider;
@@ -105,12 +105,12 @@ class MetaResourceImpl implements MetaResource {
         final List<Data> dataItems = new ArrayList<>();
 
         if (expression.getChildren().size() == 1
-                && expression.getChildren().getFirst() instanceof final ExpressionTerm term
-                && term.hasCondition(Condition.EQUALS)) {
+            && expression.getChildren().getFirst() instanceof final ExpressionTerm term
+            && term.hasCondition(Condition.EQUALS)) {
             final String metaIdStr = term.getValue();
 
             try {
-                long metaId = Long.parseLong(metaIdStr);
+                final long metaId = Long.parseLong(metaIdStr);
                 final Meta meta = metaServiceProvider.get().getMeta(metaId, true);
                 dataItems.add(Data.builder()
                         .withName("Feed")
@@ -121,7 +121,7 @@ class MetaResourceImpl implements MetaResource {
                         .withValue(meta.getTypeName())
                         .build());
                 currentStatus = meta.getStatus().getDisplayValue();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error(LogUtil.message("Error fetching meta for id '{}' for audit logging: {}",
                         metaIdStr, LogUtil.exceptionMessage(e), e));
             }
@@ -137,10 +137,10 @@ class MetaResourceImpl implements MetaResource {
             description = isDelete
                     ? "Delete stream with ID " + metaIdStr
                     : "Update the status of stream with ID " + metaIdStr
-                            + " from " + currentStatus + " to " + newStatus;
+                      + " from " + currentStatus + " to " + newStatus;
         } else if (expression.getChildren().size() == 1
-                && expression.getChildren().getFirst() instanceof final ExpressionTerm term
-                && term.hasCondition(Condition.IN)) {
+                   && expression.getChildren().getFirst() instanceof final ExpressionTerm term
+                   && term.hasCondition(Condition.IN)) {
             final String streamIdsStr = term.getValue();
             final String[] idArr = NullSafe.getOrElse(
                     streamIdsStr,
@@ -172,13 +172,13 @@ class MetaResourceImpl implements MetaResource {
 
         final EventAction eventAction;
         if (isDelete) {
-            DeleteEventAction.Builder<Void> deleteBuilder = DeleteEventAction.builder()
+            final DeleteEventAction.Builder<Void> deleteBuilder = DeleteEventAction.builder()
                     .addData(dataItems);
             NullSafe.firstNonNull(baseObjectBefore, baseObjectAfter)
                     .ifPresent(deleteBuilder::withObjects);
             eventAction = deleteBuilder.build();
         } else {
-            UpdateEventAction.Builder<Void> updateBuilder = UpdateEventAction.builder()
+            final UpdateEventAction.Builder<Void> updateBuilder = UpdateEventAction.builder()
                     .withAfter(MultiObject.builder()
                             .withObjects(baseObjectAfter)
                             .build())
@@ -244,7 +244,7 @@ class MetaResourceImpl implements MetaResource {
                         DateUtil::createNormalDateTimeString);
                 addData(dataItems, "MaxCreateTime", maxCreateTime);
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error(LogUtil.message("Error building selection summary for criteria {}: {}",
                     criteria, LogUtil.exceptionMessage(e), e));
         }

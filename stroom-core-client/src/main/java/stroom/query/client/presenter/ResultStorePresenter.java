@@ -17,13 +17,13 @@
 package stroom.query.client.presenter;
 
 import stroom.preferences.client.DateTimeFormatter;
-import stroom.query.api.v2.LifespanInfo;
-import stroom.query.api.v2.ResultStoreInfo;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchTaskProgress;
+import stroom.query.api.LifespanInfo;
+import stroom.query.api.ResultStoreInfo;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchTaskProgress;
 import stroom.query.client.presenter.ResultStorePresenter.ResultStoreView;
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserRef;
 import stroom.widget.popup.client.event.ShowPopupEvent;
 import stroom.widget.popup.client.presenter.PopupSize;
@@ -66,7 +66,7 @@ public class ResultStorePresenter extends MyPresenterWidget<ResultStoreView> {
                 tb
                         .row(TableCell.header("Store Details", 2))
                         .row("UUID", resultStoreInfo.getQueryKey().getUuid())
-                        .row("Owner", GwtNullSafe.get(resultStoreInfo.getOwner(), UserRef::toDisplayString))
+                        .row("Owner", NullSafe.get(resultStoreInfo.getOwner(), UserRef::toDisplayString))
                         .row("Creation Time", dateTimeFormatter.format(resultStoreInfo.getCreationTime()))
                         .row("Age", ModelStringUtil.formatDurationString(
                                 System.currentTimeMillis() - resultStoreInfo.getCreationTime()))

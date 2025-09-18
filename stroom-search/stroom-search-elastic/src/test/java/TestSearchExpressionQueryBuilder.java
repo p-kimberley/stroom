@@ -1,9 +1,9 @@
-import stroom.datasource.api.v2.FieldType;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FieldType;
 import stroom.query.common.v2.DateExpressionParser;
 import stroom.query.common.v2.MockIndexFieldCache;
 import stroom.search.elastic.search.SearchExpressionQueryBuilder;
@@ -53,7 +53,7 @@ public class TestSearchExpressionQueryBuilder {
         BoolQuery boolQuery = queryBuilder.bool();
         Assertions.assertEquals(1, boolQuery.must().size(), "Bool query contains exactly one item");
 
-        TermQuery termQuery = boolQuery.must().getFirst().term();
+        final TermQuery termQuery = boolQuery.must().getFirst().term();
         Assertions.assertEquals(answerField.getFldName(), termQuery.field(), "Field name is correct");
         Assertions.assertEquals(answerFieldValue, termQuery.value().longValue(), "Query value is correct");
 
@@ -83,7 +83,7 @@ public class TestSearchExpressionQueryBuilder {
         final long dateFieldValue = expectedDate.get().toInstant().toEpochMilli();
         Assertions.assertEquals(expectedParsedDateFieldValue, dateFieldValue, "Parsed date value is correct");
 
-        ExpressionOperator notOperator = ExpressionOperator.builder()
+        final ExpressionOperator notOperator = ExpressionOperator.builder()
                 .op(Op.NOT)
                 .addTerm(dateField.getFldName(), Condition.GREATER_THAN, nowStr)
                 .build();
@@ -93,11 +93,11 @@ public class TestSearchExpressionQueryBuilder {
 
         boolQuery = queryBuilder.bool();
         Assertions.assertEquals(2, boolQuery.must().size(), "Bool query contains exactly two items");
-        BoolQuery innerBoolQuery = boolQuery.must().get(1).bool();
+        final BoolQuery innerBoolQuery = boolQuery.must().get(1).bool();
         Assertions.assertEquals(1, innerBoolQuery.mustNot().size(),
                 "Inner bool query contains one item");
 
-        RangeQuery firstRangeQuery = innerBoolQuery.mustNot().getFirst().range();
+        final RangeQuery firstRangeQuery = innerBoolQuery.mustNot().getFirst().range();
         Assertions.assertEquals(dateField.getFldName(), firstRangeQuery.field(),
                 "Field name of first range query is correct");
     }

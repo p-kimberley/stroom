@@ -18,8 +18,8 @@ package stroom.analytics.shared;
 
 import stroom.docref.DocRef;
 import stroom.docstore.shared.Doc;
-import stroom.query.api.v2.Param;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.Param;
+import stroom.query.api.TimeRange;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -101,7 +101,7 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
                                    @JsonProperty("parameters") final List<Param> parameters,
                                    @JsonProperty("timeRange") final TimeRange timeRange,
                                    @JsonProperty("query") final String query,
-                                   @JsonProperty("analyticProcessType") AnalyticProcessType analyticProcessType,
+                                   @JsonProperty("analyticProcessType") final AnalyticProcessType analyticProcessType,
                                    @JsonProperty("analyticProcessConfig") final AnalyticProcessConfig analyticProcessConfig,
                                    @Deprecated @JsonProperty("analyticNotificationConfig") final NotificationConfig analyticNotificationConfig,
                                    @JsonProperty("notifications") final List<NotificationConfig> notifications,

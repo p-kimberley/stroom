@@ -30,11 +30,11 @@ import stroom.meta.mock.MockMetaService;
 import stroom.meta.shared.Meta;
 import stroom.security.mock.MockSecurityContext;
 import stroom.test.common.util.test.StroomUnitTest;
-import stroom.util.NullSafe;
 import stroom.util.cache.CacheConfig;
 import stroom.util.date.DateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 import stroom.util.sysinfo.SystemInfoResult;
 import stroom.util.time.StroomDuration;
 
@@ -96,7 +96,7 @@ class TestEffectiveStreamCache extends StroomUnitTest {
             }
         };
 
-        try (CacheManager cacheManager = new CacheManagerImpl()) {
+        try (final CacheManager cacheManager = new CacheManagerImpl()) {
             final EffectiveStreamCache effectiveStreamCache = new EffectiveStreamCache(cacheManager,
                     metaService,
                     new EffectiveStreamInternPool(),
@@ -139,7 +139,7 @@ class TestEffectiveStreamCache extends StroomUnitTest {
 
         final InnerStreamMetaService mockStore = new InnerStreamMetaService();
 
-        try (CacheManager cacheManager = new CacheManagerImpl()) {
+        try (final CacheManager cacheManager = new CacheManagerImpl()) {
             final ReferenceDataConfig referenceDataConfig = new ReferenceDataConfig()
                     .withEffectiveStreamCache(CacheConfig.builder()
                             .maximumSize(1000L)
@@ -156,9 +156,9 @@ class TestEffectiveStreamCache extends StroomUnitTest {
             assertThat(effectiveStreamCache.size()).as("No pooled times yet").isEqualTo(0);
             assertThat(mockStore.getCallCount()).as("No calls to the database yet").isEqualTo(0);
 
-            long time = DateUtil.parseNormalDateTimeString("2010-01-01T12:00:00.000Z");
-            long fromMs = getFromMs(time);
-            long toMs = getToMs(fromMs);
+            final long time = DateUtil.parseNormalDateTimeString("2010-01-01T12:00:00.000Z");
+            final long fromMs = getFromMs(time);
+            final long toMs = getToMs(fromMs);
             EffectiveMetaSet streams;
 
             // Make sure we've got no effective streams.
@@ -225,7 +225,7 @@ class TestEffectiveStreamCache extends StroomUnitTest {
         Mockito.when(mockMetaService.findEffectiveData(Mockito.any()))
                 .thenReturn(effectiveMetaSet);
 
-        try (CacheManager cacheManager = new CacheManagerImpl()) {
+        try (final CacheManager cacheManager = new CacheManagerImpl()) {
             final EffectiveStreamCache effectiveStreamCache = new EffectiveStreamCache(
                     cacheManager,
                     mockMetaService,
@@ -256,7 +256,7 @@ class TestEffectiveStreamCache extends StroomUnitTest {
     void testSystemInfo() throws JsonProcessingException {
         final MetaService mockMetaService = Mockito.mock(MetaService.class);
 
-        try (CacheManager cacheManager = new CacheManagerImpl()) {
+        try (final CacheManager cacheManager = new CacheManagerImpl()) {
             final EffectiveStreamCache effectiveStreamCache = new EffectiveStreamCache(cacheManager,
                     mockMetaService,
                     new EffectiveStreamInternPool(),
@@ -284,7 +284,7 @@ class TestEffectiveStreamCache extends StroomUnitTest {
                     .isEqualTo(3);
 
             final SystemInfoResult systemInfo = effectiveStreamCache.getSystemInfo();
-            ObjectMapper objectMapper = new ObjectMapper();
+            final ObjectMapper objectMapper = new ObjectMapper();
             final String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(systemInfo);
             LOGGER.debug("systemInfo:\n{}", json);
         }
@@ -332,12 +332,12 @@ class TestEffectiveStreamCache extends StroomUnitTest {
                                     stream.getEffectiveMs(),
                                     effMs ->
                                             effMs >= criteria.getEffectivePeriod().getFromMs()
-                                                    && effMs <= criteria.getEffectivePeriod().getToMs()))
+                                            && effMs <= criteria.getEffectivePeriod().getToMs()))
                     .map(EffectiveMeta::new)
                     .collect(EffectiveMetaSet.collector(criteria.getFeed(), criteria.getType()));
         }
 
-        void addEffectiveStream(final String feedName, long effectiveTimeMs) {
+        void addEffectiveStream(final String feedName, final long effectiveTimeMs) {
             final Meta meta = create(
                     MetaProperties.builder()
                             .feedName(feedName)

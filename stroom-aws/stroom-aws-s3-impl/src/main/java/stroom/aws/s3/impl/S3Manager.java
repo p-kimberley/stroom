@@ -11,10 +11,10 @@ import stroom.aws.s3.shared.AwsTag;
 import stroom.aws.s3.shared.S3ClientConfig;
 import stroom.meta.api.AttributeMap;
 import stroom.meta.shared.Meta;
-import stroom.util.NullSafe;
 import stroom.util.io.PathCreator;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import software.amazon.awssdk.auth.credentials.AnonymousCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -302,7 +302,7 @@ public class S3Manager {
 
         if (awsCredentials != null) {
             switch (awsCredentials) {
-                case stroom.aws.s3.shared.AwsAnonymousCredentials awsAnonymousCredentials -> {
+                case final stroom.aws.s3.shared.AwsAnonymousCredentials awsAnonymousCredentials -> {
                     LOGGER.debug("Using AWS anonymous credentials");
                     return AnonymousCredentialsProvider.create();
                 }
@@ -313,11 +313,11 @@ public class S3Manager {
                     return StaticCredentialsProvider.create(credentials);
 
                 }
-                case stroom.aws.s3.shared.AwsDefaultCredentials awsDefaultCredentials -> {
+                case final stroom.aws.s3.shared.AwsDefaultCredentials awsDefaultCredentials -> {
                     LOGGER.debug("Using AWS default credentials");
                     return DefaultCredentialsProvider.create();
                 }
-                case stroom.aws.s3.shared.AwsEnvironmentVariableCredentials awsEnvironmentVariableCredentials -> {
+                case final stroom.aws.s3.shared.AwsEnvironmentVariableCredentials awsEnvironmentVariableCredentials -> {
                     LOGGER.debug("Using AWS environment variable credentials");
                     return EnvironmentVariableCredentialsProvider.create();
                 }
@@ -347,7 +347,7 @@ public class S3Manager {
                     return StaticCredentialsProvider.create(credentials);
 
                 }
-                case stroom.aws.s3.shared.AwsSystemPropertyCredentials awsSystemPropertyCredentials -> {
+                case final stroom.aws.s3.shared.AwsSystemPropertyCredentials awsSystemPropertyCredentials -> {
                     LOGGER.debug("Using AWS system property credentials");
                     return SystemPropertyCredentialsProvider.create();
                 }
@@ -477,9 +477,9 @@ public class S3Manager {
 
                         final CompletedFileUpload uploadResult = fileUpload.completionFuture().join();
                         LOGGER.debug(() -> "Upload result: " +
-                                getDebugIdentity(bucketName, key) +
-                                ", result=" +
-                                uploadResult);
+                                           getDebugIdentity(bucketName, key) +
+                                           ", result=" +
+                                           uploadResult);
                         response = uploadResult.response();
                     }
 
@@ -552,9 +552,9 @@ public class S3Manager {
 
                         final CompletedFileDownload downloadResult = downloadFile.completionFuture().join();
                         LOGGER.debug(() -> "Download result: " +
-                                getDebugIdentity(bucketName, key) +
-                                ", result=" +
-                                downloadResult);
+                                           getDebugIdentity(bucketName, key) +
+                                           ", result=" +
+                                           downloadResult);
                         response = downloadResult.response();
                     }
 
@@ -661,7 +661,7 @@ public class S3Manager {
     }
 
     private String getIdPath(final String id) {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < id.length() - PAD_SIZE; i += PAD_SIZE) {
             final String part = id.substring(i, i + PAD_SIZE);
             if (!sb.isEmpty()) {
@@ -710,9 +710,9 @@ public class S3Manager {
                        final String key,
                        final Exception e) {
         LOGGER.debug(() -> message +
-                getDebugIdentity(bucketName, key) +
-                ", message=" +
-                e.getMessage(), e);
+                           getDebugIdentity(bucketName, key) +
+                           ", message=" +
+                           e.getMessage(), e);
     }
 
     private void error(final String message,
@@ -720,15 +720,15 @@ public class S3Manager {
                        final String key,
                        final Exception e) {
         LOGGER.error(() -> message +
-                getDebugIdentity(bucketName, key) +
-                ", message=" +
-                e.getMessage(), e);
+                           getDebugIdentity(bucketName, key) +
+                           ", message=" +
+                           e.getMessage(), e);
     }
 
     private String getDebugIdentity(final String bucketName,
                                     final String key) {
         return "bucketName=" +
-                bucketName +
-                Optional.ofNullable(key).map(k -> ", key=" + k).orElse("");
+               bucketName +
+               Optional.ofNullable(key).map(k -> ", key=" + k).orElse("");
     }
 }

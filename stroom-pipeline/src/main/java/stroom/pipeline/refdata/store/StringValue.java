@@ -18,8 +18,8 @@
 package stroom.pipeline.refdata.store;
 
 import stroom.pipeline.refdata.store.offheapstore.serdes.StringValueSerde;
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
@@ -49,7 +49,7 @@ public class StringValue implements RefDataValue {
         this.valueHash = stagingValue.getValueHashCode();
     }
 
-    public static StringValue of(String value) {
+    public static StringValue of(final String value) {
         return new StringValue(value);
     }
 
@@ -98,7 +98,7 @@ public class StringValue implements RefDataValue {
     @Override
     public String toString() {
         return "StringValue{" +
-                "value='" + value + '\'' +
-                '}';
+               "value='" + value + '\'' +
+               '}';
     }
 }

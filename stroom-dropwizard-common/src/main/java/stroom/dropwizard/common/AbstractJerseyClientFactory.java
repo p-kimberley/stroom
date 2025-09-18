@@ -1,6 +1,5 @@
 package stroom.dropwizard.common;
 
-import stroom.util.NullSafe;
 import stroom.util.config.PropertyUtil;
 import stroom.util.config.PropertyUtil.Prop;
 import stroom.util.io.PathCreator;
@@ -13,6 +12,7 @@ import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.BuildInfo;
+import stroom.util.shared.NullSafe;
 
 import io.dropwizard.client.JerseyClientBuilder;
 import io.dropwizard.client.JerseyClientConfiguration;
@@ -82,7 +82,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                             modifyConfig(jerseyClientName, jerseyClientConfig);
 
                             configMap.put(jerseyClientName, jerseyClientConfig);
-                        } catch (IllegalArgumentException e) {
+                        } catch (final IllegalArgumentException e) {
                             throw new RuntimeException(LogUtil.message(
                                     "Unknown jerseyClient name '{}' in configuration. Expecting one of {}",
                                     name.toUpperCase(), JerseyClientName.values()), e);
@@ -96,7 +96,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
         Arrays.stream(JerseyClientName.values())
                 .forEach(jerseyClientName -> {
                     if (!configMap.containsKey(jerseyClientName)
-                            && CONFIG_DEFAULTS_MAP.containsKey(jerseyClientName)) {
+                        && CONFIG_DEFAULTS_MAP.containsKey(jerseyClientName)) {
 
                         final JerseyClientConfiguration defaultConfig = CONFIG_DEFAULTS_MAP.get(
                                 jerseyClientName);
@@ -202,7 +202,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
         Objects.requireNonNull(jerseyClientName);
         Objects.requireNonNull(jerseyClientConfiguration);
         final String dropWizardName = getJerseyClientNamePrefix().toLowerCase()
-                + jerseyClientName.name().toLowerCase();
+                                      + jerseyClientName.name().toLowerCase();
 
         final String userAgent = jerseyClientConfiguration.getUserAgent()
                 .orElse(null);
@@ -214,7 +214,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                     .using(jerseyClientConfiguration)
                     .build(dropWizardName)
                     .register(DefaultLoggingFilter.createWithDefaults());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException(LogUtil.message("Error building jersey client for '{}': {}",
                     jerseyClientName, e.getMessage()), e);
         }
@@ -260,15 +260,15 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                 // Our hard coded sensible default (may be same as above)
                 final Object stroomDefaultValue = getPropValue(prop, stroomDefaultConfig);
                 // Value from yaml
-                Object actualValue = getPropValue(prop, actualConfig);
+                final Object actualValue = getPropValue(prop, actualConfig);
                 LOGGER.debug("Prop: {}.{}\nVanilla: {}\nStroom Default: {}\nActual: {}",
                         prefix, propName, vanillaValue, stroomDefaultValue, actualValue);
 
                 if (propName.equals(TLS_PROP_NAME)
-                        && (stroomDefaultValue != null || actualValue != null)) {
+                    && (stroomDefaultValue != null || actualValue != null)) {
                     if (vanillaValue != null) {
                         throw new RuntimeException("Expecting vanilla config to be null. " +
-                                "Have DropWizard changed their default config");
+                                                   "Have DropWizard changed their default config");
                     }
                     final Object mergedValue;
                     if (stroomDefaultValue != null && actualValue == null) {
@@ -283,10 +283,10 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                     }
                     prop.setValueOnConfigObject(actualConfig, mergedValue);
                 } else if (propName.equals(PROXY_PROP_NAME)
-                        && (stroomDefaultValue != null || actualValue != null)) {
+                           && (stroomDefaultValue != null || actualValue != null)) {
                     if (vanillaValue != null) {
                         throw new RuntimeException("Expecting vanilla config to be null. " +
-                                "Have DropWizard changed their default config");
+                                                   "Have DropWizard changed their default config");
                     }
                     final Object mergedValue;
                     if (stroomDefaultValue != null && actualValue == null) {
@@ -301,7 +301,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                     prop.setValueOnConfigObject(actualConfig, mergedValue);
                 } else {
                     if (Objects.equals(vanillaValue, actualValue)
-                            && !Objects.equals(vanillaValue, stroomDefaultValue)) {
+                        && !Objects.equals(vanillaValue, stroomDefaultValue)) {
                         // yaml value is same as DW default but stroom has a different default
                         // so apply that
                         LOGGER.debug(() ->
@@ -326,7 +326,7 @@ public abstract class AbstractJerseyClientFactory implements JerseyClientFactory
                 .filter(str -> !str.isBlank())
                 .orElseGet(() -> {
                     final String userAgent2 = getJerseyClientUserAgentPrefix().toLowerCase()
-                            + buildInfoProvider.get().getBuildVersion();
+                                              + buildInfoProvider.get().getBuildVersion();
                     LOGGER.debug("Setting jersey client user agent string to [{}]", userAgent2);
                     jerseyClientConfiguration.setUserAgent(Optional.of(userAgent2));
                     return userAgent2;

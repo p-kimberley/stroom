@@ -9,6 +9,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
 
+/**
+ * @deprecated Use instead {@link GetFeedStatusRequestV2}
+ */
+@Deprecated
 @JsonInclude(Include.NON_NULL)
 public class GetFeedStatusRequest extends RemoteRequest {
 
@@ -60,7 +64,7 @@ public class GetFeedStatusRequest extends RemoteRequest {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
+        final StringBuilder builder = new StringBuilder();
         builder.append("feed status request - feed: '");
         builder.append(feedName);
         builder.append("'");

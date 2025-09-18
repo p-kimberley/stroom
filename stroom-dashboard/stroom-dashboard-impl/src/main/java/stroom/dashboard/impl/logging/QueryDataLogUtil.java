@@ -20,10 +20,10 @@ package stroom.dashboard.impl.logging;
 import stroom.collection.api.CollectionService;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
 
 import event.logging.AdvancedQueryItem;
 import event.logging.AdvancedQueryOperator;
@@ -144,7 +144,7 @@ public class QueryDataLogUtil {
                                        final WordListProvider wordListProvider,
                                        final CollectionService collectionService,
                                        final ExpressionOperator exp) {
-        AdvancedQueryOperator operator;
+        final AdvancedQueryOperator operator;
         if (exp.op() == Op.NOT) {
             operator = new Not();
         } else if (exp.op() == Op.OR) {

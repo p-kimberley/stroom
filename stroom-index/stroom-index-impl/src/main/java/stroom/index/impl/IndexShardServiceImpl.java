@@ -16,20 +16,21 @@
 
 package stroom.index.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.index.shared.FindIndexShardCriteria;
 import stroom.index.shared.IndexShard;
 import stroom.index.shared.IndexShardFields;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ValuesConsumer;
 import stroom.searchable.api.Searchable;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import jakarta.inject.Inject;
@@ -43,12 +44,15 @@ public class IndexShardServiceImpl implements IndexShardService, Searchable {
 
     private final SecurityContext securityContext;
     private final IndexShardDao indexShardDao;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     IndexShardServiceImpl(final SecurityContext securityContext,
-                          final IndexShardDao indexShardDao) {
+                          final IndexShardDao indexShardDao,
+                          final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.securityContext = securityContext;
         this.indexShardDao = indexShardDao;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
@@ -72,7 +76,7 @@ public class IndexShardServiceImpl implements IndexShardService, Searchable {
         if (!IndexShardFields.INDEX_SHARDS_PSEUDO_DOC_REF.equals(criteria.getDataSourceRef())) {
             return ResultPage.empty();
         }
-        return FieldInfoResultPageBuilder.builder(criteria).addAll(getFields()).build();
+        return fieldInfoResultPageFactory.create(criteria, getFields());
     }
 
     private List<QueryField> getFields() {
@@ -87,6 +91,7 @@ public class IndexShardServiceImpl implements IndexShardService, Searchable {
     @Override
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
+                       final DateTimeSettings dateTimeSettings,
                        final ValuesConsumer consumer) {
         securityContext.secure(AppPermission.MANAGE_INDEX_SHARDS_PERMISSION, () ->
                 indexShardDao.search(criteria, fieldIndex, consumer));

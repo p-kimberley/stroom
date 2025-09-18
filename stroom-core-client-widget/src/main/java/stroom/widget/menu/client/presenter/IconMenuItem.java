@@ -19,7 +19,7 @@ package stroom.widget.menu.client.presenter;
 import stroom.svg.client.IconColour;
 import stroom.svg.client.Preset;
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.KeyBinding.Action;
 
 import com.google.gwt.safehtml.shared.SafeHtml;
@@ -74,7 +74,7 @@ public class IconMenuItem extends MenuItem {
         protected boolean highlight;
 
         public B icon(final Preset svgPreset) {
-            this.enabledIcon = GwtNullSafe.get(svgPreset, Preset::getSvgImage);
+            this.enabledIcon = NullSafe.get(svgPreset, Preset::getSvgImage);
             return self();
         }
 
@@ -84,7 +84,7 @@ public class IconMenuItem extends MenuItem {
         }
 
         public B disabledIcon(final Preset svgPreset) {
-            this.disabledIcon = GwtNullSafe.get(svgPreset, Preset::getSvgImage);
+            this.disabledIcon = NullSafe.get(svgPreset, Preset::getSvgImage);
             return self();
         }
 

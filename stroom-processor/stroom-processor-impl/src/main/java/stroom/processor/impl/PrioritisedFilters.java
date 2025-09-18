@@ -5,16 +5,16 @@ import stroom.processor.api.ProcessorFilterService;
 import stroom.processor.shared.ProcessorFields;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.ProcessorFilterFields;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.AsyncReference;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.Clearable;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -74,11 +74,11 @@ public class PrioritisedFilters implements Clearable {
             filters.sort(ProcessorFilter.HIGHEST_PRIORITY_FIRST_COMPARATOR);
 
             // Try and ensure we have pipeline names for each filter
-            for (ProcessorFilter filter : NullSafe.list(filters)) {
+            for (final ProcessorFilter filter : NullSafe.list(filters)) {
                 try {
                     if (filter != null
-                            && filter.getPipelineUuid() != null
-                            && NullSafe.isEmptyString(filter.getPipelineName())) {
+                        && filter.getPipelineUuid() != null
+                        && NullSafe.isEmptyString(filter.getPipelineName())) {
                         final Optional<String> pipelineName = processorFilterService
                                 .getPipelineName(filter.getProcessorType(), filter.getPipelineUuid());
                         pipelineName.ifPresent(newPipeName -> {

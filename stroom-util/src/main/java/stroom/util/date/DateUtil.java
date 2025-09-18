@@ -16,10 +16,10 @@
 
 package stroom.util.date;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -170,7 +170,7 @@ public final class DateUtil {
             // Our format requires a zone offset, e.g. 'Z', '+02', '+00:00', '-02:00', etc.
             final ZonedDateTime zonedDateTime = ZonedDateTime.parse(date, DEFAULT_ISO_PARSER);
             return zonedDateTime.toInstant();
-        } catch (DateTimeParseException e) {
+        } catch (final DateTimeParseException e) {
             throw new IllegalArgumentException("Unable to parse date: \"" + date + "\": " + e.getMessage(), e);
         }
     }
@@ -232,7 +232,7 @@ public final class DateUtil {
                     zonedDateTime = ZonedDateTime.parse(date, DEFAULT_ISO_PARSER);
                 }
                 return NORMAL_STROOM_TIME_FORMATTER.format(zonedDateTime);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.debug("Unable to parse date: \"" + date + "\": " + LogUtil.exceptionMessage(e), e);
                 if (ignoreErrors) {
                     return date;
@@ -247,7 +247,7 @@ public final class DateUtil {
     private static long parseDateAsMillisSinceEpoch(final String dateStr) {
         try {
             return Long.parseLong(dateStr);
-        } catch (NumberFormatException e) {
+        } catch (final NumberFormatException e) {
             throw new IllegalArgumentException(LogUtil.message(
                     "Unable to parse date '{}' as numeric milliseconds since epoch: {}",
                     dateStr,
@@ -259,10 +259,10 @@ public final class DateUtil {
         // Can't check the length as Instant.parse() accepts strings with variable numbers
         // of mills
         return date != null
-                && (date.charAt(date.length() - 1) == 'Z'
-                || date.contains("-")
-                || date.contains(":")
-                || date.contains("+"));
+               && (date.charAt(date.length() - 1) == 'Z'
+                   || date.contains("-")
+                   || date.contains(":")
+                   || date.contains("+"));
     }
 
     public static Instant roundDown(final Instant instant, final Duration duration) {

@@ -16,25 +16,24 @@
 
 package stroom.planb.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.IndexField;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.index.shared.IndexFieldImpl;
 import stroom.planb.impl.data.ShardManager;
-import stroom.planb.impl.db.StateFieldUtil;
 import stroom.planb.shared.PlanBDoc;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchTaskProgress;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.Query;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchTaskProgress;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
 import stroom.query.common.v2.ExpressionPredicateFactory;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.IndexFieldProvider;
 import stroom.query.common.v2.ResultStore;
 import stroom.query.common.v2.ResultStoreFactory;
@@ -44,10 +43,10 @@ import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.TaskProgress;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import jakarta.inject.Inject;
@@ -78,6 +77,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
     private final ShardManager shardManager;
     private final ExpressionPredicateFactory expressionPredicateFactory;
     private final SecurityContext securityContext;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public StateSearchProvider(final Executor executor,
@@ -89,7 +89,8 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
                                final TaskContextFactory taskContextFactory,
                                final ShardManager shardManager,
                                final ExpressionPredicateFactory expressionPredicateFactory,
-                               final SecurityContext securityContext) {
+                               final SecurityContext securityContext,
+                               final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.executor = executor;
         this.stateDocStore = stateDocStore;
         this.stateDocCache = stateDocCache;
@@ -100,6 +101,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
         this.shardManager = shardManager;
         this.expressionPredicateFactory = expressionPredicateFactory;
         this.securityContext = securityContext;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     private PlanBDoc getPlanBDoc(final DocRef docRef) {
@@ -125,17 +127,14 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
     @Override
     public Optional<QueryField> getTimeField(final DocRef docRef) {
         final PlanBDoc doc = getPlanBDoc(docRef);
-        return Optional.ofNullable(StateFieldUtil.getTimeField(doc.getStateType()));
+        return Optional.ofNullable(StateFieldUtil.getTimeField(doc));
     }
 
     @Override
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
         final PlanBDoc doc = getPlanBDoc(criteria.getDataSourceRef());
-        final List<QueryField> fields = StateFieldUtil.getQueryableFields(doc.getStateType());
-        return FieldInfoResultPageBuilder
-                .builder(criteria)
-                .addAll(fields)
-                .build();
+        final List<QueryField> fields = StateFieldUtil.getQueryableFields(doc);
+        return fieldInfoResultPageFactory.create(criteria, fields);
     }
 
     @Override
@@ -143,7 +142,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
         final PlanBDoc doc = getPlanBDoc(docRef);
         return NullSafe.getOrElse(
                 doc,
-                d -> StateFieldUtil.getQueryableFields(doc.getStateType()),
+                d -> StateFieldUtil.getQueryableFields(doc),
                 List::size,
                 0);
     }
@@ -151,7 +150,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
     @Override
     public IndexField getIndexField(final DocRef docRef, final String fieldName) {
         final PlanBDoc doc = getPlanBDoc(docRef);
-        final Map<String, QueryField> fieldMap = StateFieldUtil.getFieldMap(doc.getStateType());
+        final Map<String, QueryField> fieldMap = StateFieldUtil.getFieldMap(doc);
         final QueryField queryField = fieldMap.get(fieldName);
         if (queryField == null) {
             return null;

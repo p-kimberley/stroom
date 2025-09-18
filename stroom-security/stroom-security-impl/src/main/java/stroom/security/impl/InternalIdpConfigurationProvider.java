@@ -81,7 +81,7 @@ public class InternalIdpConfigurationProvider implements IdpConfigurationProvide
 
     private boolean isNewResponseRequired(final String configurationEndpoint) {
         return openIdConfigurationResp == null
-                || !Objects.equals(lastConfigurationEndpoint, configurationEndpoint);
+               || !Objects.equals(lastConfigurationEndpoint, configurationEndpoint);
     }
 
     @Override
@@ -125,8 +125,13 @@ public class InternalIdpConfigurationProvider implements IdpConfigurationProvide
     }
 
     @Override
-    public boolean isValidateAudience() {
-        return localOpenIdConfigProvider.get().isValidateAudience();
+    public Set<String> getAllowedAudiences() {
+        return localOpenIdConfigProvider.get().getAllowedAudiences();
+    }
+
+    @Override
+    public boolean isAudienceClaimRequired() {
+        return localOpenIdConfigProvider.get().isAudienceClaimRequired();
     }
 
     @Override
@@ -145,6 +150,11 @@ public class InternalIdpConfigurationProvider implements IdpConfigurationProvide
     }
 
     @Override
+    public String getFullNameClaimTemplate() {
+        return localOpenIdConfigProvider.get().getFullNameClaimTemplate();
+    }
+
+    @Override
     public String getLogoutRedirectParamName() {
         return localOpenIdConfigProvider.get().getLogoutRedirectParamName();
     }
@@ -152,5 +162,10 @@ public class InternalIdpConfigurationProvider implements IdpConfigurationProvide
     @Override
     public Set<String> getExpectedSignerPrefixes() {
         return localOpenIdConfigProvider.get().getExpectedSignerPrefixes();
+    }
+
+    @Override
+    public String getPublicKeyUriPattern() {
+        return localOpenIdConfigProvider.get().getPublicKeyUriPattern();
     }
 }

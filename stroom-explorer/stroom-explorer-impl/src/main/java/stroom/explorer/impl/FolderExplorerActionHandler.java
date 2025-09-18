@@ -8,7 +8,7 @@ import stroom.explorer.api.ExplorerActionHandler;
 import stroom.explorer.shared.ExplorerConstants;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermission;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 
 import jakarta.inject.Inject;
@@ -164,7 +164,7 @@ class FolderExplorerActionHandler implements ExplorerActionHandler {
         return explorerTreeDao.findByNames(names, allowWildCards)
                 .stream()
                 .map(ExplorerTreeNode::getDocRef)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

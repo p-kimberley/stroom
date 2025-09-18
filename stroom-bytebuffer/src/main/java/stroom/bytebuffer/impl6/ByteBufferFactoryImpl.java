@@ -5,7 +5,7 @@ import stroom.bytebuffer.ByteBufferSupport;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ArrayBlockingQueue;
 
-public class ByteBufferFactoryImpl extends ByteBufferFactory {
+public class ByteBufferFactoryImpl implements ByteBufferFactory {
 
     private static final double LOG2 = Math.log(2);
     static final int MAX_CACHED_BUFFER_SIZE = 1024;
@@ -30,7 +30,7 @@ public class ByteBufferFactoryImpl extends ByteBufferFactory {
         if (size <= MAX_CACHED_BUFFER_SIZE) {
             final int exponent = getExponent(size);
             final Pool pool = pools[exponent];
-            ByteBuffer byteBuffer = pool.poll();
+            final ByteBuffer byteBuffer = pool.poll();
             if (byteBuffer != null) {
                 if (byteBuffer.capacity() >= size) {
                     byteBuffer.clear();
@@ -41,10 +41,10 @@ public class ByteBufferFactoryImpl extends ByteBufferFactory {
             }
 
             final int roundedSize = pow2(exponent);
-            return super.acquire(roundedSize);
+            return ByteBuffer.allocateDirect(roundedSize);
         }
 
-        return super.acquire(size);
+        return ByteBuffer.allocateDirect(size);
     }
 
     @Override
@@ -66,7 +66,7 @@ public class ByteBufferFactoryImpl extends ByteBufferFactory {
         return Math.max(minExponent, getMinExponent(size));
     }
 
-    private static int getMinExponent(int n) {
+    private static int getMinExponent(final int n) {
         return (int) Math.ceil(log2(n));
     }
 
@@ -74,7 +74,7 @@ public class ByteBufferFactoryImpl extends ByteBufferFactory {
         return (int) Math.pow(2, exponent);
     }
 
-    private static double log2(int n) {
+    private static double log2(final int n) {
         return Math.log(n) / LOG2;
     }
 

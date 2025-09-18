@@ -17,7 +17,6 @@
 package stroom.query.language.functions;
 
 import stroom.query.language.functions.ref.StoredValues;
-import stroom.query.language.token.Param;
 
 import java.text.ParseException;
 import java.util.function.Supplier;
@@ -61,7 +60,7 @@ class If extends AbstractManyChildFunction {
 
         // See if this is a static computation.
         simple = true;
-        for (Param param : params) {
+        for (final Param param : params) {
             if (!(param instanceof Val)) {
                 simple = false;
                 break;

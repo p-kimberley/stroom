@@ -24,7 +24,6 @@ import stroom.analytics.shared.ExecutionScheduleRequest;
 import stroom.analytics.shared.ExecutionTracker;
 import stroom.analytics.shared.ScheduleBounds;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch;
 import stroom.docrefinfo.api.DocRefInfoService;
 import stroom.node.api.NodeInfo;
 import stroom.security.api.SecurityContext;
@@ -33,7 +32,6 @@ import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.concurrent.WorkQueue;
 import stroom.util.date.DateUtil;
@@ -44,6 +42,7 @@ import stroom.util.logging.LogUtil;
 import stroom.util.scheduler.Trigger;
 import stroom.util.scheduler.TriggerFactory;
 import stroom.util.shared.HasUserDependencies;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserDependency;
@@ -156,16 +155,20 @@ abstract class AbstractScheduledQueryExecutor<T extends AbstractAnalyticRuleDoc>
 
     private void execRule(final T doc,
                           final TaskContext parentTaskContext) {
-        // Load schedules for the rule.
         final DocRef docRef = doc.asDocRef();
-        final ExecutionScheduleRequest request = ExecutionScheduleRequest
-                .builder()
-                .ownerDocRef(docRef)
-                .enabled(true)
-                .nodeName(StringMatch.equals(nodeInfo.getThisNodeName(), true))
-                .build();
 
-        final ResultPage<ExecutionSchedule> executionSchedules = executionScheduleDao.fetchExecutionSchedule(request);
+        // Load schedules for the rule. Do this as the processing user as permission is required to load associated
+        // users.
+        final ResultPage<ExecutionSchedule> executionSchedules = securityContext.asProcessingUserResult(() -> {
+            final ExecutionScheduleRequest request = ExecutionScheduleRequest
+                    .builder()
+                    .ownerDocRef(docRef)
+                    .enabled(true)
+                    .nodeName(nodeInfo.getThisNodeName())
+                    .build();
+            return executionScheduleDao.fetchExecutionSchedule(request);
+        });
+
         final WorkQueue workQueue = new WorkQueue(executorProvider.get(), 1, 1);
         for (final ExecutionSchedule executionSchedule : executionSchedules.getValues()) {
             final Runnable runnable = () -> {

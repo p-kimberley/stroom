@@ -1,9 +1,9 @@
 package stroom.db.util;
 
 import stroom.config.common.AbstractDbConfig;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import com.google.inject.Injector;
 import com.zaxxer.hikari.HikariDataSource;
@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 
@@ -71,7 +70,7 @@ public abstract class AbstractFlyWayDbModule<T_CONFIG extends AbstractDbConfig, 
                         NullSafe.list(locations1).stream(),
                         NullSafe.list(locations2).stream())
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
@@ -84,6 +83,6 @@ public abstract class AbstractFlyWayDbModule<T_CONFIG extends AbstractDbConfig, 
                         NullSafe.list(locations1).stream(),
                         Stream.of(location2))
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
     }
 }

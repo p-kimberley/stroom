@@ -2,7 +2,7 @@ package stroom.app.guice;
 
 import stroom.app.db.migration.CrossModuleDbConnProvider;
 import stroom.app.db.migration.CrossModuleDbMigrationsModule;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.inject.AbstractModule;
 import jakarta.inject.Inject;
@@ -28,8 +28,6 @@ public class DbConnectionsModule extends AbstractModule {
         install(new stroom.explorer.impl.db.ExplorerDbModule());
         install(new stroom.index.impl.db.IndexDbModule());
         install(new stroom.job.impl.db.JobDbModule());
-        //noinspection deprecation
-        install(new stroom.legacy.db.LegacyDbModule());
         install(new stroom.meta.impl.db.MetaDbModule());
         install(new stroom.node.impl.db.NodeDbModule());
         install(new stroom.processor.impl.db.ProcessorDbModule());

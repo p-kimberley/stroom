@@ -18,6 +18,7 @@ package stroom.importexport.impl;
 
 import stroom.docref.DocRef;
 import stroom.importexport.api.ExportSummary;
+import stroom.importexport.api.ImportExportSerializer;
 import stroom.importexport.shared.ImportSettings;
 import stroom.importexport.shared.ImportState;
 import stroom.util.io.FileUtil;
@@ -105,7 +106,7 @@ public class ImportExportServiceImpl implements ImportExportService {
     private Path workingZipDir(final Path zipFile) {
         // Remove extension if there is one.
         String name = zipFile.getFileName().toString();
-        int index = name.lastIndexOf(".");
+        final int index = name.lastIndexOf(".");
         if (index != -1) {
             name = name.substring(0, index);
         }

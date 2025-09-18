@@ -43,10 +43,10 @@ import stroom.security.api.SecurityContext;
 import stroom.state.shared.StateDoc;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 
 import jakarta.annotation.Nullable;
@@ -179,7 +179,7 @@ public class ReferenceData {
 
                     // Recurse with the nested lookup
                     ensureReferenceDataAvailability(pipelineReferences, nestedIdentifier, result);
-                } catch (ClassCastException e) {
+                } catch (final ClassCastException e) {
                     result.logLazyTemplate(Severity.ERROR,
                             "Value is the wrong type, expected: {}, found: {}",
                             () -> Arrays.asList(StringValue.class.getName(),

@@ -21,7 +21,7 @@ import stroom.docs.shared.Description;
 import stroom.docstore.shared.Doc;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -78,8 +78,8 @@ public class ViewDoc extends Doc {
                    @JsonProperty("createUser") final String createUser,
                    @JsonProperty("updateUser") final String updateUser,
                    @JsonProperty("description") final String description,
-                   @JsonProperty("dataSource") DocRef dataSource,
-                   @JsonProperty("filter") ExpressionOperator filter,
+                   @JsonProperty("dataSource") final DocRef dataSource,
+                   @JsonProperty("filter") final ExpressionOperator filter,
                    @JsonProperty("pipeline") final DocRef pipeline) {
         super(type, uuid, name, version, createTimeMs, updateTimeMs, createUser, updateUser);
         this.description = description;

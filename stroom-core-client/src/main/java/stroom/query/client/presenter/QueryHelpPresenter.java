@@ -32,7 +32,6 @@ import stroom.widget.util.client.MultiSelectionModel;
 import com.google.gwt.safehtml.shared.SafeHtml;
 import com.google.gwt.safehtml.shared.SafeHtmlUtils;
 import com.google.gwt.user.cellview.client.HasKeyboardSelectionPolicy.KeyboardSelectionPolicy;
-import com.google.gwt.user.client.Timer;
 import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
 import com.google.web.bindery.event.shared.HandlerRegistration;
@@ -53,9 +52,6 @@ public class QueryHelpPresenter
     private final QueryHelpDetailProvider detailProvider;
     private final MarkdownConverter markdownConverter;
 
-    private String currentQuery;
-    private Timer requestTimer;
-
     @Inject
     public QueryHelpPresenter(final EventBus eventBus,
                               final QueryHelpView view,
@@ -71,7 +67,6 @@ public class QueryHelpPresenter
         this.markdownConverter = markdownConverter;
 
         view.getSelectionList().setKeyboardSelectionPolicy(KeyboardSelectionPolicy.BOUND_TO_SELECTION);
-        model.setSelectionList(view.getSelectionList());
         view.getSelectionList().init(model);
     }
 
@@ -155,25 +150,11 @@ public class QueryHelpPresenter
     }
 
     public void setQuery(final String query) {
-        // Debounce requests so we don't spam the backend
-        if (requestTimer != null) {
-            requestTimer.cancel();
-        }
-
-        requestTimer = new Timer() {
-            @Override
-            public void run() {
-                if (!Objects.equals(currentQuery, query)) {
-                    currentQuery = query;
-                    model.setQuery(query);
-                    refresh();
-                }
-            }
-        };
-        requestTimer.schedule(400);
+        model.setQuery(query);
+        refresh();
     }
 
-    private HandlerRegistration addInsertHandler(InsertEditorTextEvent.Handler handler) {
+    private HandlerRegistration addInsertHandler(final InsertEditorTextEvent.Handler handler) {
         return addHandlerToSource(InsertEditorTextEvent.getType(), handler);
     }
 
@@ -208,12 +189,12 @@ public class QueryHelpPresenter
         keyedAceCompletionProvider.setDataSourceRef(dataSourceRef);
     }
 
-    public void setIncludedTypes(Set<QueryHelpType> includedTypes) {
+    public void setIncludedTypes(final Set<QueryHelpType> includedTypes) {
         model.setIncludedTypes(includedTypes);
         keyedAceCompletionProvider.setIncludedTypes(includedTypes);
     }
 
-    public void setTextType(TextType textType) {
+    public void setTextType(final TextType textType) {
         keyedAceCompletionProvider.setTextType(textType);
     }
 

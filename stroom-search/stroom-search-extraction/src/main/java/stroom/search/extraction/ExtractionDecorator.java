@@ -9,8 +9,8 @@ import stroom.pipeline.PipelineStore;
 import stroom.pipeline.factory.PipelineDataCache;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.data.PipelineData;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
 import stroom.query.common.v2.Coprocessors;
 import stroom.query.common.v2.SearchProgressLog;
 import stroom.query.common.v2.SearchProgressLog.SearchPhase;
@@ -180,7 +180,7 @@ public class ExtractionDecorator {
                             } else {
                                 // Poll for the next set of values.
                                 // When we get null we are done.
-                                Val[] values = storedDataQueue.take();
+                                final Val[] values = storedDataQueue.take();
                                 if (values == null) {
                                     done = true;
                                 } else {

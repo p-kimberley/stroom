@@ -16,7 +16,7 @@
 
 package stroom.util.io;
 
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.base.Strings;
 import jakarta.inject.Inject;
@@ -27,6 +27,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.LongSupplier;
@@ -73,7 +75,7 @@ public class SimplePathCreator implements PathCreator {
     }
 
     @Override
-    public String replaceTimeVars(String path) {
+    public String replaceTimeVars(final String path) {
         // Replace some of the path elements with time variables.
         final ZonedDateTime dateTime = ZonedDateTime.now(ZoneOffset.UTC);
         return replaceTimeVars(path, dateTime);
@@ -195,31 +197,46 @@ public class SimplePathCreator implements PathCreator {
 
     @Override
     public String replace(final String path,
-                          final String type,
+                          final String var,
                           final LongSupplier replacementSupplier,
                           final int pad) {
 
         //convert the long supplier into a string supplier to prevent the
         //evaluation of the long supplier
-        Supplier<String> stringReplacementSupplier = () -> {
+        final Supplier<String> stringReplacementSupplier = () -> {
             String value = String.valueOf(replacementSupplier.getAsLong());
             if (pad > 0) {
                 value = Strings.padStart(value, pad, '0');
             }
             return value;
         };
-        return replace(path, type, stringReplacementSupplier);
+        return replace(path, var, stringReplacementSupplier);
+    }
+
+    public String replace(final String path,
+                          final Map<String, Supplier<String>> varToReplacementSupplierMap) {
+        if (NullSafe.isNonBlankString(path)) {
+            String output = path;
+            for (final Entry<String, Supplier<String>> entry : varToReplacementSupplierMap.entrySet()) {
+                output = replace(output, entry.getKey(), entry.getValue());
+            }
+            return output;
+        } else {
+            return path;
+        }
     }
 
     @Override
-    public String replace(final String path,
-                          final String type,
+    public String replace(final String str,
+                          final String var,
                           final Supplier<String> replacementSupplier) {
-        String newPath = path;
-        final String param = "${" + type + "}";
+        String newPath = str;
+        final String param = "${" + var + "}";
         int start = newPath.indexOf(param);
         while (start != -1) {
             final int end = start + param.length();
+            // Could consider re-using the replacement value to save calling the supplier
+            // multiple times if the var is used >1 time.
             newPath = newPath.substring(0, start) + replacementSupplier.get() + newPath.substring(end);
             start = newPath.indexOf(param, start);
         }
@@ -237,7 +254,7 @@ public class SimplePathCreator implements PathCreator {
     }
 
     @Override
-    public String replaceContextVars(String path) {
+    public String replaceContextVars(final String path) {
         return path;
     }
 

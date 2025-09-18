@@ -23,7 +23,7 @@ import stroom.meta.api.MetaService;
 import stroom.meta.api.StandardHeaderArguments;
 import stroom.proxy.StroomStatusCode;
 import stroom.receive.common.AttributeMapFilter;
-import stroom.receive.common.AttributeMapValidator;
+import stroom.receive.common.AttributeMapFilterFactory;
 import stroom.receive.common.ReceiptIdGenerator;
 import stroom.receive.common.RequestAuthenticator;
 import stroom.receive.common.RequestHandler;
@@ -32,13 +32,14 @@ import stroom.receive.common.StroomStreamException;
 import stroom.receive.common.StroomStreamProcessor;
 import stroom.receive.common.StroomStreamStatus;
 import stroom.security.api.SecurityContext;
+import stroom.security.api.UserIdentity;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskProgressHandler;
-import stroom.util.NullSafe;
 import stroom.util.cert.CertificateExtractor;
 import stroom.util.concurrent.UniqueId;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
@@ -100,12 +101,9 @@ class ReceiveDataRequestHandler implements RequestHandler {
                     receivedTime,
                     receiptId);
 
-            // Authenticate the request using token or cert depending on configuration
+            // Authenticate the request depending on the configured auth methods.
             // Adds sender details to the attributeMap
-            requestAuthenticator.authenticate(request, attributeMap);
-
-            // Validate the supplied attributes.
-            AttributeMapValidator.validate(attributeMap, metaService::getTypes);
+            final UserIdentity userIdentity = requestAuthenticator.authenticate(request, attributeMap);
 
             final String feedName;
             if (attributeMapFilter.filter(attributeMap)) {
@@ -114,7 +112,7 @@ class ReceiveDataRequestHandler implements RequestHandler {
                 feedName = NullSafe.trim(attributeMap.get(StandardHeaderArguments.FEED));
 
                 // Get the type name from the header arguments if supplied.
-                String typeName = NullSafe.trim(attributeMap.get(StandardHeaderArguments.TYPE));
+                final String typeName = NullSafe.trim(attributeMap.get(StandardHeaderArguments.TYPE));
 
                 taskContextFactory.context("Receiving Data", taskContext -> {
                     final Consumer<Long> progressHandler =

@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
 
 @Singleton
 class ScriptStoreImpl implements ScriptStore {
@@ -89,7 +88,7 @@ class ScriptStoreImpl implements ScriptStore {
     }
 
     @Override
-    public DocRefInfo info(DocRef docRef) {
+    public DocRefInfo info(final DocRef docRef) {
         return store.info(docRef);
     }
 
@@ -123,7 +122,7 @@ class ScriptStoreImpl implements ScriptStore {
                 doc.setDependencies(doc.getDependencies()
                         .stream()
                         .map(dependencyRemapper::remap)
-                        .collect(Collectors.toList()));
+                        .toList());
             }
         };
     }
@@ -183,7 +182,7 @@ class ScriptStoreImpl implements ScriptStore {
     }
 
     @Override
-    public Set<DocRef> findAssociatedNonExplorerDocRefs(DocRef docRef) {
+    public Set<DocRef> findAssociatedNonExplorerDocRefs(final DocRef docRef) {
         return null;
     }
 

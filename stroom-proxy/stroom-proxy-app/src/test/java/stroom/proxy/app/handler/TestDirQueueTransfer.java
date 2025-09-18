@@ -4,11 +4,12 @@ import stroom.meta.api.AttributeMap;
 import stroom.meta.api.AttributeMapUtil;
 import stroom.proxy.repo.queue.QueueMonitors;
 import stroom.proxy.repo.store.FileStores;
-import stroom.util.NullSafe;
+import stroom.test.common.MockMetrics;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,13 +32,14 @@ class TestDirQueueTransfer {
     private Path intputDir;
     private Path sourceQueueDir;
     private Path destQueueDir;
-    private final QueueMonitors queueMonitors = new QueueMonitors();
-    private final FileStores fileStores = new FileStores();
+    private MockMetrics metrics = new MockMetrics();
+    private final QueueMonitors queueMonitors = new QueueMonitors(metrics);
+    private final FileStores fileStores = new FileStores(metrics);
     private DirQueue sourceQueue;
     private DirQueue destQueue;
 
     @BeforeEach
-    void setUp(@TempDir Path baseDir) {
+    void setUp(@TempDir final Path baseDir) {
         this.baseDir = baseDir;
         this.intputDir = FileUtil.ensureDirExists(baseDir.resolve("input"));
         this.sourceQueueDir = FileUtil.ensureDirExists(baseDir.resolve("sourceQueue"));
@@ -103,7 +105,7 @@ class TestDirQueueTransfer {
 
         try {
             dirQueueTransfer.run();
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug("Swallow error: {}", e.getMessage());
         }
 
@@ -162,7 +164,7 @@ class TestDirQueueTransfer {
                 final AttributeMap attributeMap = new AttributeMap(attrs);
                 AttributeMapUtil.write(attributeMap, meta);
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
         return sourceDir;

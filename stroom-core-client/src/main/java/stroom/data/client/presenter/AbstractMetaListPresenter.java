@@ -27,11 +27,9 @@ import stroom.data.client.event.HasDataSelectionHandlers;
 import stroom.data.grid.client.DataGridSelectionEventManager;
 import stroom.data.grid.client.EndColumn;
 import stroom.data.grid.client.MyDataGrid;
-import stroom.data.grid.client.OrderByColumn;
 import stroom.data.grid.client.PagerView;
 import stroom.data.shared.DataResource;
 import stroom.data.table.client.Refreshable;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dispatch.client.ExportFileCompleteUtil;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
@@ -53,13 +51,16 @@ import stroom.processor.shared.CreateProcessFilterRequest;
 import stroom.processor.shared.ProcessorFilterResource;
 import stroom.processor.shared.QueryData;
 import stroom.processor.shared.ReprocessDataInfo;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.datasource.QueryField;
 import stroom.security.shared.DocumentPermission;
 import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.Selection;
 import stroom.util.shared.Severity;
@@ -83,6 +84,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import javax.inject.Provider;
 
 public abstract class AbstractMetaListPresenter
@@ -130,7 +132,7 @@ public abstract class AbstractMetaListPresenter
         this.expressionValidator = expressionValidator;
 
         this.dataGrid = new MyDataGrid<>();
-        selectionModel = new MultiSelectionModelImpl<>(dataGrid);
+        selectionModel = new MultiSelectionModelImpl<>();
         selectionEventManager = new DataGridSelectionEventManager<>(dataGrid, selectionModel, false);
         dataGrid.setSelectionModel(selectionModel, selectionEventManager);
 
@@ -140,8 +142,6 @@ public abstract class AbstractMetaListPresenter
         addColumns(allowSelectAll);
 
         criteria = new FindMetaCriteria();
-        criteria.setSort(MetaFields.CREATE_TIME.getFldName(), true, false);
-
         dataProvider = new RestDataProvider<MetaRow, ResultPage<MetaRow>>(eventBus) {
             @Override
             protected void exec(final Range range,
@@ -149,6 +149,7 @@ public abstract class AbstractMetaListPresenter
                                 final RestErrorHandler errorHandler) {
                 if (criteria.getExpression() != null) {
                     CriteriaUtil.setRange(criteria, range);
+                    CriteriaUtil.setSortList(criteria, dataGrid.getColumnSortList());
                     restFactory
                             .create(META_RESOURCE)
                             .method(res -> res.findMetaRow(criteria))
@@ -170,13 +171,7 @@ public abstract class AbstractMetaListPresenter
 
     @Override
     protected void onBind() {
-        registerHandler(dataGrid.addColumnSortHandler(event -> {
-            if (event.getColumn() instanceof OrderByColumn<?, ?>) {
-                final OrderByColumn<?, ?> orderByColumn = (OrderByColumn<?, ?>) event.getColumn();
-                criteria.setSort(orderByColumn.getField(), !event.isSortAscending(), orderByColumn.isIgnoreCase());
-                refresh();
-            }
-        }));
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
     }
 
     protected ResultPage<MetaRow> onProcessData(final ResultPage<MetaRow> data) {
@@ -234,7 +229,7 @@ public abstract class AbstractMetaListPresenter
         // There might have been a selection change so fire a data selection event.
         DataSelectionEvent.fire(AbstractMetaListPresenter.this, selection, false);
 
-        MetaRow selected = selectionModel.getSelected();
+        final MetaRow selected = selectionModel.getSelected();
         if (selected != null) {
             if (!resultPage.getValues().contains(selected)) {
                 selectionModel.setSelected(selected, false);
@@ -339,14 +334,17 @@ public abstract class AbstractMetaListPresenter
     }
 
     void addCreatedColumn() {
-        dataGrid.addResizableColumn(
-                DataGridUtil.copyTextColumnBuilder((MetaRow metaRow) ->
-                                        dateTimeFormatter.format(metaRow.getMeta().getCreateMs()),
-                                getEventBus())
-                        .withSorting(MetaFields.CREATE_TIME)
-                        .build(),
+        final Column<MetaRow, String> col = DataGridUtil.copyTextColumnBuilder((MetaRow metaRow) ->
+                                dateTimeFormatter.format(metaRow.getMeta().getCreateMs()),
+                        getEventBus())
+                .withSorting(MetaFields.CREATE_TIME)
+                .defaultSortAscending(false)
+                .build();
+        dataGrid.addResizableColumn(col,
                 "Created",
                 ColumnSizeConstants.DATE_COL);
+        // Sort by create time by default.
+        dataGrid.sort(col);
     }
 
     void addFeedColumn() {
@@ -366,10 +364,10 @@ public abstract class AbstractMetaListPresenter
     void addStreamTypeColumn() {
         dataGrid.addResizableColumn(
                 DataGridUtil.copyTextColumnBuilder((MetaRow metaRow) ->
-                                Optional.ofNullable(metaRow)
-                                        .map(MetaRow::getMeta)
-                                        .map(Meta::getTypeName)
-                                        .orElse(""),
+                                        Optional.ofNullable(metaRow)
+                                                .map(MetaRow::getMeta)
+                                                .map(Meta::getTypeName)
+                                                .orElse(""),
                                 getEventBus())
                         .withSorting(MetaFields.TYPE)
                         .build(),
@@ -527,7 +525,7 @@ public abstract class AbstractMetaListPresenter
     public void setExpression(final ExpressionOperator expression, final Runnable onSetExpression) {
         validateExpression(expression, expression2 -> {
             this.criteria.setExpression(expression2);
-            GwtNullSafe.run(onSetExpression);
+            NullSafe.run(onSetExpression);
         });
     }
 
@@ -607,9 +605,10 @@ public abstract class AbstractMetaListPresenter
 
     private void doReprocess(final ProcessChoice processChoice) {
         confirmSelection("reprocess", () -> {
-            final ExpressionOperator expression = selectionToExpression(this.criteria, getSelection());
-            validateExpression(expression, exp -> {
-                final FindMetaCriteria criteria = expressionToNonPagedCriteria(exp);
+            final ExpressionOperator expression = selectionToExpression(
+                    this.criteria, getSelection(), true);
+            validateExpression(expression, MetaFields.getProcessorFilterFields(), expressionOperator -> {
+                final FindMetaCriteria criteria = expressionToNonPagedCriteria(expressionOperator);
                 showSummary(
                         criteria,
                         DocumentPermission.VIEW,
@@ -624,9 +623,15 @@ public abstract class AbstractMetaListPresenter
 
     private void validateExpression(final ExpressionOperator expression,
                                     final Consumer<ExpressionOperator> consumer) {
+        validateExpression(expression, MetaFields.getAllFields(), consumer);
+    }
+
+    private void validateExpression(final ExpressionOperator expression,
+                                    final List<QueryField> validFields,
+                                    final Consumer<ExpressionOperator> consumer) {
         expressionValidator.validateExpression(
                 AbstractMetaListPresenter.this,
-                MetaFields.getAllFields(),
+                validFields,
                 expression,
                 consumer,
                 getView());
@@ -873,28 +878,40 @@ public abstract class AbstractMetaListPresenter
 
     private ExpressionOperator selectionToExpression(final FindMetaCriteria criteria,
                                                      final Selection<Long> selection) {
+        return selectionToExpression(criteria, selection, false);
+    }
+
+    private ExpressionOperator selectionToExpression(final FindMetaCriteria criteria,
+                                                     final Selection<Long> selection,
+                                                     final boolean removeStatusTerms) {
 //        final ExpressionOperator.Builder builder = ExpressionOperator.builder();
         // First make sure there is some sort of selection, either
         // individual streams have been selected or all streams have been
         // selected.
         if (selection.isMatchAll()) {
-            if (criteria != null && criteria.getExpression() != null) {
-//                builder.addOperator(criteria.getExpression());
-                return ExpressionUtil.copyOperator(criteria.getExpression());
+            if (NullSafe.nonNull(criteria, FindMetaCriteria::getExpression)) {
+                final Predicate<ExpressionItem> termFilter = removeStatusTerms
+                        ? AbstractMetaListPresenter::isNotStatusTerm
+                        : null;
+                return ExpressionUtil.copyOperator(criteria.getExpression(), termFilter);
             }
-
         } else if (selection.size() > 0) {
             // If we aren't matching all then create a criteria that
             // only includes the selected streams.
             return MetaExpressionUtil
                     .createDataIdSetExpression(selection.getSet());
-
         }
 //        else {
         return null;
 //        }
 //
 //        return builder;
+    }
+
+    private static boolean isNotStatusTerm(final ExpressionItem expressionItem) {
+        final boolean isStatusTerm = expressionItem instanceof final ExpressionTerm term
+                                     && MetaFields.STATUS.getFldName().equals(term.getField());
+        return !isStatusTerm;
     }
 
     private FindMetaCriteria expressionToNonPagedCriteria(final ExpressionOperator expression) {

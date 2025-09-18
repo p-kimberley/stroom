@@ -19,15 +19,15 @@ package stroom.security.client.presenter;
 import stroom.cell.info.client.ActionMenuCell;
 import stroom.cell.tickbox.shared.TickBoxState;
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.QuickFilterExpressionParser;
@@ -37,7 +37,7 @@ import stroom.security.shared.UserResource;
 import stroom.svg.client.Preset;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 import stroom.util.shared.UserRef.DisplayType;
@@ -123,14 +123,17 @@ public class UserListPresenter
         userListView.setUiHandlers(this);
     }
 
-    private void setupColumns() {
-        DataGridUtil.addColumnSortHandler(dataGrid, criteriaBuilder, this::refresh);
+    @Override
+    protected void onBind() {
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
+    }
 
+    private void setupColumns() {
         if (showEnabledCol) {
             dataGrid.addColumn(
                     DataGridUtil.updatableTickBoxColumnBuilder(TickBoxState.createTickBoxFunc(User::isEnabled))
 //                        .enabledWhen(this::isJobNodeEnabled)
-                            .withFieldUpdater((int index, User user, TickBoxState value) -> {
+                            .withFieldUpdater((final int index, final User user, final TickBoxState value) -> {
                                 if (user != null) {
                                     user.setEnabled(value.toBoolean());
                                     restFactory.create(USER_RESOURCE)
@@ -219,6 +222,7 @@ public class UserListPresenter
                         .withToolTip(displayNameTooltip)
                         .build(),
                 ColumnSizeConstants.USER_DISPLAY_NAME_COL);
+        dataGrid.sort(displayNameCol);
 
 //        final Column<User, User> displayNameCol = DataGridUtil.columnBuilder(
 //                        Function.identity(),
@@ -279,9 +283,9 @@ public class UserListPresenter
                         Function.identity(),
                         () -> new ActionMenuCell<>(
                                 (User user) -> UserAndGroupHelper.buildUserActionMenu(
-                                        GwtNullSafe.get(user, User::asRef),
+                                        NullSafe.get(user, User::asRef),
                                         isExternalIdp(),
-                                        GwtNullSafe.requireNonNullElseGet(
+                                        NullSafe.requireNonNullElseGet(
                                                 validUserScreensForActionMenu, UserScreen::all),
                                         this),
                                 this))
@@ -295,7 +299,6 @@ public class UserListPresenter
                 ColumnSizeConstants.ICON_COL + 10);
 
         DataGridUtil.addEndColumn(dataGrid);
-        dataGrid.getColumnSortList().push(displayNameCol);
     }
 
     private boolean isExternalIdp() {
@@ -334,7 +337,7 @@ public class UserListPresenter
 
     @Override
     public void onFilterChange(final String text) {
-        filter = GwtNullSafe.trim(text);
+        filter = NullSafe.trim(text);
         if (filter.isEmpty()) {
             filter = null;
         }
@@ -417,7 +420,8 @@ public class UserListPresenter
                             .build();
                 }
                 criteriaBuilder.expression(expression);
-                criteriaBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+                criteriaBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+                criteriaBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
                 restFactory
                         .create(USER_RESOURCE)
                         .method(res -> res.find(criteriaBuilder.build()))

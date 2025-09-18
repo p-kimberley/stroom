@@ -22,17 +22,17 @@ import stroom.lmdb.LmdbLibraryConfig;
 import stroom.lmdb2.LmdbEnv;
 import stroom.lmdb2.LmdbEnvDir;
 import stroom.lmdb2.LmdbEnvDirFactory;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.Format;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.ParamSubstituteUtil;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TableResult;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.Format;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.ParamUtil;
+import stroom.query.api.QueryKey;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TableResult;
+import stroom.query.api.TableSettings;
 import stroom.query.common.v2.format.FormatterFactory;
 import stroom.query.language.functions.ExpressionContext;
 import stroom.query.language.functions.FieldIndex;
@@ -44,7 +44,7 @@ import stroom.util.io.SimplePathCreator;
 import stroom.util.io.TempDirProvider;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
-import stroom.util.logging.Metrics;
+import stroom.util.logging.SimpleMetrics;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -122,7 +122,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 () -> executorService,
                 errorConsumer,
                 new ByteBufferFactoryImpl(),
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
     }
 
     @Test
@@ -133,22 +133,22 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .format(Format.TEXT)
                         .group(0)
                         .build())
                 .addColumns(Column.builder()
                         .id("Text2")
                         .name("Text2")
-                        .expression(ParamSubstituteUtil.makeParam("Text2"))
+                        .expression(ParamUtil.create("Text2"))
                         .format(Format.TEXT)
                         .build())
                 .build();
 
         final DataStore dataStore = create(tableSettings);
 
-        Metrics.setEnabled(true);
-        Metrics.measure("Added data", () -> {
+        SimpleMetrics.setEnabled(true);
+        SimpleMetrics.measure("Added data", () -> {
             for (int i = 0; i < 300_000; i++) {
                 final Val val = ValString.create("Text " + i + "test".repeat(1000));
                 dataStore.accept(Val.of(val, val));
@@ -162,9 +162,9 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 throw new RuntimeException(e.getMessage(), e);
             }
         });
-        Metrics.report();
+        SimpleMetrics.report();
 
-        Metrics.measure("Retrieved data", () -> {
+        SimpleMetrics.measure("Retrieved data", () -> {
             // Make sure we only get 50 results.
             final ResultRequest tableResultRequest = ResultRequest.builder()
                     .componentId("componentX")
@@ -173,14 +173,14 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                     .build();
             final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                     formatterFactory,
-                    new ExpressionPredicateFactory(null));
+                    new ExpressionPredicateFactory());
             final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                     dataStore,
                     tableResultRequest);
             assertThat(searchResult.getResultRange().getLength()).isEqualTo(50);
             assertThat(searchResult.getTotalResults().intValue()).isEqualTo(50);
         });
-        Metrics.report();
+        SimpleMetrics.report();
     }
 
     @Disabled
@@ -205,21 +205,21 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("Text")
                         .name("Text")
-                        .expression(ParamSubstituteUtil.makeParam("Text"))
+                        .expression(ParamUtil.create("Text"))
                         .format(Format.TEXT)
                         .group(0)
                         .build())
                 .addColumns(Column.builder()
                         .id("Text2")
                         .name("Text2")
-                        .expression(ParamSubstituteUtil.makeParam("Text2"))
+                        .expression(ParamUtil.create("Text2"))
                         .format(Format.TEXT)
                         .group(1)
                         .build())
                 .addColumns(Column.builder()
                         .id("Text2")
                         .name("Text2")
-                        .expression("first(" + ParamSubstituteUtil.makeParam("Text2") + ")")
+                        .expression("first(" + ParamUtil.create("Text2") + ")")
                         .format(Format.TEXT)
                         .build())
                 .addColumns(Column.builder()
@@ -257,7 +257,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                             .build();
                     final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                             formatterFactory,
-                            new ExpressionPredicateFactory(null));
+                            new ExpressionPredicateFactory());
                     final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                             dataStore,
                             tableResultRequest);
@@ -280,7 +280,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
 
                     final TableResultCreator tableComponentResultCreator2 = new TableResultCreator(
                             formatterFactory,
-                            new ExpressionPredicateFactory(null));
+                            new ExpressionPredicateFactory());
                     final TableResult searchResult2 = (TableResult) tableComponentResultCreator2.create(
                             dataStore,
                             tableResultRequest2);
@@ -305,7 +305,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
 
                     final TableResultCreator tableComponentResultCreator3 = new TableResultCreator(
                             formatterFactory,
-                            new ExpressionPredicateFactory(null));
+                            new ExpressionPredicateFactory());
                     final TableResult searchResult3 = (TableResult) tableComponentResultCreator2.create(
                             dataStore,
                             tableResultRequest3);
@@ -337,7 +337,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
         reading.set(false);
         CompletableFuture.allOf(readers).join();
 
-        Metrics.measure("Retrieved data", () -> {
+        SimpleMetrics.measure("Retrieved data", () -> {
             final ResultRequest tableResultRequest = ResultRequest.builder()
                     .componentId("componentX")
                     .addMappings(tableSettings)
@@ -345,12 +345,12 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                     .build();
             final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                     formatterFactory,
-                    new ExpressionPredicateFactory(null));
+                    new ExpressionPredicateFactory());
             final TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                     dataStore,
                     tableResultRequest);
         });
-        Metrics.report();
+        SimpleMetrics.report();
     }
 
     @Test
@@ -361,19 +361,19 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 .addColumns(Column.builder()
                         .id("StreamId")
                         .name("StreamId")
-                        .expression(ParamSubstituteUtil.makeParam("StreamId"))
+                        .expression(ParamUtil.create("StreamId"))
                         .format(Format.NUMBER)
                         .build())
                 .addColumns(Column.builder()
                         .id("EventId")
                         .name("EventId")
-                        .expression(ParamSubstituteUtil.makeParam("EventId"))
+                        .expression(ParamUtil.create("EventId"))
                         .format(Format.NUMBER)
                         .build())
                 .addColumns(Column.builder()
                         .id("EventTime")
                         .name("EventTime")
-                        .expression(ParamSubstituteUtil.makeParam("EventTime"))
+                        .expression(ParamUtil.create("EventTime"))
                         .format(Format.DATE_TIME)
                         .build())
                 .build();
@@ -385,7 +385,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 .builder()
                 .sourceType(SourceType.TABLE_BUILDER_ANALYTIC)
                 .build();
-        LmdbDataStore dataStore = (LmdbDataStore)
+        final LmdbDataStore dataStore = (LmdbDataStore)
                 create(
                         searchRequestSource,
                         queryKey,
@@ -417,7 +417,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
                 .build();
         final TableResultCreator tableComponentResultCreator = new TableResultCreator(
                 formatterFactory,
-                new ExpressionPredicateFactory(null));
+                new ExpressionPredicateFactory());
         TableResult searchResult = (TableResult) tableComponentResultCreator.create(
                 dataStore,
                 tableResultRequest);
@@ -430,7 +430,7 @@ class TestLmdbDataStore extends AbstractDataStoreTest {
         dataStore.close();
 
         // Try and open the datastore again.
-        LmdbDataStore dataStore2 = (LmdbDataStore)
+        final LmdbDataStore dataStore2 = (LmdbDataStore)
                 create(
                         searchRequestSource,
                         queryKey,

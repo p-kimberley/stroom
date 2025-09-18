@@ -4,7 +4,7 @@ import stroom.alert.client.event.AlertEvent;
 import stroom.alert.client.event.ConfirmEvent;
 import stroom.cell.info.client.CommandLink;
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.DataGridSelectionEventManager;
 import stroom.data.grid.client.MyDataGrid;
@@ -12,8 +12,7 @@ import stroom.data.grid.client.PagerView;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
 import stroom.preferences.client.DateTimeFormatter;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.security.client.api.ClientSecurityContext;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.client.event.OpenUsersAndGroupsScreenEvent;
 import stroom.security.identity.shared.Account;
 import stroom.security.identity.shared.AccountFields;
@@ -24,8 +23,7 @@ import stroom.security.shared.UserResource;
 import stroom.svg.shared.SvgImage;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.CriteriaFieldSort;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.widget.button.client.InlineSvgButton;
 import stroom.widget.dropdowntree.client.view.QuickFilterPageView;
@@ -41,8 +39,6 @@ import com.google.inject.Provider;
 import com.google.web.bindery.event.shared.EventBus;
 import com.gwtplatform.mvp.client.MyPresenterWidget;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -55,7 +51,6 @@ public class AccountsListPresenter
 
     private final RestFactory restFactory;
     private final DateTimeFormatter dateTimeFormatter;
-    private final ClientSecurityContext securityContext;
     private final Provider<EditAccountPresenter> editAccountPresenterProvider;
     private final MultiSelectionModelImpl<Account> selectionModel;
     private RestDataProvider<Account, ResultPage<Account>> dataProvider;
@@ -66,26 +61,21 @@ public class AccountsListPresenter
     private final PagerView pagerView;
     private final FindAccountRequest.Builder requestBuilder = new FindAccountRequest.Builder();
 
-    private List<CriteriaFieldSort> sortList = Collections.singletonList(
-            new CriteriaFieldSort(AccountFields.FIELD_NAME_USER_ID, false, true));
-
     @Inject
     public AccountsListPresenter(final EventBus eventBus,
                                  final QuickFilterPageView view,
                                  final PagerView pagerView,
                                  final RestFactory restFactory,
                                  final DateTimeFormatter dateTimeFormatter,
-                                 final ClientSecurityContext securityContext,
                                  final Provider<EditAccountPresenter> editAccountPresenterProvider,
                                  final UiConfigCache uiConfigCache) {
         super(eventBus, view);
         this.pagerView = pagerView;
         this.restFactory = restFactory;
         this.dateTimeFormatter = dateTimeFormatter;
-        this.securityContext = securityContext;
         this.editAccountPresenterProvider = editAccountPresenterProvider;
         this.dataGrid = new MyDataGrid<>(1000);
-        this.selectionModel = new MultiSelectionModelImpl<>(dataGrid);
+        this.selectionModel = new MultiSelectionModelImpl<>();
         final DataGridSelectionEventManager<Account> selectionEventManager = new DataGridSelectionEventManager<>(
                 dataGrid, selectionModel, false);
         this.dataGrid.setSelectionModel(selectionModel, selectionEventManager);
@@ -119,6 +109,12 @@ public class AccountsListPresenter
         view.setUiHandlers(this);
     }
 
+    @Override
+    protected void onBind() {
+        super.onBind();
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
+    }
+
     private void initButtons() {
         addButton.setSvg(SvgImage.ADD);
         addButton.setTitle("Add new account");
@@ -139,7 +135,7 @@ public class AccountsListPresenter
     }
 
     private void setButtonStates() {
-        final boolean hasSelectedItems = GwtNullSafe.hasItems(selectionModel.getSelectedItems());
+        final boolean hasSelectedItems = NullSafe.hasItems(selectionModel.getSelectedItems());
         editButton.setEnabled(hasSelectedItems);
         deleteButton.setEnabled(selectionModel.getSelected() != null);
     }
@@ -179,9 +175,6 @@ public class AccountsListPresenter
     }
 
     private void initTableColumns() {
-
-        DataGridUtil.addColumnSortHandler(dataGrid, requestBuilder, this::refresh);
-
         // User Id
         final Column<Account, CommandLink> userIdCol = DataGridUtil.commandLinkColumnBuilder(buildOpenUserCommandLink())
                 .enabledWhen(Account::isEnabled)
@@ -193,8 +186,7 @@ public class AccountsListPresenter
                         .withToolTip("The unique identifier for both the account and the corresponding user.")
                         .build(),
                 200);
-
-        dataGrid.getColumnSortList().push(userIdCol);
+        dataGrid.sort(userIdCol);
 
         // First Name
         final Column<Account, String> firstNameColumn = DataGridUtil.textColumnBuilder(Account::getFirstName)
@@ -260,12 +252,10 @@ public class AccountsListPresenter
         dataGrid.addAutoResizableColumn(commentsColumn, "Comments", ColumnSizeConstants.BIG_COL);
 
         DataGridUtil.addEndColumn(dataGrid);
-
-        dataGrid.getColumnSortList().push(userIdCol);
     }
 
     private Function<Account, CommandLink> buildOpenUserCommandLink() {
-        return (Account account) -> {
+        return (final Account account) -> {
             if (account != null) {
                 final String userId = account.getUserId();
 
@@ -300,7 +290,8 @@ public class AccountsListPresenter
                 protected void exec(final Range range,
                                     final Consumer<ResultPage<Account>> dataConsumer,
                                     final RestErrorHandler errorHandler) {
-                    requestBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+                    requestBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+                    requestBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
                     restFactory
                             .create(ACCOUNT_RESOURCE)
                             .method(res -> res.find(requestBuilder.build()))

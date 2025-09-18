@@ -64,9 +64,9 @@ public class ValidDirectoryPathValidatorImpl implements ValidDirectoryPathValida
             boolean exists = Files.exists(modifiedDir);
             if (!exists && ensureExistence) {
                 try {
-                    LOGGER.debug("Creating dir {} (modified to {})", dir, modifiedDir);
+                    LOGGER.info("Creating dir {} (modified to {})", dir, modifiedDir);
                     Files.createDirectories(modifiedDir);
-                } catch (IOException e) {
+                } catch (final IOException e) {
                     final String msg = "error creating directory: " + e.getMessage();
                     addValidationMessage(context, dir, modifiedDir, msg);
                 }

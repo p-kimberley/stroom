@@ -1,7 +1,7 @@
 package stroom.security.impl.db;
 
 import stroom.db.util.JooqUtil;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.impl.TestModule;
 import stroom.security.impl.UserDao;
 import stroom.security.shared.AppPermission;
@@ -285,6 +285,19 @@ class TestAppPermissionDaoImpl {
 
     }
 
+    @Test
+    void addPermission_idempotency() {
+        final UserRef user1 = createUser("user1");
+        appPermissionDao.addPermission(user1.getUuid(), AppPermission.STEPPING_PERMISSION);
+        assertThat(appPermissionDao.getPermissionsForUser(user1.getUuid()))
+                .containsExactlyInAnyOrder(AppPermission.STEPPING_PERMISSION);
+
+        // Do the same again
+        appPermissionDao.addPermission(user1.getUuid(), AppPermission.STEPPING_PERMISSION);
+        assertThat(appPermissionDao.getPermissionsForUser(user1.getUuid()))
+                .containsExactlyInAnyOrder(AppPermission.STEPPING_PERMISSION);
+    }
+
     private void validateAppPermissions(final ResultPage<AppUserPermissions> resultPage,
                                         final String name,
                                         final Set<AppPermission> expectedPermissions,
@@ -326,7 +339,7 @@ class TestAppPermissionDaoImpl {
     }
 
     private UserRef createUserOrGroup(final String name, final boolean group) {
-        User user = User.builder()
+        final User user = User.builder()
                 .subjectId(name)
                 .displayName(name)
                 .uuid(UUID.randomUUID().toString())

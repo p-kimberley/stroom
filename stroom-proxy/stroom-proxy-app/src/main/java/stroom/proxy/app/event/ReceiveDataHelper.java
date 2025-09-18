@@ -3,12 +3,13 @@ package stroom.proxy.app.event;
 import stroom.meta.api.AttributeMap;
 import stroom.meta.api.AttributeMapUtil;
 import stroom.proxy.StroomStatusCode;
-import stroom.proxy.app.handler.AttributeMapFilterFactory;
 import stroom.proxy.repo.CSVFormatter;
 import stroom.proxy.repo.LogStream;
 import stroom.proxy.repo.LogStream.EventType;
 import stroom.receive.common.AttributeMapFilter;
+import stroom.receive.common.AttributeMapFilterFactory;
 import stroom.receive.common.ReceiptIdGenerator;
+import stroom.receive.common.ReceiveDataConfig;
 import stroom.receive.common.RequestAuthenticator;
 import stroom.receive.common.StroomStreamException;
 import stroom.receive.common.StroomStreamStatus;
@@ -17,9 +18,10 @@ import stroom.util.concurrent.UniqueId;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
-import stroom.util.logging.Metrics;
+import stroom.util.logging.SimpleMetrics;
 
 import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,20 +34,23 @@ public class ReceiveDataHelper {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ReceiveDataHelper.class);
 
+    private final Provider<ReceiveDataConfig> receiveDataConfigProvider;
     private final RequestAuthenticator requestAuthenticator;
-    private final AttributeMapFilter attributeMapFilter;
+    private final AttributeMapFilterFactory attributeMapFilterFactory;
     private final CertificateExtractor certificateExtractor;
     private final LogStream logStream;
     private final ReceiptIdGenerator receiptIdGenerator;
 
     @Inject
-    public ReceiveDataHelper(final RequestAuthenticator requestAuthenticator,
+    public ReceiveDataHelper(final Provider<ReceiveDataConfig> receiveDataConfigProvider,
+                             final RequestAuthenticator requestAuthenticator,
                              final AttributeMapFilterFactory attributeMapFilterFactory,
                              final CertificateExtractor certificateExtractor,
                              final LogStream logStream,
                              final ReceiptIdGenerator receiptIdGenerator) {
+        this.receiveDataConfigProvider = receiveDataConfigProvider;
         this.requestAuthenticator = requestAuthenticator;
-        this.attributeMapFilter = attributeMapFilterFactory.create();
+        this.attributeMapFilterFactory = attributeMapFilterFactory;
         this.certificateExtractor = certificateExtractor;
         this.logStream = logStream;
         this.receiptIdGenerator = receiptIdGenerator;
@@ -66,13 +71,14 @@ public class ReceiveDataHelper {
                 receiptId);
         try {
             // TODO convert to DW Metrics in 7.9+
-            Metrics.measure("ProxyRequestHandler - stream", () -> {
+            SimpleMetrics.measure("ProxyRequestHandler - stream", () -> {
                 // Authorise request.
                 requestAuthenticator.authenticate(request, attributeMap);
 
                 // TODO convert to DW Metrics in 7.9+
-                Metrics.measure("ProxyRequestHandler - handle1", () -> {
+                SimpleMetrics.measure("ProxyRequestHandler - handle1", () -> {
                     // Test to see if we are going to accept this stream or drop the data.
+                    final AttributeMapFilter attributeMapFilter = attributeMapFilterFactory.create();
                     if (attributeMapFilter.filter(attributeMap)) {
                         consumeHandler.handle(request, attributeMap, receiptId);
                     } else {

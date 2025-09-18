@@ -3,10 +3,10 @@ package stroom.feed.impl;
 import stroom.docref.DocRef;
 import stroom.feed.api.FeedStore;
 import stroom.meta.api.MetaSecurityFilter;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Builder;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Builder;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermission;
 import stroom.util.shared.Clearable;
@@ -47,7 +47,7 @@ class MetaSecurityFilterImpl implements MetaSecurityFilter, Clearable {
 
     private String getFilteredFeeds(final DocumentPermission permission) {
         // Get all feeds as seen by the processing user.
-        List<DocRef> feeds = getCachedFeeds();
+        final List<DocRef> feeds = getCachedFeeds();
         // Filter feeds that the current user has the requested permission on.
         return feeds
                 .stream()

@@ -18,6 +18,7 @@ package stroom.job.client.presenter;
 
 import stroom.cell.info.client.CommandLink;
 import stroom.cell.valuespinner.shared.EditableInteger;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerViewWithHeading;
@@ -42,7 +43,7 @@ import stroom.schedule.client.SchedulePopup;
 import stroom.svg.shared.SvgImage;
 import stroom.util.client.DataGridUtil;
 import stroom.util.client.DelayedUpdate;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.button.client.InlineSvgToggleButton;
 import stroom.widget.menu.client.presenter.MenuPresenter;
 import stroom.widget.util.client.MultiSelectionModelImpl;
@@ -170,7 +171,7 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
                 JobChangeEvent.getType(), event -> {
                     GWT.log("Handling JobChangeEvent " + event);
                     final String currentJobName = getJobNameCriteria();
-                    final String affectedJobName = GwtNullSafe.get(event, JobChangeEvent::getJob, Job::getName);
+                    final String affectedJobName = NullSafe.get(event, JobChangeEvent::getJob, Job::getName);
                     if (currentJobName != null && Objects.equals(currentJobName, affectedJobName)) {
                         internalRefresh();
                     }
@@ -192,6 +193,8 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
                         }
                     }
                 }));
+
+        registerHandler(dataGrid.addColumnSortHandler(event -> internalRefresh()));
     }
 
     private RestDataProvider<JobNodeAndInfo, JobNodeAndInfoListResponse> buildDataProvider(
@@ -205,6 +208,7 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
             protected void exec(final Range range,
                                 final Consumer<JobNodeAndInfoListResponse> dataConsumer,
                                 final RestErrorHandler errorHandler) {
+                CriteriaUtil.setSortList(findJobNodeCriteria, dataGrid.getColumnSortList());
 
                 // ON is show enabled only, OFF is show all states
                 findJobNodeCriteria.setJobNodeEnabled(showEnabledToggleBtn.isOn()
@@ -275,8 +279,6 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
      * Add the columns to the table.
      */
     private void initTable() {
-        DataGridUtil.addColumnSortHandler(dataGrid, findJobNodeCriteria, this::internalRefresh);
-
         // JobNode Enabled tick box
         jobNodeListHelper.addEnabledTickBoxColumn(dataGrid, true);
 
@@ -346,11 +348,11 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
     }
 
     public void read(final Job job) {
-//        getView().setHeading(GwtNullSafe.get(job, Job::getName));
+//        getView().setHeading(NullSafe.get(job, Job::getName));
         if (dataProvider.getDataDisplays().isEmpty()) {
             dataProvider.addDataDisplay(dataGrid);
         }
-        setJobNameCriteria(GwtNullSafe.get(job, Job::getName));
+        setJobNameCriteria(NullSafe.get(job, Job::getName));
         internalRefresh();
     }
 
@@ -371,14 +373,14 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
     }
 
     private Function<JobNodeAndInfo, CommandLink> buildOpenJobNodeCommandLink() {
-        return (JobNodeAndInfo jobNodeAndInfo) -> {
+        return (final JobNodeAndInfo jobNodeAndInfo) -> {
             if (jobNodeAndInfo != null) {
                 final String nodeName = jobNodeAndInfo.getNodeName();
                 final String jobName = jobNodeAndInfo.getJobName();
                 return new CommandLink(
                         nodeName,
                         "Open node '" + nodeName + "' and job '" + jobName
-                                + "' on the Nodes screen.",
+                        + "' on the Nodes screen.",
                         () -> OpenNodeEvent.fire(
                                 JobNodeListPresenter.this, jobNodeAndInfo.getJobNode()));
             } else {
@@ -393,7 +395,7 @@ public class JobNodeListPresenter extends MyPresenterWidget<PagerViewWithHeading
         final String stateStr = isShowEnabled
                 ? "enabled"
                 : "all";
-        getView().setHeading(GwtNullSafe.getOrElse(
+        getView().setHeading(NullSafe.getOrElse(
                 jobName,
                 name -> "Scheduling of job '" + jobName + "' on " + stateStr + " nodes",
                 null));

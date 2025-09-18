@@ -17,9 +17,9 @@
 package stroom.search;
 
 import stroom.dictionary.api.DictionaryStore;
-import stroom.expression.api.DateTimeSettings;
 import stroom.index.impl.IndexStore;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.SearchRequest;
 import stroom.query.common.v2.ExpressionContextFactory;
 import stroom.query.language.SearchRequestFactory;
 import stroom.query.language.functions.ExpressionContext;
@@ -72,7 +72,7 @@ public class TestVisualisationTokenConsumer extends AbstractCoreIntegrationTest 
 
     @Test
     void testVis() {
-        String queryString = """
+        final String queryString = """
                 from "Test index"
                 eval EventTime = roundDay(EventTime)
                 eval count = count()

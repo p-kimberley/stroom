@@ -578,7 +578,8 @@ public class TextPresenter extends MyPresenterWidget<TextView> implements TextUi
                                 // If we are queueing more actions then don't update
                                 // the text.
                                 if (fetchDataQueue.size() == 0) {
-                                    String data = "The data has been deleted or reprocessed since this index was built";
+                                    final String data = "The data has been deleted or reprocessed since this " +
+                                                        "index was built";
                                     boolean isHtml = false;
                                     if (result != null) {
                                         if (result instanceof FetchDataResult) {

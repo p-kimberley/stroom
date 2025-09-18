@@ -3,6 +3,7 @@ package stroom.security.shared;
 import stroom.util.shared.HasAuditInfoGetters;
 import stroom.util.shared.HasAuditableUserIdentity;
 import stroom.util.shared.HasIntegerId;
+import stroom.util.shared.SerialisationTestConstructor;
 import stroom.util.shared.UserRef;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -80,6 +81,13 @@ public class HashedApiKey implements HasAuditInfoGetters, HasIntegerId {
         this.hashAlgorithm = Objects.requireNonNull(hashAlgorithm);
     }
 
+    @SerialisationTestConstructor
+    private HashedApiKey() {
+        this(HashedApiKey
+                .builder()
+                .withHashAlgorithm(HashAlgorithm.BCRYPT));
+    }
+
     private HashedApiKey(final Builder builder) {
         id = builder.id;
         version = builder.version;
@@ -102,7 +110,7 @@ public class HashedApiKey implements HasAuditInfoGetters, HasIntegerId {
     }
 
     public static Builder builder(final HashedApiKey copy) {
-        Builder builder = new Builder();
+        final Builder builder = new Builder();
         builder.id = copy.getId();
         builder.version = copy.getVersion();
         builder.createTimeMs = copy.getCreateTimeMs();
@@ -224,16 +232,16 @@ public class HashedApiKey implements HasAuditInfoGetters, HasIntegerId {
     @Override
     public String toString() {
         return "ApiKey{" +
-                "id=" + id +
-                ", version=" + version +
-                ", owner=" + owner +
-                ", apiKeyHash='" + apiKeyHash + '\'' +
-                ", apiKeyPrefix='" + apiKeyPrefix + '\'' +
-                ", expireTimeMs=" + expireTimeMs + '\'' +
-                ", name='" + name + '\'' +
-                ", enabled=" + enabled +
-                ", hashAlgorithm=" + hashAlgorithm +
-                '}';
+               "id=" + id +
+               ", version=" + version +
+               ", owner=" + owner +
+               ", apiKeyHash='" + apiKeyHash + '\'' +
+               ", apiKeyPrefix='" + apiKeyPrefix + '\'' +
+               ", expireTimeMs=" + expireTimeMs + '\'' +
+               ", name='" + name + '\'' +
+               ", enabled=" + enabled +
+               ", hashAlgorithm=" + hashAlgorithm +
+               '}';
     }
 
     // --------------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 package stroom.util.logging;
 
-import stroom.util.NullSafe;
+import stroom.util.NullSafeExtra;
 import stroom.util.concurrent.DurationAdder;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.base.Strings;
 import org.slf4j.Logger;
@@ -70,7 +71,7 @@ public final class LogUtil {
      * @param args   The values for any placeholders in the message format
      * @return A formatted message
      */
-    public static String message(String format, Object... args) {
+    public static String message(final String format, final Object... args) {
         return MessageFormatter.arrayFormat(format, args).getMessage();
     }
 
@@ -188,7 +189,7 @@ public final class LogUtil {
     public static String getDurationMessage(final String work,
                                             final Duration duration,
                                             final long iterations) {
-        final double secs = NullSafe.duration(duration).isZero()
+        final double secs = NullSafeExtra.duration(duration).isZero()
                 ? 0
                 : duration.toMillis() / (double) 1_000;
         final String rate = secs == 0
@@ -291,7 +292,7 @@ public final class LogUtil {
                 } else {
 //                    final int pct = (int) (valNum / totalNum * 100);
 
-                    BigDecimal pct = BigDecimal.valueOf(valNum / totalNum * 100)
+                    final BigDecimal pct = BigDecimal.valueOf(valNum / totalNum * 100)
                             .stripTrailingZeros()
                             .round(new MathContext(3, RoundingMode.HALF_UP));
                     return originalValue + " (" + pct.toPlainString() + "%)";
@@ -322,7 +323,7 @@ public final class LogUtil {
                     if (str.startsWith("{") && str.endsWith("}")) {
                         str = str.substring(1, str.length() - 1);
                     }
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     LOGGER.error("Error stripping class name from {}", obj, e);
                     return str;
                 }
@@ -418,7 +419,7 @@ public final class LogUtil {
                 new Exception("Dumping Stack Trace").printStackTrace(pw);
                 logConsumer.accept(
                         Objects.requireNonNullElse(message, "Dumping stack trace") + "\n" + writer);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 logConsumer.accept(
                         "Error dumping stack trace: " + e.getMessage());
             }
@@ -434,7 +435,7 @@ public final class LogUtil {
     public static <T> Optional<T> swallowExceptions(final Supplier<T> supplier) {
         try {
             return Optional.ofNullable(supplier.get());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug("Error swallowed", e);
             return Optional.empty();
         }
@@ -449,7 +450,7 @@ public final class LogUtil {
     public static OptionalLong swallowExceptions(final LongSupplier supplier) {
         try {
             return OptionalLong.of(supplier.getAsLong());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug("Error swallowed", e);
             return OptionalLong.empty();
         }
@@ -464,7 +465,7 @@ public final class LogUtil {
     public static OptionalInt swallowExceptions(final IntSupplier supplier) {
         try {
             return OptionalInt.of(supplier.getAsInt());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.debug("Error swallowed", e);
             return OptionalInt.empty();
         }
@@ -490,5 +491,13 @@ public final class LogUtil {
         return logger != null && logger.isTraceEnabled()
                 ? DurationTimer.start()
                 : null;
+    }
+
+    public static String getSimpleClassName(final Object obj) {
+        return NullSafe.get(obj, Object::getClass, Class::getSimpleName);
+    }
+
+    public static String getClassName(final Object obj) {
+        return NullSafe.get(obj, Object::getClass, Class::getName);
     }
 }

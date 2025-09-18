@@ -26,10 +26,10 @@ import stroom.security.api.DocumentPermissionService;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.security.user.api.UserRefLookup;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.test.common.util.guice.AbstractTestModule;
 import stroom.util.AuditUtil;
-import stroom.util.db.ForceLegacyMigration;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.Clearable;
@@ -89,6 +89,7 @@ class AbstractProcessorTest {
         injector = Guice.createInjector(
                 new ProcessorDaoModule(),
                 new ProcessorDbModule(),
+                new MockMetricsModule(),
                 new CacheModule(),
                 new MockTaskModule(),
                 new MockClusterLockModule(),
@@ -106,20 +107,8 @@ class AbstractProcessorTest {
                         bindMock(ProcessorTaskQueueManager.class);
                         bindMock(DocumentEventLog.class);
                         bindMock(DocumentPermissionService.class);
-                        // Not using all the DB modules so just bind to an empty anonymous class
-                        bind(ForceLegacyMigration.class).toInstance(new ForceLegacyMigration() {
-                        });
-                        bind(UserRefLookup.class).toInstance(new UserRefLookup() {
-                            @Override
-                            public Optional<UserRef> getByUuid(final String userUuid) {
-                                return Optional.of(UserRef.forUserUuid(userUuid));
-                            }
-
-                            @Override
-                            public UserRef decorate(final UserRef userRef) {
-                                return userRef;
-                            }
-                        });
+                        bind(UserRefLookup.class).toInstance((userUuid, context) ->
+                                Optional.of(UserRef.forUserUuid(userUuid)));
                     }
                 });
         injector.injectMembers(this);
@@ -137,7 +126,7 @@ class AbstractProcessorTest {
 
     protected int countOwned(final String nodeName) {
         int count = 0;
-        List<ProcessorTask> list = processorTaskDao.find(new ExpressionCriteria()).getValues();
+        final List<ProcessorTask> list = processorTaskDao.find(new ExpressionCriteria()).getValues();
         for (final ProcessorTask task : list) {
             if (task.getNodeName() == null) {
                 if (nodeName == null) {

@@ -1,9 +1,9 @@
 package stroom.util.user;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserDesc;
 
 import org.apache.commons.csv.CSVFormat;
@@ -76,7 +76,7 @@ public class UserDescUtil {
                                     fullName);
                         })
                         .collect(Collectors.toList());
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 LOGGER.error("Unable to parse users CSV data\n{}", usersCsvData);
                 throw new RuntimeException(LogUtil.message("Error parsing user CSV data: {}",
                         e.getMessage()), e);

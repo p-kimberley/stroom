@@ -1,6 +1,6 @@
 package stroom.query.common.v2;
 
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.query.common.v2.SimpleStringExpressionParser.FieldProvider;
 import stroom.query.language.token.AbstractQueryTest;
 
@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
 
 public class TestSimpleStringExpressionParser extends AbstractQueryTest {
 
@@ -30,7 +29,7 @@ public class TestSimpleStringExpressionParser extends AbstractQueryTest {
     private ExpressionOperator getExpression(final String string) {
         final FieldProvider fieldProvider = new FieldProviderImpl(
                 List.of("defaultField"),
-                Map.of("field1", "field1", "field2", "field2"));
+                List.of("field1", "field2"));
         return SimpleStringExpressionParser
                 .create(fieldProvider, string)
                 .orElseThrow();

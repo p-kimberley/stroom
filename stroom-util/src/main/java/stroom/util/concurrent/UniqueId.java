@@ -1,7 +1,7 @@
 package stroom.util.concurrent;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.base.Strings;
 
@@ -134,14 +134,14 @@ public final class UniqueId {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == this) {
             return true;
         }
         if (obj == null || obj.getClass() != this.getClass()) {
             return false;
         }
-        var that = (UniqueId) obj;
+        final var that = (UniqueId) obj;
         return this.epochMs == that.epochMs &&
                this.sequenceNo == that.sequenceNo &&
                Objects.equals(this.nodeId, that.nodeId);

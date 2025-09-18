@@ -9,7 +9,7 @@ import stroom.entity.shared.ExpressionCriteria;
 import stroom.explorer.shared.AdvancedDocumentFindRequest;
 import stroom.explorer.shared.ExplorerResource;
 import stroom.explorer.shared.FindResult;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.shared.DocumentPermission;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
@@ -73,8 +73,8 @@ public class DocumentListPresenter extends MyPresenterWidget<PagerView> {
         };
         cellTable.addStyleName("FindCellTable");
 
-        selectionModel = new MultiSelectionModelImpl<>(cellTable);
-        SelectionEventManager<FindResult> selectionEventManager = new SelectionEventManager<>(
+        selectionModel = new MultiSelectionModelImpl<>();
+        final SelectionEventManager<FindResult> selectionEventManager = new SelectionEventManager<>(
                 cellTable,
                 selectionModel,
                 doc -> findResultListHandler.openDocument(doc),
@@ -164,7 +164,7 @@ public class DocumentListPresenter extends MyPresenterWidget<PagerView> {
         return selectionModel.getSelected();
     }
 
-    public void setKeyboardSelectedRow(final int row, boolean stealFocus) {
+    public void setKeyboardSelectedRow(final int row, final boolean stealFocus) {
         cellTable.setKeyboardSelectedRow(row, stealFocus);
     }
 

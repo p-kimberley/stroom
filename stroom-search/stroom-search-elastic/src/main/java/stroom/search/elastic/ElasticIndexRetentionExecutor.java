@@ -20,8 +20,8 @@ package stroom.search.elastic;
 import stroom.cluster.lock.api.ClusterLockService;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionUtil;
 import stroom.query.common.v2.IndexFieldCache;
 import stroom.search.elastic.search.SearchExpressionQueryBuilder;
 import stroom.search.elastic.shared.ElasticClusterDoc;
@@ -136,7 +136,7 @@ public class ElasticIndexRetentionExecutor {
                             info(taskContext, () ->
                                     "Deleting data from Elasticsearch index '" + elasticIndex.getName() + "'");
 
-                            DeleteByQueryRequest request = DeleteByQueryRequest.of(r -> r
+                            final DeleteByQueryRequest request = DeleteByQueryRequest.of(r -> r
                                     .index(elasticIndex.getIndexName())
                                     .query(query)
                                     .timeout(Time.of(t -> t.time(String.format("%ds", DELETE_REQUEST_TIMEOUT_SECONDS))))
@@ -145,7 +145,7 @@ public class ElasticIndexRetentionExecutor {
                             );
 
                             elasticClient.deleteByQuery(request);
-                        } catch (Exception e) {
+                        } catch (final Exception e) {
                             LOGGER.error(e::getMessage, e);
                         }
                     });

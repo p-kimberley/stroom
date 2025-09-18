@@ -17,7 +17,7 @@
 package stroom.security.client.presenter;
 
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
@@ -28,7 +28,7 @@ import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
 import stroom.explorer.client.presenter.DocumentTypeCache;
 import stroom.explorer.shared.DocumentTypes;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.security.shared.DocPermissionResource;
 import stroom.security.shared.DocumentPermission;
@@ -42,7 +42,7 @@ import stroom.svg.client.Preset;
 import stroom.svg.shared.SvgImage;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 import stroom.util.shared.UserRef.DisplayType;
@@ -59,7 +59,6 @@ import com.google.gwt.core.client.GWT;
 import com.google.gwt.safehtml.shared.SafeHtml;
 import com.google.gwt.safehtml.shared.SafeHtmlUtils;
 import com.google.gwt.user.cellview.client.Column;
-import com.google.gwt.user.cellview.client.ColumnSortList.ColumnSortInfo;
 import com.google.gwt.view.client.Range;
 import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
@@ -135,8 +134,14 @@ public class DocumentUserPermissionsListPresenter
     }
 
     @Override
+    protected void onBind() {
+        super.onBind();
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
+    }
+
+    @Override
     public void onFilterChange(String text) {
-        text = GwtNullSafe.trim(text);
+        text = NullSafe.trim(text);
         if (text.isEmpty()) {
             text = null;
         }
@@ -157,7 +162,8 @@ public class DocumentUserPermissionsListPresenter
                         protected void exec(final Range range,
                                             final Consumer<ResultPage<DocumentUserPermissions>> dataConsumer,
                                             final RestErrorHandler errorHandler) {
-                            criteriaBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+                            criteriaBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+                            criteriaBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
                             final FetchDocumentUserPermissionsRequest request = criteriaBuilder.build();
                             restFactory
                                     .create(DOC_PERMISSION_RESOURCE)
@@ -194,8 +200,6 @@ public class DocumentUserPermissionsListPresenter
     }
 
     private void setupColumns(final DocumentTypes documentTypes) {
-        DataGridUtil.addColumnSortHandler(dataGrid, criteriaBuilder, this::refresh);
-
         // Icon
         dataGrid.addColumn(
                 DataGridUtil.svgPresetColumnBuilder(false, (DocumentUserPermissions row) ->
@@ -222,6 +226,7 @@ public class DocumentUserPermissionsListPresenter
                         .withSorting(UserFields.FIELD_DISPLAY_NAME, true)
                         .enabledWhen(this::isUserEnabled)
                         .build();
+        dataGrid.sort(displayNameCol);
 
         dataGrid.addResizableColumn(
                 displayNameCol,
@@ -233,7 +238,7 @@ public class DocumentUserPermissionsListPresenter
         // Explicit Permission
         dataGrid.addColumn(
                 DataGridUtil.textColumnBuilder((DocumentUserPermissions row) ->
-                                GwtNullSafe.get(
+                                NullSafe.get(
                                         row,
                                         DocumentUserPermissions::getPermission,
                                         DocumentPermission::getDisplayValue))
@@ -248,10 +253,10 @@ public class DocumentUserPermissionsListPresenter
         // Effective Permission
         dataGrid.addColumn(
                 DataGridUtil.textColumnBuilder(
-                                (DocumentUserPermissions row) -> {
+                                (final DocumentUserPermissions row) -> {
                                     final DocumentPermission explicit = row.getPermission();
                                     final DocumentPermission inherited = row.getInheritedPermission();
-                                    return GwtNullSafe.get(DocumentPermission.highest(explicit, inherited),
+                                    return NullSafe.get(DocumentPermission.highest(explicit, inherited),
                                             DocumentPermission::getDisplayValue);
                                 })
                         .withSorting(DocumentPermissionFields.FIELD_EFFECTIVE_DOC_PERMISSION)
@@ -289,12 +294,10 @@ public class DocumentUserPermissionsListPresenter
         }
 
         DataGridUtil.addEndColumn(dataGrid);
-
-        dataGrid.getColumnSortList().push(new ColumnSortInfo(displayNameCol, true));
     }
 
     private boolean isUserEnabled(final DocumentUserPermissions documentUserPermissions) {
-        return GwtNullSafe.get(documentUserPermissions, DocumentUserPermissions::getUserRef, UserRef::isEnabled);
+        return NullSafe.get(documentUserPermissions, DocumentUserPermissions::getUserRef, UserRef::isEnabled);
     }
 
     public SafeHtml permissionsToExplicitTypeIcons(final DocumentUserPermissions row,
@@ -306,17 +309,17 @@ public class DocumentUserPermissionsListPresenter
 
     public SafeHtml permissionsToEffectiveTypeIcons(final DocumentUserPermissions row,
                                                     final int docTypeCount) {
-        final Set<String> effective = new HashSet<>(GwtNullSafe.set(row
+        final Set<String> effective = new HashSet<>(NullSafe.set(row
                 .getDocumentCreatePermissions()));
-        effective.addAll(GwtNullSafe.set(row.getInheritedDocumentCreatePermissions()));
+        effective.addAll(NullSafe.set(row.getInheritedDocumentCreatePermissions()));
 
         return permissionsToTypeIcons(effective, docTypeCount);
     }
 
     public SafeHtml permissionsToTypeIcons(final Set<String> createTypes,
                                            final int docTypeCount) {
-        if ((GwtNullSafe.hasItems(createTypes))) {
-            if (GwtNullSafe.size(createTypes) == docTypeCount) {
+        if ((NullSafe.hasItems(createTypes))) {
+            if (NullSafe.size(createTypes) == docTypeCount) {
                 return SafeHtmlUtils.fromTrustedString("ALL");
             } else {
                 //noinspection SimplifyStreamApiCallChains // Cos GWT

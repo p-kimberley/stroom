@@ -1,12 +1,11 @@
 package stroom.db.util;
 
 import stroom.config.common.AbstractDbConfig;
-import stroom.util.NullSafe;
-import stroom.util.db.ForceLegacyMigration;
 import stroom.util.guice.GuiceUtil;
 import stroom.util.logging.DurationTimer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.NullSafe;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Injector;
@@ -54,7 +53,6 @@ public abstract class AbstractDataSourceProviderModule<
     public T_CONN_PROV getConnectionProvider(
             final Provider<T_CONFIG> configProvider,
             final DataSourceFactory dataSourceFactory,
-            @SuppressWarnings("unused") final ForceLegacyMigration forceLegacyMigration,
             final Injector injector) {
 
         LOGGER.debug(() -> "Getting connection provider for " + getModuleName());

@@ -17,15 +17,15 @@
 
 package stroom.search.solr.search;
 
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.IndexField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.IndexField;
 import stroom.query.common.v2.DateExpressionParser;
 import stroom.query.common.v2.IndexFieldCache;
 
@@ -516,7 +516,7 @@ public class SearchExpressionQueryBuilder {
         // we can't expect to do a sentence match. In this case we need to
         // modify the query so that each word becomes a new term in a boolean
         // query.
-        String val = value.trim();
+        final String val = value.trim();
 //        if (in || !AnalyzerType.KEYWORD.equals(field.getAnalyzerType())) {
 //            // If the field has been analysed then we need to analyse the search
 //            // query to create matching terms.

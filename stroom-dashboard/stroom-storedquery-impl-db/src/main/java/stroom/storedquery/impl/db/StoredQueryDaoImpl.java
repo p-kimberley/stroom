@@ -1,15 +1,16 @@
 package stroom.storedquery.impl.db;
 
+import stroom.cluster.lock.api.ClusterLockService;
 import stroom.dashboard.shared.FindStoredQueryCriteria;
 import stroom.dashboard.shared.StoredQuery;
 import stroom.db.util.JooqUtil;
 import stroom.security.user.api.UserRefLookup;
 import stroom.storedquery.impl.StoredQueryDao;
-import stroom.util.NullSafe;
 import stroom.util.exception.DataChangedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 
@@ -40,19 +41,24 @@ class StoredQueryDaoImpl implements StoredQueryDao {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(StoredQueryDaoImpl.class);
 
+    private static final String LOCK_NAME = "StoredQueryClean";
+
     private static final Map<String, Field<?>> FIELD_MAP = Map.of(
             FindStoredQueryCriteria.FIELD_ID, QUERY.ID,
             FindStoredQueryCriteria.FIELD_NAME, QUERY.NAME,
             FindStoredQueryCriteria.FIELD_TIME, QUERY.CREATE_TIME_MS);
 
+    private final ClusterLockService clusterLockService;
     private final StoredQueryDbConnProvider storedQueryDbConnProvider;
     private final QueryJsonSerialiser queryJsonSerialiser;
     private final Function<Record, StoredQuery> recordToStoredQueryMapper;
 
     @Inject
-    StoredQueryDaoImpl(final StoredQueryDbConnProvider storedQueryDbConnProvider,
+    StoredQueryDaoImpl(final ClusterLockService clusterLockService,
+                       final StoredQueryDbConnProvider storedQueryDbConnProvider,
                        final QueryJsonSerialiser queryJsonSerialiser,
                        final Provider<UserRefLookup> userRefLookupProvider) {
+        this.clusterLockService = clusterLockService;
         this.storedQueryDbConnProvider = storedQueryDbConnProvider;
         this.queryJsonSerialiser = queryJsonSerialiser;
         recordToStoredQueryMapper = new RecordToStoredQueryMapper(
@@ -69,7 +75,7 @@ class StoredQueryDaoImpl implements StoredQueryDao {
         storedQuery.setVersion(1);
         storedQuery.setUuid(UUID.randomUUID().toString());
         final String data = queryJsonSerialiser.serialise(storedQuery.getQuery());
-        final int id = context
+        final Integer id = context
                 .insertInto(QUERY)
                 .columns(QUERY.VERSION,
                         QUERY.CREATE_TIME_MS,
@@ -135,7 +141,7 @@ class StoredQueryDaoImpl implements StoredQueryDao {
 
 
     @Override
-    public boolean delete(int id) {
+    public boolean delete(final int id) {
         final int count = JooqUtil.contextResult(storedQueryDbConnProvider, context -> context
                 .deleteFrom(QUERY)
                 .where(QUERY.ID.eq(id))
@@ -144,7 +150,7 @@ class StoredQueryDaoImpl implements StoredQueryDao {
     }
 
     @Override
-    public Optional<StoredQuery> fetch(int id) {
+    public Optional<StoredQuery> fetch(final int id) {
         return JooqUtil.contextResult(storedQueryDbConnProvider, context -> context
                         .select()
                         .from(QUERY)
@@ -181,44 +187,47 @@ class StoredQueryDaoImpl implements StoredQueryDao {
     public void clean(final String ownerUuid,
                       final int historyItemsRetention,
                       final long oldestCrtMs) {
-        try {
-            LOGGER.debug("Deleting old rows for ownerUuid: {}, historyItemsRetention: {}, oldestCrtMs: {}",
-                    ownerUuid, historyItemsRetention, oldestCrtMs);
-            final int rows = JooqUtil.contextResult(storedQueryDbConnProvider, context -> {
+        LOGGER.debug(() -> "Trying lock " + LOCK_NAME);
+        clusterLockService.tryLock(LOCK_NAME, () -> {
+            try {
+                LOGGER.debug("Deleting old rows for ownerUuid: {}, historyItemsRetention: {}, oldestCrtMs: {}",
+                        ownerUuid, historyItemsRetention, oldestCrtMs);
+                final int rows = JooqUtil.contextResult(storedQueryDbConnProvider, context -> {
 
-                final Field<Integer> rowNumField = DSL.rowNumber()
-                        .over(DSL.orderBy(QUERY.ID.desc()))
-                        .as("rn");
+                    final Field<Integer> rowNumField = DSL.rowNumber()
+                            .over(DSL.orderBy(QUERY.ID.desc()))
+                            .as("rn");
 
-                // Rank the rows with lowest ronNum being the most recent
-                // and highest rowNum being the oldest
-                Table<?> inner = context
-                        .select(
-                                QUERY.ID,
-                                rowNumField,
-                                QUERY.CREATE_TIME_MS)
-                        .from(QUERY)
-                        .where(QUERY.OWNER_UUID.eq(ownerUuid))
-                        .and(QUERY.FAVOURITE.eq(false)) // Don't want to delete favourites
-                        .asTable("inner");
-                final Field<Integer> innerId = inner.field(QUERY.ID);
+                    // Rank the rows with lowest ronNum being the most recent
+                    // and highest rowNum being the oldest
+                    final Table<?> inner = context
+                            .select(
+                                    QUERY.ID,
+                                    rowNumField,
+                                    QUERY.CREATE_TIME_MS)
+                            .from(QUERY)
+                            .where(QUERY.OWNER_UUID.eq(ownerUuid))
+                            .and(QUERY.FAVOURITE.eq(false)) // Don't want to delete favourites
+                            .asTable("inner");
+                    final Field<Integer> innerId = inner.field(QUERY.ID);
 
-                return context
-                        .deleteFrom(QUERY)
-                        .where(DSL.exists(
-                                context.select(DSL.inline((String) null))
-                                        .from(inner)
-                                        .where(rowNumField.greaterThan(historyItemsRetention)
-                                                .or(QUERY.CREATE_TIME_MS.lessThan(oldestCrtMs)))
-                                        .and(QUERY.ID.eq(innerId))
-                        ))
-                        .execute();
-            });
+                    return context
+                            .deleteFrom(QUERY)
+                            .where(DSL.exists(
+                                    context.select(DSL.inline((String) null))
+                                            .from(inner)
+                                            .where(rowNumField.greaterThan(historyItemsRetention)
+                                                    .or(QUERY.CREATE_TIME_MS.lessThan(oldestCrtMs)))
+                                            .and(QUERY.ID.eq(innerId))
+                            ))
+                            .execute();
+                });
 
-            LOGGER.debug("Deleted {} rows for ownerUuid: {}", rows, ownerUuid);
-        } catch (final RuntimeException e) {
-            LOGGER.error(e.getMessage(), e);
-        }
+                LOGGER.debug("Deleted {} rows for ownerUuid: {}", rows, ownerUuid);
+            } catch (final RuntimeException e) {
+                LOGGER.error(e.getMessage(), e);
+            }
+        });
     }
 
     @Override

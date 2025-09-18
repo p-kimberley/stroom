@@ -16,7 +16,6 @@
 
 package stroom.db.util;
 
-import stroom.util.NullSafe;
 import stroom.util.concurrent.ThreadUtil;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.logging.AsciiTable;
@@ -29,8 +28,8 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.BaseCriteria;
 import stroom.util.shared.CriteriaFieldSort;
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.HasAuditInfo;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.Range;
 import stroom.util.shared.Selection;
@@ -96,7 +95,7 @@ public final class JooqUtil {
     }
 
     private static Settings createSettings(final boolean isExecuteWithOptimisticLocking) {
-        Settings settings = new Settings();
+        final Settings settings = new Settings();
         // Turn off fully qualified schemata.
         settings.withRenderSchema(RENDER_SCHEMA);
 
@@ -232,7 +231,7 @@ public final class JooqUtil {
 
     public static <R> R contextResult(final DataSource dataSource,
                                       final Function<DSLContext, R> function) {
-        R result;
+        final R result;
         try (final Connection connection = dataSource.getConnection()) {
             try {
                 checkDataSource(dataSource);
@@ -255,7 +254,7 @@ public final class JooqUtil {
     public static <R> TimedResult<R> timedContextResult(final DataSource dataSource,
                                                         final boolean isTimed,
                                                         final Function<DSLContext, R> function) {
-        TimedResult<R> timedResult;
+        final TimedResult<R> timedResult;
         try (final Connection connection = dataSource.getConnection()) {
             try {
                 checkDataSource(dataSource);
@@ -295,7 +294,7 @@ public final class JooqUtil {
      */
     public static <R> R contextResultWithOptimisticLocking(final DataSource dataSource,
                                                            final Function<DSLContext, R> function) {
-        R result;
+        final R result;
         try (final Connection connection = dataSource.getConnection()) {
             try {
                 checkDataSource(dataSource);
@@ -304,7 +303,7 @@ public final class JooqUtil {
             } finally {
                 releaseDataSource();
             }
-        } catch (DataChangedException e) {
+        } catch (final DataChangedException e) {
             throw new stroom.util.exception.DataChangedException(e.getMessage(), e);
         } catch (final Exception e) {
             throw convertException(e);
@@ -439,7 +438,7 @@ public final class JooqUtil {
             if (onCreateAction != null) {
                 onCreateAction.accept(persistedRecord);
             }
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             if (isDuplicateKeyException(e)) {
                 LOGGER.debug(e::getMessage, e);
 
@@ -511,7 +510,7 @@ public final class JooqUtil {
         try {
             // Attempt to write the record, which may already be there
             result = record.insert();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             if (isDuplicateKeyException(e)) {
                 LOGGER.debug(e::getMessage, e);
             } else {
@@ -552,7 +551,7 @@ public final class JooqUtil {
             } finally {
                 releaseDataSource();
             }
-        } catch (DataChangedException e) {
+        } catch (final DataChangedException e) {
             throw new stroom.util.exception.DataChangedException(e.getMessage(), e);
         } catch (final Exception e) {
             throw convertException(e);
@@ -659,8 +658,8 @@ public final class JooqUtil {
                 }
 
                 return result;
-            } catch (DataAccessException e) {
-                if (e.getCause() instanceof SQLTransactionRollbackException sqlTxnRollbackEx
+            } catch (final DataAccessException e) {
+                if (e.getCause() instanceof final SQLTransactionRollbackException sqlTxnRollbackEx
                     && NullSafe.containsIgnoringCase(sqlTxnRollbackEx.getMessage(), "deadlock")) {
 
                     if (attempt.get() >= MAX_DEADLOCK_RETRY_ATTEMPTS) {
@@ -688,7 +687,7 @@ public final class JooqUtil {
         }
     }
 
-    private static Field<Integer> getIdField(Table<?> table) {
+    private static Field<Integer> getIdField(final Table<?> table) {
         final Field<Integer> idField = table.field(DEFAULT_ID_FIELD_NAME, Integer.class);
         if (idField == null) {
             throw new RuntimeException(LogUtil.message("Field [id] not found on table [{}]", table.getName()));
@@ -886,8 +885,8 @@ public final class JooqUtil {
     public static Collection<OrderField<?>> getOrderFields(final Map<String, Field<?>> fieldMap,
                                                            final BaseCriteria criteria,
                                                            final OrderField<?>... defaultSortFields) {
-        final List<OrderField<?>> defaults = GwtNullSafe.asList(defaultSortFields);
-        if (GwtNullSafe.isEmptyCollection(criteria.getSortList())) {
+        final List<OrderField<?>> defaults = NullSafe.asList(defaultSortFields);
+        if (NullSafe.isEmptyCollection(criteria.getSortList())) {
             return defaults;
         } else {
             final List<OrderField<?>> defaultsNotSeen = new ArrayList<>(defaults);
@@ -910,11 +909,20 @@ public final class JooqUtil {
         }
     }
 
+    public static Collection<OrderField<?>> getOrderFields(final Map<String, Field<?>> fieldMap,
+                                                           final BaseCriteria criteria) {
+        return NullSafe.list(criteria.getSortList())
+                .stream()
+                .map(s -> getOrderField(fieldMap, s))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
     private static OrderField<?> getOrderField(final Map<String, Field<?>> fieldMap,
                                                final CriteriaFieldSort sort) {
-        final Field<?> field = GwtNullSafe.map(fieldMap)
+        final Field<?> field = NullSafe.map(fieldMap)
                 .get(sort.getId());
-        return GwtNullSafe.get(
+        return NullSafe.get(
                 field,
                 fld -> (sort.isDesc()
                         ? fld.desc()
@@ -924,14 +932,14 @@ public final class JooqUtil {
     /**
      * Converts a time in millis since epoch to a {@link java.sql.Timestamp}
      */
-    public static Field<Timestamp> epochMsToTimestamp(Field<? extends Number> field) {
+    public static Field<Timestamp> epochMsToTimestamp(final Field<? extends Number> field) {
         return DSL.field("from_unixtime({0} / 1000)", SQLDataType.TIMESTAMP, field);
     }
 
     /**
      * Converts a time in millis since epoch to a {@link java.sql.Date}
      */
-    public static Field<Date> epochMsToDate(Field<? extends Number> field) {
+    public static Field<Date> epochMsToDate(final Field<? extends Number> field) {
         return DSL.field("from_unixtime({0} / 1000)", SQLDataType.DATE, field);
     }
 
@@ -1091,7 +1099,7 @@ public final class JooqUtil {
      * @param dataSource The datasource to check.
      */
     private static void checkDataSource(final DataSource dataSource) {
-        DataSource currentDataSource = DATA_SOURCE_THREAD_LOCAL.get();
+        final DataSource currentDataSource = DATA_SOURCE_THREAD_LOCAL.get();
         if (currentDataSource != null && currentDataSource.equals(dataSource)) {
             try {
                 throw new RuntimeException("Data source already in use");
@@ -1163,7 +1171,7 @@ public final class JooqUtil {
     public static void onDuplicateKeyIgnore(final Runnable runnable) {
         try {
             runnable.run();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             if (isDuplicateKeyException(e)) {
                 LOGGER.debug(e::getMessage, e);
             } else {
@@ -1177,7 +1185,7 @@ public final class JooqUtil {
     public static <R> Optional<R> onDuplicateKeyIgnore(final Supplier<Optional<R>> supplier) {
         try {
             return supplier.get();
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             if (isDuplicateKeyException(e)) {
                 LOGGER.debug(e::getMessage, e);
                 return Optional.empty();
@@ -1189,11 +1197,11 @@ public final class JooqUtil {
         }
     }
 
-    private static boolean isDuplicateKeyException(final Throwable throwable) {
+    public static boolean isDuplicateKeyException(final Throwable throwable) {
         // 1062 is a duplicate key exception so someone else has already inserted it
         return NullSafe.test(throwable, e ->
                 e instanceof DataAccessException
-                && e.getCause() instanceof SQLIntegrityConstraintViolationException sqlEx
+                && e.getCause() instanceof final SQLIntegrityConstraintViolationException sqlEx
                 && sqlEx.getErrorCode() == 1062);
     }
 

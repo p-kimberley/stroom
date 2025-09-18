@@ -1,6 +1,6 @@
 package stroom.explorer.shared;
 
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.shared.DocumentPermission;
 import stroom.security.shared.PermissionShowLevel;
 import stroom.util.shared.CriteriaFieldSort;
@@ -31,7 +31,7 @@ public class AdvancedDocumentFindWithPermissionsRequest extends AdvancedDocument
                                                       @JsonProperty("requiredPermissions") final Set<DocumentPermission>
                                                               requiredPermissions,
                                                       @JsonProperty("userRef") final UserRef userRef,
-                                                      @JsonProperty("showLevel") PermissionShowLevel showLevel) {
+                                                      @JsonProperty("showLevel") final PermissionShowLevel showLevel) {
         super(pageRequest, sortList, expression, requiredPermissions);
         this.userRef = userRef;
         this.showLevel = showLevel;

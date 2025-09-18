@@ -4,6 +4,7 @@ import stroom.cell.info.client.InfoColumn;
 import stroom.cell.tickbox.shared.TickBoxState;
 import stroom.cell.valuespinner.shared.EditableInteger;
 import stroom.data.client.presenter.ColumnSizeConstants;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
@@ -23,8 +24,8 @@ import stroom.ui.config.shared.NodeMonitoringConfig;
 import stroom.util.client.DataGridUtil;
 import stroom.util.client.DelayedUpdate;
 import stroom.util.shared.BuildInfo;
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.widget.button.client.InlineSvgToggleButton;
 import stroom.widget.popup.client.presenter.PopupPosition;
 import stroom.widget.tooltip.client.presenter.TooltipPresenter;
@@ -113,6 +114,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
             protected void exec(final Range range,
                                 final Consumer<FetchNodeStatusResponse> dataConsumer,
                                 final RestErrorHandler errorHandler) {
+                CriteriaUtil.setSortList(findNodeStatusCriteria, dataGrid.getColumnSortList());
                 nodeManager.fetchNodeStatus(dataConsumer, errorHandler, findNodeStatusCriteria,
                         NodeListPresenter.this);
             }
@@ -175,6 +177,8 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
                 }
             }
         }));
+
+        registerHandler(dataGrid.addColumnSortHandler(event -> internalRefresh()));
     }
 
     private void scheduleDataGridRedraw() {
@@ -186,20 +190,20 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
         return selectionModel;
     }
 
-    private static boolean isNodeEnabled(NodeStatusResult nodeStatusResult) {
-        return GwtNullSafe.isTrue(nodeStatusResult.getNode(), Node::isEnabled);
+    private static boolean isNodeEnabled(final NodeStatusResult nodeStatusResult) {
+        return NullSafe.isTrue(nodeStatusResult.getNode(), Node::isEnabled);
     }
 
-    private static Number extractNodePriority(NodeStatusResult result) {
-        return GwtNullSafe.get(
+    private static Number extractNodePriority(final NodeStatusResult result) {
+        return NullSafe.get(
                 result,
                 NodeStatusResult::getNode,
                 Node::getPriority,
                 EditableInteger::new);
     }
 
-    private String extractLastBootTimeAsStr(NodeStatusResult result) {
-        return GwtNullSafe.get(
+    private String extractLastBootTimeAsStr(final NodeStatusResult result) {
+        return NullSafe.get(
                 result,
                 NodeStatusResult::getNode,
                 Node::getLastBootMs,
@@ -210,8 +214,6 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
      * Add the columns to the table.
      */
     private void initTableColumns() {
-        DataGridUtil.addColumnSortHandler(dataGrid, findNodeStatusCriteria, this::internalRefresh);
-
         // Info column.
         final InfoColumn<NodeStatusResult> infoColumn = new InfoColumn<NodeStatusResult>() {
             @Override
@@ -227,10 +229,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
 
         // Name.
         dataGrid.addResizableColumn(
-                DataGridUtil.textColumnBuilder((NodeStatusResult result) -> GwtNullSafe.get(
-                                result,
-                                NodeStatusResult::getNode,
-                                Node::getName))
+                DataGridUtil.textColumnBuilder(DataGridUtil.toStringFunc(NodeStatusResult::getNode, Node::getName))
                         .enabledWhen(NodeListPresenter::isNodeEnabled)
                         .withSorting(FindNodeStatusCriteria.FIELD_ID_NAME)
                         .build(),
@@ -241,7 +240,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
 
         // Host Name.
         dataGrid.addResizableColumn(
-                DataGridUtil.textColumnBuilder((NodeStatusResult result) -> GwtNullSafe.get(
+                DataGridUtil.textColumnBuilder((NodeStatusResult result) -> NullSafe.get(
                                 result,
                                 NodeStatusResult::getNode,
                                 Node::getUrl))
@@ -255,7 +254,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
 
         // Version
         dataGrid.addResizableColumn(
-                DataGridUtil.textColumnBuilder((NodeStatusResult result) -> GwtNullSafe.get(
+                DataGridUtil.textColumnBuilder((NodeStatusResult result) -> NullSafe.get(
                                 result,
                                 NodeStatusResult::getNode,
                                 Node::getBuildVersion))
@@ -293,7 +292,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
         // Master.
         dataGrid.addColumn(
                 DataGridUtil.readOnlyTickBoxColumnBuilder(TickBoxState.createTickBoxFunc(
-                                (NodeStatusResult result) -> GwtNullSafe.get(
+                                (NodeStatusResult result) -> NullSafe.get(
                                         result,
                                         NodeStatusResult::isMaster)))
                         .enabledWhen(NodeListPresenter::isNodeEnabled)
@@ -329,7 +328,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
         // Enabled
         dataGrid.addColumn(
                 DataGridUtil.updatableTickBoxColumnBuilder(TickBoxState.createTickBoxFunc(
-                                (NodeStatusResult result) -> GwtNullSafe.get(
+                                (NodeStatusResult result) -> NullSafe.get(
                                         result,
                                         NodeStatusResult::getNode,
                                         Node::isEnabled)))
@@ -380,7 +379,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
             } else if (ping == null || ping < 0) {
                 ping = Long.MAX_VALUE;
                 pingMsg = "Invalid ping value: "
-                          + GwtNullSafe.requireNonNullElse(ping, "null");
+                          + NullSafe.requireNonNullElse(ping, "null");
             }
 
             return buildPingBar(ping, pingMsg, pingResult.getNodeMonitoringConfig());
@@ -440,7 +439,7 @@ public class NodeListPresenter extends MyPresenterWidget<PagerView> implements R
         final Attribute titleAttr = Attribute.title(title);
         final Attribute outerClass = Attribute.className("nodePingBar-outer");
 
-        HtmlBuilder htmlBuilder = new HtmlBuilder();
+        final HtmlBuilder htmlBuilder = new HtmlBuilder();
         if (isErrorMsg) {
             // A text div covering the whole of the cell
             // e.g. ' Unable to connect           '

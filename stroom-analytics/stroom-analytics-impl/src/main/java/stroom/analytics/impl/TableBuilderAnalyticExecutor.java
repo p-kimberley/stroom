@@ -24,19 +24,19 @@ import stroom.pipeline.PipelineStore;
 import stroom.pipeline.factory.PipelineDataCache;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.data.PipelineData;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.TableResult;
-import stroom.query.api.v2.TableResultBuilder;
-import stroom.query.api.v2.TimeFilter;
+import stroom.query.api.Column;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.QueryKey;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.TableResult;
+import stroom.query.api.TableResultBuilder;
+import stroom.query.api.TimeFilter;
 import stroom.query.common.v2.CurrentDbState;
 import stroom.query.common.v2.DeleteCommand;
 import stroom.query.common.v2.ExpressionPredicateFactory;
@@ -60,13 +60,13 @@ import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
 import stroom.task.api.TerminateHandlerFactory;
 import stroom.ui.config.shared.AnalyticUiDefaultConfig;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.date.DateUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogExecutionTime;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserRef;
 import stroom.util.shared.time.SimpleDuration;
 import stroom.util.shared.time.TimeUnit;
@@ -574,7 +574,7 @@ public class TableBuilderAnalyticExecutor {
         for (final TableBuilderAnalytic analytic : analytics) {
             final AnalyticDataStore dataStore = analytic.dataStore();
             final LmdbDataStore lmdbDataStore = dataStore.lmdbDataStore();
-            CurrentDbState currentDbState = lmdbDataStore.sync();
+            final CurrentDbState currentDbState = lmdbDataStore.sync();
 
             // If we don't have any data in LMDB then we may have a currentDbState
             // but lastEventTime will not be present
@@ -621,7 +621,7 @@ public class TableBuilderAnalyticExecutor {
         final AnalyticProcessConfig analyticProcessConfig = doc.getAnalyticProcessConfig();
         if (analyticProcessConfig instanceof
                 final TableBuilderAnalyticProcessConfig tableBuilderAnalyticProcessConfig) {
-            TableBuilderAnalyticProcessConfig updatedProcessConfig = tableBuilderAnalyticProcessConfig
+            final TableBuilderAnalyticProcessConfig updatedProcessConfig = tableBuilderAnalyticProcessConfig
                     .copy()
                     .enabled(false)
                     .build();
@@ -715,7 +715,7 @@ public class TableBuilderAnalyticExecutor {
             to = newTo;
         }
         if (analytic.analyticProcessConfig.getMaxMetaCreateTimeMs() != null) {
-            Instant max = Instant.ofEpochMilli(analytic.analyticProcessConfig.getMaxMetaCreateTimeMs());
+            final Instant max = Instant.ofEpochMilli(analytic.analyticProcessConfig.getMaxMetaCreateTimeMs());
             if (max.isBefore(to)) {
                 to = max;
             }
@@ -929,7 +929,7 @@ public class TableBuilderAnalyticExecutor {
                     AnalyticProcessType.TABLE_BUILDER.equals(analyticRuleDoc.getAnalyticProcessType())) {
                     final AnalyticTracker tracker = getTracker(analyticRuleDoc);
 
-                    TableBuilderAnalyticTrackerData analyticProcessorTrackerData;
+                    final TableBuilderAnalyticTrackerData analyticProcessorTrackerData;
                     if (tracker.getAnalyticTrackerData() instanceof
                             TableBuilderAnalyticTrackerData) {
                         analyticProcessorTrackerData = (TableBuilderAnalyticTrackerData)
@@ -1002,7 +1002,7 @@ public class TableBuilderAnalyticExecutor {
         //  we can pass some kind of json path query to the persistence layer that the DBPersistence
         //  can translate to a MySQL json path query.
         final List<AnalyticRuleDoc> currentRules = new ArrayList<>();
-        List<DocRef> docRefs = analyticRuleStore.list();
+        final List<DocRef> docRefs = analyticRuleStore.list();
         for (final DocRef docRef : docRefs) {
             try {
                 final AnalyticRuleDoc analyticRuleDoc = analyticRuleStore.readDocument(docRef);

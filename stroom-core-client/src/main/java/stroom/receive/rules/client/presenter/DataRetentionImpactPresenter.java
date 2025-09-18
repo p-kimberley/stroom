@@ -20,6 +20,7 @@ import stroom.alert.client.event.AlertEvent;
 import stroom.cell.expander.client.ExpanderCell;
 import stroom.config.global.client.presenter.ListDataProvider;
 import stroom.data.client.presenter.ColumnSizeConstants;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.EditExpressionPresenter;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
@@ -28,15 +29,15 @@ import stroom.data.retention.shared.DataRetentionDeleteSummaryRequest;
 import stroom.data.retention.shared.DataRetentionRules;
 import stroom.data.retention.shared.DataRetentionRulesResource;
 import stroom.data.retention.shared.FindDataRetentionImpactCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dispatch.client.RestFactory;
 import stroom.meta.shared.MetaFields;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.client.presenter.SimpleFieldSelectionListModel;
 import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.button.client.ToggleButtonView;
 import stroom.widget.popup.client.event.ShowPopupEvent;
@@ -230,6 +231,8 @@ public class DataRetentionImpactPresenter
     }
 
     private void refreshVisibleData() {
+        CriteriaUtil.setSortList(criteria, dataGrid.getColumnSortList());
+
         // Rebuild the rows from the source data, e.g. when sorting has changed
         // or it is toggled from nest/flat
         final List<DataRetentionImpactRow> rows = Optional.ofNullable(this.sourceData)
@@ -281,6 +284,7 @@ public class DataRetentionImpactPresenter
             treeAction.collapseAll();
             refreshVisibleData();
         }));
+        registerHandler(dataGrid.addColumnSortHandler(event -> refreshVisibleData()));
     }
 
     private void openFilterPresenter() {
@@ -349,7 +353,7 @@ public class DataRetentionImpactPresenter
 
         dataGrid.addResizableColumn(
                 DataGridUtil.textColumnBuilder((DataRetentionImpactRow row) ->
-                                GwtNullSafe.toString(row.getRuleNumber()))
+                                NullSafe.toString(row.getRuleNumber()))
                         .rightAligned()
                         .withSorting(DataRetentionImpactRow.FIELD_NAME_RULE_NO)
                         .build(),
@@ -409,8 +413,6 @@ public class DataRetentionImpactPresenter
                 150);
 
         DataGridUtil.addEndColumn(dataGrid);
-
-        DataGridUtil.addColumnSortHandler(dataGrid, criteria, this::refreshVisibleData);
     }
 
     public ButtonView addButton(final Preset preset) {

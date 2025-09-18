@@ -17,15 +17,15 @@ import stroom.importexport.shared.ImportSettings.ImportMode;
 import stroom.importexport.shared.ImportState;
 import stroom.importexport.shared.ImportState.State;
 import stroom.security.api.SecurityContext;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.rest.RestUtil;
 import stroom.util.shared.DocRefs;
-import stroom.util.shared.QuickFilterResultPage;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourceGeneration;
 import stroom.util.shared.ResourceKey;
+import stroom.util.shared.ResultPage;
 
 import com.google.common.base.Strings;
 import event.logging.AdvancedQuery;
@@ -56,10 +56,10 @@ public class ContentResourceImpl implements ContentResource {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ContentResourceImpl.class);
 
-    final Provider<StroomEventLoggingService> eventLoggingServiceProvider;
-    final Provider<ContentService> contentServiceProvider;
-    final Provider<ExplorerNodeService> explorerNodeServiceProvider;
-    final Provider<SecurityContext> securityContextProvider;
+    private final Provider<StroomEventLoggingService> eventLoggingServiceProvider;
+    private final Provider<ContentService> contentServiceProvider;
+    private final Provider<ExplorerNodeService> explorerNodeServiceProvider;
+    private final Provider<SecurityContext> securityContextProvider;
 
     @Inject
     ContentResourceImpl(final Provider<StroomEventLoggingService> eventLoggingServiceProvider,
@@ -92,7 +92,7 @@ public class ContentResourceImpl implements ContentResource {
 
         try {
             if (ImportMode.ACTION_CONFIRMATION.equals(importMode)
-                    && NullSafe.hasItems(request.getConfirmList())) {
+                && NullSafe.hasItems(request.getConfirmList())) {
                 // Only want to log when the user has actually confirmed to import something
                 return eventLoggingServiceProvider.get().loggedWorkBuilder()
                         .withTypeId("ImportConfig")
@@ -103,13 +103,19 @@ public class ContentResourceImpl implements ContentResource {
             } else {
                 return responseSupplier.get();
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error(LogUtil.message("Error importing content with key: {}, name: {}, error: {}",
                     NullSafe.get(request.getResourceKey(), ResourceKey::getKey),
                     NullSafe.get(request.getResourceKey(), ResourceKey::getName),
                     e.getMessage()), e);
             throw new RuntimeException(e);
         }
+    }
+
+    @AutoLogged(OperationType.UNLOGGED) // This is a tidy up operation so no need to log it
+    @Override
+    public void abortImport(final ResourceKey resourceKey) {
+        contentServiceProvider.get().abortImport(resourceKey);
     }
 
     private ImportEventAction buildImportEventAction(final ImportConfigRequest importConfigRequest) {
@@ -132,7 +138,7 @@ public class ContentResourceImpl implements ContentResource {
                                                 State::getDisplayValue,
                                                 "Error")))
                                 .build())
-                .collect(Collectors.toList());
+                .toList();
 
         return ImportEventAction.builder()
                 .withSource(MultiObject.builder()
@@ -149,9 +155,10 @@ public class ContentResourceImpl implements ContentResource {
         docRefs.getDocRefs().stream()
                 .forEach(docRef -> {
                     final String path = securityContextProvider.get()
-                            .asProcessingUserResult(() -> explorerNodeServiceProvider.get().getPath(docRef))
-                            .stream().map(ExplorerNode::getName).collect(Collectors.joining("/"))
-                            + docRef.getName();
+                                                .asProcessingUserResult(() -> explorerNodeServiceProvider.get().getPath(
+                                                        docRef))
+                                                .stream().map(ExplorerNode::getName).collect(Collectors.joining("/"))
+                                        + docRef.getName();
 
                     if ("Folder".equals(docRef.getType())) {
                         builder.addFolder(
@@ -198,7 +205,7 @@ public class ContentResourceImpl implements ContentResource {
                                                         .withCondition(TermCondition.EQUALS)
                                                         .withValue(docRef.getUuid())
                                                         .build())
-                                                .collect(Collectors.toList()))
+                                                .toList())
                                         .build())
                                 .build())
                         .build())
@@ -207,7 +214,7 @@ public class ContentResourceImpl implements ContentResource {
 
     @AutoLogged(OperationType.MANUALLY_LOGGED)
     @Override
-    public QuickFilterResultPage<Dependency> fetchDependencies(final DependencyCriteria criteria) {
+    public ResultPage<Dependency> fetchDependencies(final DependencyCriteria criteria) {
         return eventLoggingServiceProvider.get().loggedWorkBuilder()
                 .withTypeId(StroomEventLoggingUtil.buildTypeId(this, "fetchDependencies"))
                 .withDescription("List filtered dependencies")
@@ -215,11 +222,11 @@ public class ContentResourceImpl implements ContentResource {
                         .withQuery(buildRawQuery(criteria.getPartialName()))
                         .build())
                 .withComplexLoggedResult(searchEventAction -> {
-                    final QuickFilterResultPage<Dependency> result = contentServiceProvider.get()
+                    final ResultPage<Dependency> result = contentServiceProvider.get()
                             .fetchDependencies(criteria);
 
                     final SearchEventAction newSearchEventAction = searchEventAction.newCopyBuilder()
-                            .withQuery(buildRawQuery(result.getQualifiedFilterInput()))
+                            .withQuery(buildRawQuery(criteria.getPartialName()))
                             .withResultPage(StroomEventLoggingUtil.createResultPage(result))
                             .withTotalResults(BigInteger.valueOf(result.size()))
                             .build();
@@ -234,8 +241,9 @@ public class ContentResourceImpl implements ContentResource {
                 ? new Query()
                 : Query.builder()
                         .withRaw("Activity matches \""
-                                + Objects.requireNonNullElse(userInput, "")
-                                + "\"")
+                                 + Objects.requireNonNullElse(userInput, "")
+                                 + "\"")
                         .build();
     }
+
 }

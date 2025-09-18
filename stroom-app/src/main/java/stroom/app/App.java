@@ -40,7 +40,6 @@ import stroom.event.logging.rs.api.RestResourceAutoLogger;
 import stroom.security.impl.AuthenticationConfig;
 import stroom.security.openid.api.AbstractOpenIdConfig;
 import stroom.security.openid.api.IdpType;
-import stroom.util.NullSafe;
 import stroom.util.authentication.DefaultOpenIdCredentials;
 import stroom.util.config.AppConfigValidator;
 import stroom.util.config.ConfigValidator;
@@ -55,8 +54,10 @@ import stroom.util.logging.DefaultLoggingFilter;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.servlet.SessionUtil;
 import stroom.util.shared.AbstractConfig;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.time.StroomDuration;
 import stroom.util.validation.ValidationModule;
@@ -72,17 +73,15 @@ import io.dropwizard.core.setup.Environment;
 import io.dropwizard.jersey.sessions.SessionFactoryProvider;
 import io.dropwizard.servlets.tasks.LogConfigurationTask;
 import jakarta.inject.Inject;
-import jakarta.servlet.DispatcherType;
-import jakarta.servlet.FilterRegistration;
 import jakarta.validation.ValidatorFactory;
+import org.eclipse.jetty.http.HttpCookie;
+import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.server.session.SessionHandler;
-import org.eclipse.jetty.servlets.CrossOriginFilter;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.EnumSet;
 import java.util.Objects;
 
 public class App extends Application<Config> {
@@ -90,7 +89,6 @@ public class App extends Application<Config> {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(App.class);
 
     private static final String APP_NAME = "Stroom";
-    public static final String SESSION_COOKIE_NAME = "STROOM_SESSION_ID";
 
     @Inject
     private HealthChecks healthChecks;
@@ -160,10 +158,10 @@ public class App extends Application<Config> {
 
         // Add the GWT UI assets.
         bootstrap.addBundle(new DynamicAssetsBundle(
-                "/ui",
+                ResourcePaths.UI_PATH,
                 ResourcePaths.UI_PATH,
                 "index.html",
-                "ui"));
+                ResourcePaths.UI_SERVLET_NAME));
 
         addCliCommands(bootstrap);
 
@@ -228,14 +226,15 @@ public class App extends Application<Config> {
         // and configuration only holds the YAML view of the config, not the DB view.
         final ConfigMapper configMapper = bootStrapInjector.getInstance(ConfigMapper.class);
         final SessionCookieConfig sessionCookieConfig = configMapper.getConfigObject(SessionCookieConfig.class);
+//        final CorsConfig corsConfig = configMapper.getConfigObject(CorsConfig.class);
         final SessionConfig sessionConfig = configMapper.getConfigObject(SessionConfig.class);
 
         // Set up a session handler for Jetty
         configureSessionHandling(environment, sessionConfig);
         configureSessionCookie(environment, sessionCookieConfig);
 
-        // Configure Cross-Origin Resource Sharing.
-        configureCors(environment);
+//        // Configure Cross-Origin Resource Sharing.
+//        configureCors(environment, corsConfig);
 
         LOGGER.info("Starting Stroom Application");
 
@@ -359,7 +358,9 @@ public class App extends Application<Config> {
         final SessionHandler sessionHandler = new SessionHandler();
         // We need to give our session cookie a name other than JSESSIONID, otherwise it might
         // clash with other services running on the same domain.
-        sessionHandler.setSessionCookie(SESSION_COOKIE_NAME);
+        sessionHandler.setSessionCookie(SessionUtil.STROOM_SESSION_COOKIE_NAME);
+        // In case we use URL encoding of the session ID, which we currently don't
+        sessionHandler.setSessionIdPathParameterName(SessionUtil.STROOM_SESSION_COOKIE_NAME);
         long maxInactiveIntervalSecs = NullSafe.getOrElse(
                 sessionConfig.getMaxInactiveInterval(),
                 StroomDuration::getDuration,
@@ -385,27 +386,47 @@ public class App extends Application<Config> {
     private void configureSessionCookie(final Environment environment,
                                         final SessionCookieConfig sessionCookieConfig) {
         // Ensure the session cookie that provides JSESSIONID is secure.
-        final jakarta.servlet.SessionCookieConfig servletSessionCookieConfig = environment
+        final ContextHandler.Context context = environment
                 .getApplicationContext()
-                .getServletContext()
+                .getServletContext();
+
+        final jakarta.servlet.SessionCookieConfig servletSessionCookieConfig = context
                 .getSessionCookieConfig();
         servletSessionCookieConfig.setSecure(sessionCookieConfig.isSecure());
         servletSessionCookieConfig.setHttpOnly(sessionCookieConfig.isHttpOnly());
-        // TODO : Add `SameSite=Strict` when supported by JEE
+        context.setAttribute(
+                HttpCookie.SAME_SITE_DEFAULT_ATTRIBUTE,
+                sessionCookieConfig.getSameSite().getAttributeValue());
     }
 
-    private static void configureCors(io.dropwizard.core.setup.Environment environment) {
-        final FilterRegistration.Dynamic cors = environment.servlets()
-                .addFilter("CORS", CrossOriginFilter.class);
-        cors.addMappingForUrlPatterns(EnumSet.allOf(DispatcherType.class), true, "/*");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, "GET,PUT,POST,DELETE,OPTIONS,PATCH");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, "*");
-        cors.setInitParameter(CrossOriginFilter.ALLOWED_HEADERS_PARAM, "*");
-    }
+//    private static void configureCors(final Environment environment,
+//                                      final CorsConfig corsConfig) {
+//        // Enable CORS headers
+//        final FilterRegistration.Dynamic cors =
+//                environment.servlets().addFilter("CORS", CrossOriginFilter.class);
+//
+//        // Configure CORS parameters
+//        cors.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM,
+//                "*"); // Same as default.
+//        cors.setInitParameter(CrossOriginFilter.ALLOWED_HEADERS_PARAM,
+//                "X-Requested-With,Content-Type,Accept,Origin"); // Same as default.
+//        cors.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM,
+//                "GET,POST,HEAD"); // Same as default.
+//
+//        // Add other overrides from config.
+//        if (corsConfig != null && corsConfig.getParameters() != null && !corsConfig.getParameters().isEmpty()) {
+//            corsConfig.getParameters().forEach(param -> {
+//                cors.setInitParameter(param.getName(), param.getValue());
+//            });
+//        }
+//
+//        // Add URL mapping
+//        cors.addMappingForUrlPatterns(EnumSet.allOf(DispatcherType.class), true, "/*");
+//    }
 
     private void registerLogConfiguration(final Environment environment) {
         // Task to allow configuration of log levels at runtime
-        String path = environment.getAdminContext().getContextPath();
+        final String path = environment.getAdminContext().getContextPath();
 
         // To change the log level do one of:
         // curl -X POST -d "logger=stroom&level=DEBUG" [admin context path]/tasks/log-level
@@ -468,7 +489,7 @@ public class App extends Application<Config> {
                         }
                     });
 
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error parsing config file " + configFile.toAbsolutePath().normalize());
         }
     }

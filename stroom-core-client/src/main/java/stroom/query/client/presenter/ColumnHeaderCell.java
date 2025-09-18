@@ -17,16 +17,11 @@
 package stroom.query.client.presenter;
 
 import stroom.dashboard.client.table.FilterCell;
-import stroom.dashboard.client.table.HasValueFilter;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ColumnFilter;
-import stroom.util.shared.GwtNullSafe;
+import stroom.dashboard.client.table.FilterCellManager;
+import stroom.query.api.Column;
 
 import com.google.gwt.cell.client.CompositeCell;
-import com.google.gwt.cell.client.FieldUpdater;
 import com.google.gwt.cell.client.HasCell;
-import com.google.gwt.cell.client.SafeHtmlCell;
-import com.google.gwt.safehtml.shared.SafeHtml;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,32 +32,26 @@ public class ColumnHeaderCell extends CompositeCell<Column> {
         super(cells);
     }
 
-    public static ColumnHeaderCell create(final HasValueFilter hasValueFilter) {
-        final com.google.gwt.user.cellview.client.Column<Column, SafeHtml> name =
-                new com.google.gwt.user.cellview.client.Column<Column, SafeHtml>(new SafeHtmlCell()) {
+    public static ColumnHeaderCell create(final FilterCellManager filterCellManager) {
+        final ColumnTitleCell columnTitleCell = new ColumnTitleCell();
+        final com.google.gwt.user.cellview.client.Column<Column, Column> title =
+                new com.google.gwt.user.cellview.client.Column<Column, Column>(columnTitleCell) {
                     @Override
-                    public SafeHtml getValue(final Column column) {
-                        return ColumnHeaderHtmlUtil.getSafeHtml(column);
+                    public Column getValue(final Column column) {
+                        return column;
                     }
                 };
 
-        final FilterCell filterCell = new FilterCell();
-        final com.google.gwt.user.cellview.client.Column<Column, String> filterInput =
-                new com.google.gwt.user.cellview.client.Column<Column, String>(filterCell) {
+        final FilterCell filterCell = new FilterCell(filterCellManager);
+        final com.google.gwt.user.cellview.client.Column<Column, Column> filterInput =
+                new com.google.gwt.user.cellview.client.Column<Column, Column>(filterCell) {
                     @Override
-                    public String getValue(final Column column) {
-                        return GwtNullSafe.get(column.getColumnFilter(), ColumnFilter::getFilter);
+                    public Column getValue(final Column column) {
+                        return column;
                     }
                 };
-        filterInput.setFieldUpdater(new FieldUpdater<Column, String>() {
-            @Override
-            public void update(final int index, final Column column, final String value) {
-                hasValueFilter.setValueFilter(column, value);
-            }
-        });
-
         final List<HasCell<Column, ?>> list = new ArrayList<>();
-        list.add(name);
+        list.add(title);
         list.add(filterInput);
 
         return new ColumnHeaderCell(list);

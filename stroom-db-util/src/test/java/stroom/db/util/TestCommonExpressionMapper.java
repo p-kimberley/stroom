@@ -1,12 +1,12 @@
 package stroom.db.util;
 
 
-import stroom.datasource.api.v2.ConditionSet;
-import stroom.datasource.api.v2.QueryField;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.datasource.ConditionSet;
+import stroom.query.api.datasource.QueryField;
 
 import org.jooq.Condition;
 import org.jooq.impl.DSL;
@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,7 +58,7 @@ class TestCommonExpressionMapper {
 
                     assertThat(condition).isEqualTo(DSL.noCondition());
                 }))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @TestFactory
@@ -79,7 +78,7 @@ class TestCommonExpressionMapper {
 
                     assertThat(condition).isEqualTo(DSL.noCondition());
                 }))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Test
@@ -227,7 +226,7 @@ class TestCommonExpressionMapper {
                     assertThat(condition.toString())
                             .isEqualTo(conditionString(DB_FIELD_NAME_1, FIELD_1_VALUE));
                 }))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @TestFactory
@@ -255,7 +254,7 @@ class TestCommonExpressionMapper {
                     assertThat(condition.toString())
                             .contains(conditionString(DB_FIELD_NAME_2, FIELD_2_VALUE));
                 }))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Test
@@ -294,7 +293,7 @@ class TestCommonExpressionMapper {
 
     private Condition doTest(final ExpressionItem expressionItem) {
         // create a noddy term mapper that doesn't need any generated code
-        Function<ExpressionTerm, Condition> handler = expressionTerm ->
+        final Function<ExpressionTerm, Condition> handler = expressionTerm ->
                 DSL.condition(expressionTerm.getField() + "=" + expressionTerm.getValue());
 
         final CommonExpressionMapper mapper = new CommonExpressionMapper();

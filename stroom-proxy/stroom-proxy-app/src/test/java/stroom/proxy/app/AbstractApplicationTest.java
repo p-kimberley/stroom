@@ -1,7 +1,6 @@
 package stroom.proxy.app;
 
 import stroom.test.common.TestResourceLocks;
-import stroom.util.NullSafe;
 import stroom.util.config.AbstractConfigUtil;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.io.FileUtil;
@@ -12,6 +11,7 @@ import stroom.util.io.SimplePathCreator;
 import stroom.util.io.TempDirProvider;
 import stroom.util.io.TempDirProviderImpl;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PropertyPath;
 
 import io.dropwizard.configuration.ConfigurationException;
@@ -69,6 +69,7 @@ public abstract class AbstractApplicationTest {
     void beforeEach() throws Exception {
         dropwizard.before();
         client = dropwizard.client();
+//        MetricsUtil.clearRegistry();
     }
 
     @AfterEach
@@ -78,6 +79,7 @@ public abstract class AbstractApplicationTest {
         // make sure these get cleared else they may break other tests that don't use system props
         System.clearProperty(HomeDirProvider.PROP_STROOM_HOME);
         System.clearProperty(TempDirProvider.PROP_STROOM_TEMP);
+//        MetricsUtil.clearRegistry();
     }
 
     // Subclasses can override this
@@ -89,7 +91,7 @@ public abstract class AbstractApplicationTest {
         final Path temp;
         try {
             temp = Files.createTempDirectory("stroom-proxy");
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(LogUtil.message("Error creating temp dir"), e);
         }
 
@@ -212,10 +214,10 @@ public abstract class AbstractApplicationTest {
                         Jackson.newObjectMapper(),
                         "dw");
 
-        Config config;
+        final Config config;
         try {
             config = configurationFactory.build(configurationSourceProvider, configFile.toAbsolutePath().toString());
-        } catch (ConfigurationException | IOException e) {
+        } catch (final ConfigurationException | IOException e) {
             throw new RuntimeException(LogUtil.message("Error parsing configuration from file {}",
                     configFile.toAbsolutePath()), e);
         }
@@ -224,7 +226,7 @@ public abstract class AbstractApplicationTest {
     }
 
     private static Config loadYamlFile(final String filename) {
-        Path path = getStroomProxyAppFile(filename);
+        final Path path = getStroomProxyAppFile(filename);
 
         return readConfig(path);
     }

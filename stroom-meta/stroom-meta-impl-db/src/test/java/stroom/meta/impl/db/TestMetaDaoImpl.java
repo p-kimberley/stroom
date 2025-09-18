@@ -24,7 +24,6 @@ import stroom.data.retention.api.DataRetentionRuleAction;
 import stroom.data.retention.api.RetentionRuleOutcome;
 import stroom.data.retention.shared.DataRetentionRule;
 import stroom.data.shared.StreamTypeNames;
-import stroom.datasource.api.v2.QueryField;
 import stroom.db.util.JooqUtil;
 import stroom.dictionary.mock.MockWordListProviderModule;
 import stroom.docref.DocRef;
@@ -45,13 +44,15 @@ import stroom.meta.shared.SelectionSummary;
 import stroom.meta.shared.SimpleMeta;
 import stroom.meta.shared.Status;
 import stroom.pipeline.shared.PipelineDoc;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.language.functions.FieldIndex;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.task.mock.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.test.common.TestUtil;
 import stroom.test.common.util.db.DbTestModule;
 import stroom.util.Period;
@@ -161,6 +162,7 @@ class TestMetaDaoImpl {
                         new MockCollectionModule(),
                         new MockDocRefInfoModule(),
                         new MockWordListProviderModule(),
+                        new MockMetricsModule(),
                         new CacheModule(),
                         new DbTestModule(),
                         localModule
@@ -330,17 +332,17 @@ class TestMetaDaoImpl {
                     .leftOuterJoin(metaProcessor).on(meta.PROCESSOR_ID.eq(metaProcessor.ID))
                     .orderBy(meta.ID)
                     .stream()
-                    .collect(Collectors.toList());
+                    .toList();
 
             LOGGER.debug("meta rows:\n{}",
                     AsciiTable.builder(metaRows)
                             .withColumn(Column.of("Id", row -> row.get(meta.ID)))
                             .withColumn(Column.of("Create Time", row ->
                                     Instant.ofEpochMilli(row.get(meta.CREATE_TIME))
-                                            + " (" + row.get(meta.CREATE_TIME) + ")"))
+                                    + " (" + row.get(meta.CREATE_TIME) + ")"))
                             .withColumn(Column.of("Effective Time", row ->
                                     Instant.ofEpochMilli(row.get(meta.EFFECTIVE_TIME))
-                                            + " (" + row.get(meta.EFFECTIVE_TIME) + ")"))
+                                    + " (" + row.get(meta.EFFECTIVE_TIME) + ")"))
                             .withColumn(Column.of("Parent Id", row -> row.get(meta.PARENT_ID)))
                             .withColumn(Column.of("Status", row -> row.get(meta.STATUS)))
                             .withColumn(Column.of("Feed", row ->
@@ -552,15 +554,15 @@ class TestMetaDaoImpl {
     private DynamicTest makeTest(final int testNo, final ExpressionOperator expression, final int expected) {
         return DynamicTest.dynamicTest(
                 Strings.padStart(String.valueOf(testNo), 2, '0')
-                        + " - "
-                        + expression.toString(),
+                + " - "
+                + expression.toString(),
                 () -> {
                     final ResultPage<Meta> resultPage = metaDao.find(new FindMetaCriteria(expression));
                     assertThat(resultPage.size()).isEqualTo(expected);
                 });
     }
 
-    private ExpressionTerm createFeedTerm(final DocRef feed, boolean enabled) {
+    private ExpressionTerm createFeedTerm(final DocRef feed, final boolean enabled) {
         return ExpressionTerm
                 .builder()
                 .field(MetaFields.FEED.getFldName())
@@ -570,7 +572,7 @@ class TestMetaDaoImpl {
                 .build();
     }
 
-    private ExpressionTerm createPipelineTerm(final String pipelineUuid, boolean enabled) {
+    private ExpressionTerm createPipelineTerm(final String pipelineUuid, final boolean enabled) {
         return ExpressionTerm
                 .builder()
                 .field(MetaFields.PIPELINE.getFldName())
@@ -1021,7 +1023,7 @@ class TestMetaDaoImpl {
                 .extracting(SimpleMeta::getId)
                 .containsExactlyElementsOf(LongStream.rangeClosed(minId, maxId)
                         .boxed()
-                        .collect(Collectors.toList()));
+                        .toList());
     }
 
     @Test
@@ -1038,7 +1040,7 @@ class TestMetaDaoImpl {
                 .extracting(SimpleMeta::getId)
                 .containsExactlyElementsOf(LongStream.range(minId, minId + 5)
                         .boxed()
-                        .collect(Collectors.toList()));
+                        .toList());
     }
 
     @Test
@@ -1056,7 +1058,7 @@ class TestMetaDaoImpl {
                 .extracting(SimpleMeta::getId)
                 .containsExactlyElementsOf(LongStream.range(minId, minId + 5)
                         .boxed()
-                        .collect(Collectors.toList()));
+                        .toList());
     }
 
     @Test
@@ -1107,7 +1109,7 @@ class TestMetaDaoImpl {
         assertThat(ids)
                 .containsExactlyInAnyOrderElementsOf(LongStream.range(metaMinId, metaMinId + 40)
                         .boxed()
-                        .collect(Collectors.toList()));
+                        .toList());
 
         assertThat(inputIds.containsAll(ids))
                 .isTrue();
@@ -1176,7 +1178,7 @@ class TestMetaDaoImpl {
                 .orElse(null);
     }
 
-    static void dumpMetaTable(MetaDbConnProvider metaDbConnProvider) {
+    static void dumpMetaTable(final MetaDbConnProvider metaDbConnProvider) {
         JooqUtil.context(metaDbConnProvider, context ->
                 LOGGER.debug("processor:\n{}", JooqUtil.toAsciiTable(context.select(
                                 meta.ID,

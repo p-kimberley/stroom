@@ -27,7 +27,6 @@ dependencies {
     implementation project(':stroom-lmdb')
     implementation project(':stroom-node:stroom-node-api')
     implementation project(':stroom-query:stroom-query-language')
-    implementation project(':stroom-query:stroom-query-language-api')
     implementation project(':stroom-query:stroom-query-api')
     implementation project(':stroom-security:stroom-security-api')
     implementation project(':stroom-security:stroom-security-user-api')
@@ -44,22 +43,15 @@ dependencies {
     implementation libs.jackson.core
     implementation libs.jakarta.validation.api
     implementation libs.jakarta.inject
-    implementation libs.jaxb.api
     implementation libs.kryo
     implementation libs.lmdbjava
     implementation libs.slf4j.api
     implementation libs.zero.allocation.hashing
 
-    //--------testing----------
-    testImplementation libs.assertj.core
-    testCompileOnly libs.junit.jupiter.api
-    testImplementation libs.jaxb.api
-    testImplementation libs.mockito.core
     testImplementation project(':stroom-query:stroom-query-language').sourceSets.test.output
     testImplementation project(':stroom-security:stroom-security-mock')
     testImplementation project(':stroom-test-common')
 
-    testRuntimeOnly libs.junit.jupiter.engine
-    testRuntimeOnly libs.logback.classic
-    testRuntimeOnly libs.logback.core
+    testImplementation libs.bundles.common.test.implementation
+    testRuntimeOnly libs.bundles.common.test.runtime
 }

@@ -4,7 +4,7 @@ import stroom.data.client.event.SelectAllEvent;
 import stroom.hyperlink.client.Hyperlink;
 import stroom.hyperlink.client.HyperlinkEvent;
 import stroom.task.client.DefaultTaskMonitorFactory;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.util.client.AbstractSelectionEventManager;
 import stroom.widget.util.client.DoubleSelectTester;
 import stroom.widget.util.client.MouseUtil;
@@ -63,7 +63,7 @@ public class DataGridSelectionEventManager<T>
     protected void onSelect(final CellPreviewEvent<T> event) {
         // Called when user hits <space> so they can do single or multi-select
         // via the keyboard using up/down/j/k, then space or space + shift/ctrl
-        GwtNullSafe.consume(event.getValue(), row -> {
+        NullSafe.consume(event.getValue(), row -> {
             doSelect(row, new SelectionType(
                     false,
                     false,
@@ -80,7 +80,7 @@ public class DataGridSelectionEventManager<T>
             boolean consumed = false;
 
             String parentTag = null;
-            Element target = event.getNativeEvent().getEventTarget().cast();
+            final Element target = event.getNativeEvent().getEventTarget().cast();
             if (target.getParentElement() != null) {
                 parentTag = target.getParentElement().getTagName();
             }
@@ -132,7 +132,7 @@ public class DataGridSelectionEventManager<T>
                     dataGrid.setKeyboardSelectedRow(index, true);
                 }
 
-                GwtNullSafe.consume(event.getValue(), row -> {
+                NullSafe.consume(event.getValue(), row -> {
                     final boolean doubleClick = doubleClickTest.test(row);
                     doSelect(row, new SelectionType(
                             doubleClick,
@@ -157,7 +157,7 @@ public class DataGridSelectionEventManager<T>
                 selection.clear();
             }
 
-            List<T> rows = dataGrid.getVisibleItems();
+            final List<T> rows = dataGrid.getVisibleItems();
             final int index1 = rows.indexOf(multiSelectStart);
             final int index2 = rows.indexOf(row);
             if (index1 != -1 && index2 != -1) {

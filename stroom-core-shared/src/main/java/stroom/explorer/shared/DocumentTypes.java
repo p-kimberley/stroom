@@ -18,7 +18,8 @@ package stroom.explorer.shared;
 
 import stroom.docref.DocRef;
 import stroom.docstore.shared.DocumentType;
-import stroom.util.shared.GwtNullSafe;
+import stroom.gitrepo.shared.GitRepoDoc;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -39,7 +40,8 @@ public class DocumentTypes {
 
     public static final String[] FOLDER_TYPES = new String[]{
             ExplorerConstants.SYSTEM,
-            ExplorerConstants.FOLDER_TYPE
+            ExplorerConstants.FOLDER_TYPE,
+            GitRepoDoc.TYPE
     };
 
     public static final Set<String> FOLDER_TYPES_SET = Collections.unmodifiableSet(Arrays.stream(FOLDER_TYPES)
@@ -58,7 +60,7 @@ public class DocumentTypes {
                          @JsonProperty("visibleTypes") final List<DocumentType> visibleTypes) {
         this.types = types;
         this.visibleTypes = visibleTypes;
-        this.typeToDocumentTypeMap = GwtNullSafe.stream(types)
+        this.typeToDocumentTypeMap = NullSafe.stream(types)
                 .collect(Collectors.toMap(DocumentType::getType, Function.identity()));
     }
 

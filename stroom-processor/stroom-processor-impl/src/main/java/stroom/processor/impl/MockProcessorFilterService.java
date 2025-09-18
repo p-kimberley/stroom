@@ -13,7 +13,7 @@ import stroom.processor.shared.ProcessorListRow;
 import stroom.processor.shared.ProcessorType;
 import stroom.processor.shared.ReprocessDataInfo;
 import stroom.security.api.SecurityContext;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import jakarta.inject.Inject;
@@ -40,7 +40,7 @@ public class MockProcessorFilterService implements ProcessorFilterService {
 
     @Override
     public ProcessorFilter create(final CreateProcessFilterRequest request) {
-        ProcessorFilter filter = new ProcessorFilter();
+        final ProcessorFilter filter = new ProcessorFilter();
         filter.setPipelineUuid(request.getPipeline().getUuid());
         filter.setQueryData(request.getQueryData());
         filter.setPriority(request.getPriority());
@@ -49,7 +49,7 @@ public class MockProcessorFilterService implements ProcessorFilterService {
         filter.setMinMetaCreateTimeMs(request.getMinMetaCreateTimeMs());
         filter.setMaxMetaCreateTimeMs(request.getMaxMetaCreateTimeMs());
         setRunAs(request, filter);
-        Processor processor = processorService.create(
+        final Processor processor = processorService.create(
                 request.getProcessorType(),
                 request.getPipeline(),
                 request.isEnabled());
@@ -73,7 +73,7 @@ public class MockProcessorFilterService implements ProcessorFilterService {
     @Override
     public ProcessorFilter create(final Processor processor,
                                   final CreateProcessFilterRequest request) {
-        ProcessorFilter filter = new ProcessorFilter();
+        final ProcessorFilter filter = new ProcessorFilter();
         filter.setProcessor(processor);
         filter.setQueryData(request.getQueryData());
         filter.setPriority(request.getPriority());
@@ -91,10 +91,11 @@ public class MockProcessorFilterService implements ProcessorFilterService {
     }
 
     @Override
-    public ProcessorFilter importFilter(final Processor processor,
+    public ProcessorFilter importFilter(final ProcessorFilter existingProcessorFilter,
+                                        final Processor processor,
                                         final DocRef processorFilterDocRef,
                                         final CreateProcessFilterRequest request) {
-        ProcessorFilter filter = new ProcessorFilter();
+        final ProcessorFilter filter = new ProcessorFilter();
         filter.setProcessor(processor);
         filter.setQueryData(request.getQueryData());
         filter.setPriority(request.getPriority());
@@ -108,12 +109,12 @@ public class MockProcessorFilterService implements ProcessorFilterService {
     }
 
     @Override
-    public ResultPage<ProcessorFilter> find(ExpressionCriteria criteria) {
+    public ResultPage<ProcessorFilter> find(final ExpressionCriteria criteria) {
         return dao.find(criteria);
     }
 
     @Override
-    public ResultPage<ProcessorListRow> find(FetchProcessorRequest request) {
+    public ResultPage<ProcessorListRow> find(final FetchProcessorRequest request) {
         return null;
     }
 
@@ -123,46 +124,54 @@ public class MockProcessorFilterService implements ProcessorFilterService {
     }
 
     @Override
-    public ResultPage<ProcessorFilter> find(DocRef pipelineDocRef) {
+    public ResultPage<ProcessorFilter> find(final DocRef pipelineDocRef) {
         return null;
     }
 
     @Override
-    public void setPriority(Integer id, Integer priority) {
+    public void setPriority(final Integer id, final Integer priority) {
     }
 
     @Override
-    public void setMaxProcessingTasks(Integer id, Integer maxProcessingTasks) {
+    public void setMaxProcessingTasks(final Integer id, final Integer maxProcessingTasks) {
     }
 
     @Override
-    public void setEnabled(Integer id, Boolean enabled) {
+    public void setEnabled(final Integer id, final Boolean enabled) {
 
     }
 
     @Override
-    public ProcessorFilter create(ProcessorFilter processorFilter) {
+    public ProcessorFilter create(final ProcessorFilter processorFilter) {
         return dao.create(processorFilter);
     }
 
     @Override
-    public Optional<ProcessorFilter> fetch(int id) {
+    public Optional<ProcessorFilter> fetch(final int id) {
         return dao.fetch(id);
     }
 
     @Override
-    public ProcessorFilter update(ProcessorFilter processorFilter) {
+    public ProcessorFilter update(final ProcessorFilter processorFilter) {
         return dao.update(processorFilter);
     }
 
     @Override
-    public boolean delete(int id) {
+    public boolean delete(final int id) {
         return dao.delete(id);
     }
 
     @Override
     public Optional<String> getPipelineName(final ProcessorType processorType, final String uuid) {
         return Optional.empty();
+    }
+
+    @Override
+    public ProcessorFilter restore(final DocRef processorFilterDocRef, final boolean resetTracker) {
+        final ProcessorFilter processorFilter = dao.fetchByUuid(processorFilterDocRef.getUuid())
+                .orElseThrow();
+        processorFilter.setDeleted(false);
+        return processorFilter;
     }
 
     @Override

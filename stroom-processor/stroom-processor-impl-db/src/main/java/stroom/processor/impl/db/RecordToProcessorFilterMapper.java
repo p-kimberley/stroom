@@ -1,6 +1,7 @@
 package stroom.processor.impl.db;
 
 import stroom.processor.shared.ProcessorFilter;
+import stroom.security.shared.FindUserContext;
 import stroom.security.user.api.UserRefLookup;
 
 import jakarta.inject.Provider;
@@ -12,10 +13,10 @@ import static stroom.processor.impl.db.jooq.tables.ProcessorFilter.PROCESSOR_FIL
 
 class RecordToProcessorFilterMapper implements Function<Record, ProcessorFilter> {
 
-    private final QueryDataXMLSerialiser queryDataXMLSerialiser;
+    private final QueryDataSerialiser queryDataXMLSerialiser;
     private final Provider<UserRefLookup> userRefLookupProvider;
 
-    public RecordToProcessorFilterMapper(final QueryDataXMLSerialiser queryDataXMLSerialiser,
+    public RecordToProcessorFilterMapper(final QueryDataSerialiser queryDataXMLSerialiser,
                                          final Provider<UserRefLookup> userRefLookupProvider) {
         this.queryDataXMLSerialiser = queryDataXMLSerialiser;
         this.userRefLookupProvider = userRefLookupProvider;
@@ -41,7 +42,7 @@ class RecordToProcessorFilterMapper implements Function<Record, ProcessorFilter>
         processorFilter.setMaxMetaCreateTimeMs(record.get(PROCESSOR_FILTER.MAX_META_CREATE_TIME_MS));
         processorFilter.setRunAsUser(userRefLookupProvider
                 .get()
-                .getByUuid(record.get(PROCESSOR_FILTER.RUN_AS_USER_UUID))
+                .getByUuid(record.get(PROCESSOR_FILTER.RUN_AS_USER_UUID), FindUserContext.RUN_AS)
                 .orElse(null));
         return processorFilter;
     }

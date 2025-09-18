@@ -16,7 +16,7 @@
 
 package stroom.statistics.impl.sql.search;
 
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.statistics.impl.sql.SQLStatisticConstants;
 import stroom.statistics.impl.sql.SQLStatisticNames;
 import stroom.statistics.impl.sql.SqlBuilder;
@@ -97,7 +97,7 @@ public class SQLTagValueWhereClauseConverter {
         }
 
         if (oldNode.getFilterOperationMode().equals(FilterOperationMode.NOT)) {
-            String sqlOp = OPERATOR_TO_SQL_TERM_MAP.get(oldNode.getFilterOperationMode());
+            final String sqlOp = OPERATOR_TO_SQL_TERM_MAP.get(oldNode.getFilterOperationMode());
             if (oldNode.getChildren().size() > 1) {
                 // Stroom supports NOT() with multiple children. This is treated as NOT( child1 OR child2 )
                 sql.append(" " + sqlOp + " (");

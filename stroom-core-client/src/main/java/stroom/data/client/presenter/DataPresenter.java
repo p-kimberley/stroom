@@ -122,6 +122,7 @@ public class DataPresenter
     private final NavigatorData navigatorData = new NavigatorData();
 
     private DisplayMode displayMode = null;
+    private DataViewType initDataViewType;
     private Boolean errorMarkerMode = null;
     // This is the parent stream type as opposed to the child stream type,
     // i.e. Raw Events rather than say Context
@@ -536,6 +537,17 @@ public class DataPresenter
                     refreshMarkers(lastResult);
                 }
             }
+
+            if (initDataViewType != null) {
+                if (initDataViewType.equals(DataViewType.INFO)) {
+                    setActiveTab(infoTab, currentStreamType);
+                    onNewTabSelected(infoTab);
+                } else if (initDataViewType.equals(DataViewType.PREVIEW)) {
+                    setActiveTab(dataTab, currentStreamType);
+                    onNewTabSelected(dataTab);
+                }
+                setInitDataViewType(null);
+            }
         } else {
             // Null meta
             showErrors(
@@ -786,7 +798,7 @@ public class DataPresenter
                     PAGE_PAGER_UNIT);
         } else if (result instanceof FetchDataResult) {
 
-            FetchDataResult fetchDataResult = (FetchDataResult) result;
+            final FetchDataResult fetchDataResult = (FetchDataResult) result;
 
             if (DataType.SEGMENTED.equals(fetchDataResult.getDataType())) {
                 // Record: a of b   Characters: x to y of z
@@ -1089,7 +1101,7 @@ public class DataPresenter
     }
 
     private void refreshMarkers(final AbstractFetchDataResult result) {
-        int pageOffset = 0;
+        final int pageOffset = 0;
         int pageCount = 0;
 
         if (result != null) {
@@ -1229,6 +1241,10 @@ public class DataPresenter
         dataView.setSourceLinkVisible(false, false);
         setErrorText(title, errorText);
         showTextPresenter();
+    }
+
+    public void setInitDataViewType(final DataViewType initDataViewType) {
+        this.initDataViewType = initDataViewType;
     }
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1386,8 +1402,8 @@ public class DataPresenter
             final long itemOffset = itemRangeSupplier.get().getOffset();
             if (totalItemCount.isExact()) {
                 // Zero based pages
-                int currPage = (int) (itemOffset / maxItemsPerPage);
-                int newPage = Math.max(0, currPage - 1);
+                final int currPage = (int) (itemOffset / maxItemsPerPage);
+                final int newPage = Math.max(0, currPage - 1);
                 setItemNo(newPage * maxItemsPerPage);
             } else {
                 setItemNo(Math.max(0, itemOffset - maxItemsPerPage));

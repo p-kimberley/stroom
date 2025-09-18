@@ -29,7 +29,7 @@ import stroom.pipeline.shared.PipelineDoc;
 import stroom.security.shared.DocumentPermission;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.ui.config.shared.QueryConfig;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.gwt.user.client.ui.Focus;
 import com.google.inject.Inject;
@@ -63,7 +63,7 @@ public class BasicTableSettingsPresenter
         // Filter the pipeline picker by tags, if configured
         uiConfigCache.get(extendedUiConfig -> {
             if (extendedUiConfig != null) {
-                GwtNullSafe.consume(
+                NullSafe.consume(
                         extendedUiConfig.getQuery(),
                         QueryConfig::getDashboardPipelineSelectorIncludedTags,
                         ExplorerTreeFilter::createTagQuickFilterInput,
@@ -93,7 +93,7 @@ public class BasicTableSettingsPresenter
     }
 
     private void setQueryId(final String queryId) {
-        getView().setQuery(getComponents().get(queryId));
+        getView().setQuery(getDashboardContext().getComponents().get(queryId));
     }
 
     private boolean extractValues() {
@@ -155,7 +155,8 @@ public class BasicTableSettingsPresenter
     public void read(final ComponentConfig componentConfig) {
         super.read(componentConfig);
 
-        final List<Component> list = getComponents().getSortedComponentsByType(QueryPresenter.TYPE.getId());
+        final List<Component> list = getDashboardContext()
+                .getComponents().getSortedComponentsByType(QueryPresenter.TYPE.getId());
         setQueryList(list);
 
         final TableComponentSettings settings = (TableComponentSettings) componentConfig.getSettings();
@@ -173,7 +174,7 @@ public class BasicTableSettingsPresenter
 
     @Override
     public ComponentConfig write(final ComponentConfig componentConfig) {
-        ComponentConfig result = super.write(componentConfig);
+        final ComponentConfig result = super.write(componentConfig);
         final TableComponentSettings oldSettings = (TableComponentSettings) result.getSettings();
         final TableComponentSettings newSettings = writeSettings(oldSettings);
         return result.copy().settings(newSettings).build();
@@ -203,19 +204,20 @@ public class BasicTableSettingsPresenter
 
         // Need to compare extractionPipeline including name in case it has been renamed after decoration
         final boolean equal = Objects.equals(oldSettings.getQueryId(), newSettings.getQueryId()) &&
-                Objects.equals(oldSettings.extractValues(), newSettings.extractValues()) &&
-                Objects.equals(oldSettings.useDefaultExtractionPipeline(),
-                        newSettings.useDefaultExtractionPipeline()) &&
-                Objects.equals(oldSettings.getExtractionPipeline(), newSettings.getExtractionPipeline()) &&
-                Objects.equals(oldSettings.getMaxResults(), newSettings.getMaxResults()) &&
-                Objects.equals(oldSettings.getPageSize(), newSettings.getPageSize()) &&
-                Objects.equals(oldSettings.getShowDetail(), newSettings.getShowDetail());
+                              Objects.equals(oldSettings.extractValues(), newSettings.extractValues()) &&
+                              Objects.equals(oldSettings.useDefaultExtractionPipeline(),
+                                      newSettings.useDefaultExtractionPipeline()) &&
+                              Objects.equals(oldSettings.getExtractionPipeline(),
+                                      newSettings.getExtractionPipeline()) &&
+                              Objects.equals(oldSettings.getMaxResults(), newSettings.getMaxResults()) &&
+                              Objects.equals(oldSettings.getPageSize(), newSettings.getPageSize()) &&
+                              Objects.equals(oldSettings.getShowDetail(), newSettings.getShowDetail());
 
         return !equal;
     }
 
     private String fromList(final List<Long> maxResults) {
-        if (GwtNullSafe.isEmptyCollection(maxResults)) {
+        if (NullSafe.isEmptyCollection(maxResults)) {
             return "";
         }
 
@@ -230,7 +232,7 @@ public class BasicTableSettingsPresenter
     }
 
     private List<Long> toList(final String string) {
-        if (GwtNullSafe.isEmptyString(string)) {
+        if (NullSafe.isEmptyString(string)) {
             return null;
         }
 

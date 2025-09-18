@@ -16,26 +16,25 @@
 
 package stroom.contentindex;
 
-import stroom.datasource.api.v2.AnalyzerType;
-import stroom.docref.DocContentHighlights;
-import stroom.docref.DocContentMatch;
 import stroom.docref.DocRef;
-import stroom.docref.StringMatch;
-import stroom.docref.StringMatch.MatchType;
-import stroom.docref.StringMatchLocation;
 import stroom.docstore.api.ContentIndex;
 import stroom.docstore.api.ContentIndexable;
 import stroom.docstore.shared.DocRefUtil;
+import stroom.explorer.shared.DocContentHighlights;
+import stroom.explorer.shared.DocContentMatch;
 import stroom.explorer.shared.FetchHighlightsRequest;
 import stroom.explorer.shared.FindInContentRequest;
+import stroom.explorer.shared.StringMatch;
+import stroom.explorer.shared.StringMatch.MatchType;
+import stroom.explorer.shared.StringMatchLocation;
 import stroom.index.lucene980.Lucene980LockFactory;
 import stroom.index.lucene980.analyser.AnalyzerFactory;
+import stroom.query.api.datasource.AnalyzerType;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermission;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TerminateHandlerFactory;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.entityevent.EntityAction;
 import stroom.util.entityevent.EntityEvent;
@@ -46,6 +45,7 @@ import stroom.util.io.TempDirProvider;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.PageResponse;
 import stroom.util.shared.PermissionException;
@@ -175,7 +175,7 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
         final boolean isInitialised = isIndexInitialised();
         if (!isInitialised && initialisationError != null) {
             throw new RuntimeException("Content index failed initialisation due to: "
-                    + initialisationError.getMessage());
+                                       + initialisationError.getMessage());
         }
         return isInitialised;
     }
@@ -395,7 +395,7 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
                     if (!highlights.isEmpty()) {
                         if (securityContext.hasDocumentPermission(docRef, DocumentPermission.VIEW)) {
                             if (total >= pageRequest.getOffset() &&
-                                    total < pageRequest.getOffset() + pageRequest.getLength()) {
+                                total < pageRequest.getOffset() + pageRequest.getLength()) {
                                 try {
                                     final String extension = doc.get(EXTENSION);
                                     matches.add(DocContentMatch.create(docRef,
@@ -488,7 +488,7 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
                             RegExp.ASCII_CASE_INSENSITIVE,
                             10_000);
                 }
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.debug(() -> LogUtil.message("Error constructing regex query with pattern '{}': {}",
                         pattern, LogUtil.exceptionMessage(e)));
                 throw e;
@@ -742,7 +742,7 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
                 // Make the user wait a wee bit if it is not initialised as this gives it a chance
                 // to return a non-zero % so the user gets the impression that it is underway.
                 isInitialised = indexInitialisedLatch.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -758,8 +758,8 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
                 completionText = "";
             }
             throw new RuntimeException("The content is currently being indexed"
-                    + completionText + ".\n" +
-                    "Please try again in a minute by clicking the Refresh button.");
+                                       + completionText + ".\n" +
+                                       "Please try again in a minute by clicking the Refresh button.");
         }
     }
 
@@ -771,7 +771,7 @@ public class LuceneContentIndex implements ContentIndex, EntityEvent.Handler {
         @Override
         protected TokenStreamComponents createComponents(final String fieldName) {
             final Tokenizer tokenizer = new NGramTokenizer(MIN_GRAM, MAX_GRAM);
-            TokenStream tokenStream = new LowerCaseFilter(tokenizer);
+            final TokenStream tokenStream = new LowerCaseFilter(tokenizer);
             return new Analyzer.TokenStreamComponents(tokenizer, tokenStream);
         }
     }

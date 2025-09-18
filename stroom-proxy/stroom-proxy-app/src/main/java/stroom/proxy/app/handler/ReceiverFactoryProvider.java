@@ -3,10 +3,10 @@ package stroom.proxy.app.handler;
 import stroom.proxy.app.ProxyConfig;
 import stroom.proxy.repo.AggregatorConfig;
 import stroom.proxy.repo.ProxyServices;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -166,12 +166,12 @@ public class ReceiverFactoryProvider implements Provider<ReceiverFactory> {
 
         final ForwarderConfig forwarderConfig = instantForwarders.getFirst();
         receiverFactory = switch (forwarderConfig) {
-            case ForwardHttpPostConfig forwardHttpPostConfig -> {
+            case final ForwardHttpPostConfig forwardHttpPostConfig -> {
                 LOGGER.info("Creating instant HTTP POST forward destination to {}",
                         forwardHttpPostConfig.getForwardUrl());
                 yield instantForwardHttpPostProvider.get().get(forwardHttpPostConfig);
             }
-            case ForwardFileConfig forwardFileConfig -> {
+            case final ForwardFileConfig forwardFileConfig -> {
                 LOGGER.info("Creating instant file forward destination to {}",
                         forwardFileConfig.getPath());
                 yield instantForwardFileProvider.get().get(forwardFileConfig);

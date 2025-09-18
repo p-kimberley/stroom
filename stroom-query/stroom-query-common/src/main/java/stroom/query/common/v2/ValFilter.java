@@ -1,16 +1,16 @@
 package stroom.query.common.v2;
 
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
 import stroom.query.common.v2.ExpressionPredicateFactory.ValueFunctionFactories;
 import stroom.query.language.functions.Generator;
 import stroom.query.language.functions.Val;
 import stroom.query.language.functions.ValNull;
 import stroom.query.language.functions.ref.StoredValues;
 import stroom.query.language.functions.ref.ValueReferenceIndex;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -30,7 +30,7 @@ public class ValFilter {
         final ValueFunctionFactories<Val[]> queryFieldIndex = RowUtil
                 .createColumnNameValExtractor(compiledColumns.getColumns());
         final Optional<Predicate<Val[]>> optionalRowExpressionMatcher =
-                expressionPredicateFactory.create(rowExpression, queryFieldIndex, dateTimeSettings);
+                expressionPredicateFactory.createOptional(rowExpression, queryFieldIndex, dateTimeSettings);
 
         final Set<String> fieldsUsed = new HashSet<>(ExpressionUtil.fields(rowExpression));
         final List<UsedColumn> usedColumns = new ArrayList<>();

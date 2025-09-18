@@ -16,13 +16,17 @@
 
 package stroom.query.language.functions;
 
-import stroom.util.NullSafe;
 import stroom.util.concurrent.LazyBoolean;
 import stroom.util.concurrent.LazyValue;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.math.DoubleMath;
 
 import java.math.BigDecimal;
@@ -30,6 +34,7 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public final class ValString implements Val {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ValString.class);
@@ -47,14 +52,19 @@ public final class ValString implements Val {
 
     public static final Type TYPE = Type.STRING;
     public static final ValString EMPTY = new ValString("");
+    @JsonProperty
     private final String value;
 
     // Permanent lazy cache of the slightly costly conversion to long/double
+    @JsonIgnore
     private final transient LazyValue<Double> lazyDoubleValue;
+    @JsonIgnore
     private final transient LazyValue<Long> lazyLongValue;
+    @JsonIgnore
     private final transient LazyBoolean lazyHasFractionalPart;
 
-    private ValString(final String value) {
+    @JsonCreator
+    private ValString(@JsonProperty("value") final String value) {
         if (value == null) {
             // We should not be allowing null values, but not sure that we can risk a null check in case
             // it breaks existing content
@@ -83,7 +93,7 @@ public final class ValString implements Val {
 
     @Override
     public Integer toInteger() {
-        Long l = toLong();
+        final Long l = toLong();
         if (l != null) {
             return l.intValue();
         }
@@ -105,7 +115,7 @@ public final class ValString implements Val {
             try {
                 // See if it is a date string
                 longValue = DateUtil.parseNormalDateTimeString(trimmedVal);
-            } catch (RuntimeException e2) {
+            } catch (final RuntimeException e2) {
                 try {
                     // See if it is a duration string
                     longValue = ValDurationUtil.parseToMilliseconds(trimmedVal);
@@ -119,7 +129,7 @@ public final class ValString implements Val {
 
     @Override
     public Float toFloat() {
-        Double d = toDouble();
+        final Double d = toDouble();
         if (d != null) {
             return d.floatValue();
         }
@@ -140,7 +150,7 @@ public final class ValString implements Val {
             try {
                 // If parsable as a date then get the millis value
                 doubleValue = (double) DateUtil.parseNormalDateTimeString(trimmedVal);
-            } catch (RuntimeException e2) {
+            } catch (final RuntimeException e2) {
                 try {
                     // If parsable as a duration then get the millis value
                     doubleValue = (double) ValDurationUtil.parseToMilliseconds(trimmedVal);

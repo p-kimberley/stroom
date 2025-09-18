@@ -1,6 +1,7 @@
 package stroom.util.sysinfo;
 
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
+import stroom.util.shared.SerialisationTestConstructor;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -41,7 +42,7 @@ public interface HasSystemInfo {
             return getSystemInfo();
         } else {
             throw new UnsupportedOperationException("This system info provider does not support parameters. " +
-                    "Has getSystemInfo(params) been implemented for it.");
+                                                    "Has getSystemInfo(params) been implemented for it.");
         }
     }
 
@@ -67,6 +68,11 @@ public interface HasSystemInfo {
             this.name = Objects.requireNonNull(name);
             this.description = Objects.requireNonNull(description);
             this.paramType = Objects.requireNonNull(paramType);
+        }
+
+        @SerialisationTestConstructor
+        private ParamInfo() {
+            this("test", "test", ParamType.MANDATORY);
         }
 
         public static ParamInfo optionalParam(final String name,

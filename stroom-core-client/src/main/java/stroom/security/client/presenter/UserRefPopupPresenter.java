@@ -17,16 +17,18 @@
 package stroom.security.client.presenter;
 
 import stroom.data.client.presenter.ColumnSizeConstants;
-import stroom.data.client.presenter.PageRequestUtil;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.MyDataGrid;
 import stroom.data.grid.client.PagerView;
 import stroom.dispatch.client.DefaultErrorHandler;
 import stroom.dispatch.client.RestErrorHandler;
 import stroom.dispatch.client.RestFactory;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.security.shared.FindUserContext;
 import stroom.security.shared.FindUserCriteria;
+import stroom.security.shared.GetUserRequest;
 import stroom.security.shared.QuickFilterExpressionParser;
 import stroom.security.shared.UserFields;
 import stroom.security.shared.UserRefResource;
@@ -77,6 +79,7 @@ public class UserRefPopupPresenter
     private UserRef initialSelection;
     private ExpressionTerm additionalTerm;
     private String filter;
+    private FindUserContext context = FindUserContext.RUN_AS;
 
     private Consumer<UserRef> selectionChangeConsumer = e -> {
 
@@ -114,8 +117,6 @@ public class UserRefPopupPresenter
     }
 
     private void setupColumns() {
-        DataGridUtil.addColumnSortHandler(dataGrid, criteriaBuilder, this::refresh);
-
         // Icon
         dataGrid.addColumn(
                 DataGridUtil.svgPresetColumnBuilder(false, UserAndGroupHelper::mapUserRefTypeToIcon)
@@ -141,6 +142,7 @@ public class UserRefPopupPresenter
                         .withToolTip("The name of the user or group.")
                         .build(),
                 300);
+        dataGrid.sort(displayNameCol);
 
         // Full name
         dataGrid.addResizableColumn(
@@ -154,7 +156,6 @@ public class UserRefPopupPresenter
                 350);
 
         DataGridUtil.addEndColumn(dataGrid);
-        dataGrid.getColumnSortList().push(displayNameCol);
     }
 
     @Override
@@ -167,6 +168,7 @@ public class UserRefPopupPresenter
                 }
             }
         }));
+        registerHandler(dataGrid.addColumnSortHandler(event -> refresh()));
     }
 
     public void setSelectionChangeConsumer(final Consumer<UserRef> selectionChangeConsumer) {
@@ -225,9 +227,10 @@ public class UserRefPopupPresenter
         if (userRef == null || userRef.getUuid() == null) {
             consumer.accept(userRef);
         } else {
+            final GetUserRequest request = new GetUserRequest(userRef.getUuid(), context);
             restFactory
                     .create(RESOURCE)
-                    .method(res -> res.getUserByUuid(userRef.getUuid()))
+                    .method(res -> res.getUserByUuid(request))
                     .onSuccess(consumer)
                     .onFailure(new DefaultErrorHandler(this, () -> consumer.accept(userRef)))
                     .taskMonitorFactory(pagerView)
@@ -249,7 +252,8 @@ public class UserRefPopupPresenter
                         expression = expression.copy().addTerm(additionalTerm).build();
                     }
                     criteriaBuilder.expression(expression);
-                    criteriaBuilder.pageRequest(PageRequestUtil.createPageRequest(range));
+                    criteriaBuilder.pageRequest(CriteriaUtil.createPageRequest(range));
+                    criteriaBuilder.sortList(CriteriaUtil.createSortList(dataGrid.getColumnSortList()));
                     restFactory
                             .create(RESOURCE)
                             .method(res -> res.find(criteriaBuilder.build()))
@@ -270,7 +274,8 @@ public class UserRefPopupPresenter
         this.additionalTerm = additionalTerm;
     }
 
-    public void showActiveUsersOnly(final boolean activeUsersOnly) {
-        criteriaBuilder.activeUsersOnly(activeUsersOnly);
+    public void setContext(final FindUserContext context) {
+        this.context = context;
+        criteriaBuilder.context(context);
     }
 }

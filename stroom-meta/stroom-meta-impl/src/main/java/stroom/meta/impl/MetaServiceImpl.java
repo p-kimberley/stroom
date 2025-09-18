@@ -21,8 +21,6 @@ import stroom.data.retention.api.DataRetentionTracker;
 import stroom.data.retention.shared.DataRetentionDeleteSummary;
 import stroom.data.retention.shared.DataRetentionRules;
 import stroom.data.retention.shared.FindDataRetentionImpactCriteria;
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.docref.DocRefInfo;
 import stroom.docrefinfo.api.DocRefInfoService;
@@ -33,6 +31,7 @@ import stroom.meta.api.EffectiveMetaSet;
 import stroom.meta.api.MetaProperties;
 import stroom.meta.api.MetaSecurityFilter;
 import stroom.meta.api.MetaService;
+import stroom.meta.api.StreamFeedProvider;
 import stroom.meta.shared.FindMetaCriteria;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.MetaFields;
@@ -42,12 +41,14 @@ import stroom.meta.shared.SimpleMeta;
 import stroom.meta.shared.Status;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.processor.shared.ProcessorTask;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Builder;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Builder;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.QueryField;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ValuesConsumer;
 import stroom.searchable.api.Searchable;
@@ -56,10 +57,9 @@ import stroom.security.shared.AppPermission;
 import stroom.security.shared.DocumentPermission;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
@@ -86,7 +86,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public class MetaServiceImpl implements MetaService, Searchable {
+public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searchable {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(MetaServiceImpl.class);
 
@@ -105,6 +105,7 @@ public class MetaServiceImpl implements MetaService, Searchable {
     private final TaskContextFactory taskContextFactory;
     private final UserQueryRegistry userQueryRegistry;
     private final TaskManager taskManager;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     MetaServiceImpl(final MetaDao metaDao,
@@ -118,7 +119,8 @@ public class MetaServiceImpl implements MetaService, Searchable {
                     final SecurityContext securityContext,
                     final TaskContextFactory taskContextFactory,
                     final UserQueryRegistry userQueryRegistry,
-                    final TaskManager taskManager) {
+                    final TaskManager taskManager,
+                    final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.metaDao = metaDao;
         this.metaFeedDao = metaFeedDao;
         this.metaValueDao = metaValueDao;
@@ -131,6 +133,7 @@ public class MetaServiceImpl implements MetaService, Searchable {
         this.taskContextFactory = taskContextFactory;
         this.userQueryRegistry = userQueryRegistry;
         this.taskManager = taskManager;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
@@ -160,6 +163,12 @@ public class MetaServiceImpl implements MetaService, Searchable {
             return null;
         }
         return list.getFirst();
+    }
+
+    @Override
+    public String getFeedName(final long id) {
+        final Meta meta = getMeta(id, true);
+        return NullSafe.get(meta, Meta::getFeedName);
     }
 
     @Override
@@ -320,7 +329,7 @@ public class MetaServiceImpl implements MetaService, Searchable {
         if (!MetaFields.STREAM_STORE_DOC_REF.equals(criteria.getDataSourceRef())) {
             return ResultPage.empty();
         }
-        return FieldInfoResultPageBuilder.builder(criteria).addAll(MetaFields.getAllFields()).build();
+        return fieldInfoResultPageFactory.create(criteria, MetaFields.getAllFields());
     }
 
     @Override
@@ -331,6 +340,7 @@ public class MetaServiceImpl implements MetaService, Searchable {
     @Override
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
+                       final DateTimeSettings dateTimeSettings,
                        final ValuesConsumer consumer) {
         LOGGER.logDurationIfTraceEnabled(() -> {
             final ExpressionOperator expression = addPermissionConstraints(criteria.getExpression(),
@@ -503,12 +513,17 @@ public class MetaServiceImpl implements MetaService, Searchable {
 
     @Override
     public Set<String> getTypes() {
-        return metaServiceConfigProvider.get().getMetaTypes();
+        return NullSafe.set(metaServiceConfigProvider.get().getMetaTypes());
     }
 
     @Override
     public Set<String> getRawTypes() {
-        return metaServiceConfigProvider.get().getRawMetaTypes();
+        return NullSafe.set(metaServiceConfigProvider.get().getRawMetaTypes());
+    }
+
+    @Override
+    public Set<String> getDataFormats() {
+        return NullSafe.set(metaServiceConfigProvider.get().getDataFormats());
     }
 
     @Override
@@ -549,11 +564,11 @@ public class MetaServiceImpl implements MetaService, Searchable {
     public List<MetaRow> findRelatedData(final long id, final boolean anyStatus) {
         // Get the starting row.
         final FindMetaCriteria findDataCriteria = new FindMetaCriteria(getIdExpression(id, anyStatus));
-        ResultPage<Meta> rows = find(findDataCriteria);
+        final ResultPage<Meta> rows = find(findDataCriteria);
         final List<Meta> result = new ArrayList<>(rows.getValues());
 
         if (!rows.isEmpty()) {
-            Meta row = rows.getFirst();
+            final Meta row = rows.getFirst();
             LOGGER.logDurationIfTraceEnabled(
                     () -> addChildren(row, anyStatus, result),
                     "Adding children");
@@ -655,7 +670,7 @@ public class MetaServiceImpl implements MetaService, Searchable {
         if (child.getParentMetaId() != null) {
             final List<Meta> parents = find(new FindMetaCriteria(getIdExpression(child.getParentMetaId(),
                     anyStatus))).getValues();
-            if (GwtNullSafe.hasItems(parents)) {
+            if (NullSafe.hasItems(parents)) {
                 parents.forEach(parent -> {
                     result.add(parent);
                     addParents(parent, anyStatus, result);
@@ -766,13 +781,13 @@ public class MetaServiceImpl implements MetaService, Searchable {
                 try {
                     // Wait for completion
                     summaries = future.get();
-                } catch (InterruptedException e) {
+                } catch (final InterruptedException e) {
                     LOGGER.debug("Thread interrupted");
                     summaries = Collections.emptyList();
-                } catch (CancellationException e) {
+                } catch (final CancellationException e) {
                     LOGGER.debug("Query cancelled");
                     summaries = Collections.emptyList();
-                } catch (ExecutionException e) {
+                } catch (final ExecutionException e) {
                     if (e.getCause() != null) {
                         if (e.getCause() instanceof RuntimeException) {
                             throw (RuntimeException) e.getCause();

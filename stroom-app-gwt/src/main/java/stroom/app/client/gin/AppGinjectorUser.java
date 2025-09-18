@@ -62,6 +62,8 @@ import stroom.feed.client.gin.FeedGinjector;
 import stroom.feed.client.gin.FeedModule;
 import stroom.folder.client.gin.FolderGinjector;
 import stroom.folder.client.gin.FolderModule;
+import stroom.gitrepo.client.gin.GitRepoGinjector;
+import stroom.gitrepo.client.gin.GitRepoModule;
 import stroom.importexport.client.gin.ImportExportConfigGinjector;
 import stroom.importexport.client.gin.ImportExportConfigModule;
 import stroom.index.client.gin.IndexGinjector;
@@ -78,6 +80,8 @@ import stroom.planb.client.gin.PlanBModule;
 import stroom.preferences.client.gin.UserPreferencesGinjector;
 import stroom.preferences.client.gin.UserPreferencesModule;
 import stroom.query.client.gin.QueryModule;
+import stroom.receive.content.client.gin.ContentTemplateGinjector;
+import stroom.receive.content.client.gin.ContentTemplateModule;
 import stroom.receive.rules.client.gin.PolicyModule;
 import stroom.script.client.gin.ScriptGinjector;
 import stroom.script.client.gin.ScriptModule;
@@ -126,6 +130,7 @@ import com.gwtplatform.mvp.client.proxy.PlaceManager;
         AnnotationModule.class,
         AppModule.class,
         CacheModule.class,
+        ContentTemplateModule.class,
         RestModule.class,
         DashboardModule.class,
         DictionaryModule.class,
@@ -165,12 +170,14 @@ import com.gwtplatform.mvp.client.proxy.PlaceManager;
         S3ConfigModule.class,
         ScyllaDbModule.class,
         StateStoreModule.class,
-        PlanBModule.class
+        PlanBModule.class,
+        GitRepoModule.class
 })
 public interface AppGinjectorUser extends
         AboutGinjector,
         AlertGinjector,
         CacheGinjector,
+        ContentTemplateGinjector,
         DashboardGinjector,
         DictionaryGinjector,
         DocumentationGinjector,
@@ -209,7 +216,8 @@ public interface AppGinjectorUser extends
         S3ConfigGinjector,
         ScyllaDbGinjector,
         StateStoreGinjector,
-        PlanBGinjector {
+        PlanBGinjector,
+        GitRepoGinjector {
 
     // Default implementation of standard resources
     EventBus getEventBus();

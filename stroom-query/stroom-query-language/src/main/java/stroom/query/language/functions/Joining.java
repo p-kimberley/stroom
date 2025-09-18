@@ -19,7 +19,6 @@ package stroom.query.language.functions;
 import stroom.query.language.functions.ref.StoredValues;
 import stroom.query.language.functions.ref.StringListReference;
 import stroom.query.language.functions.ref.ValueReferenceIndex;
-import stroom.query.language.token.Param;
 
 import java.text.ParseException;
 import java.util.List;
@@ -182,7 +181,7 @@ class Joining extends AbstractFunction implements AggregateFunction {
         public Val eval(final StoredValues storedValues, final Supplier<ChildData> childDataSupplier) {
             final List<String> list = stringListReference.get(storedValues);
             final StringBuilder sb = new StringBuilder();
-            for (String s : list) {
+            for (final String s : list) {
                 sb.append(s);
                 sb.append(delimiter);
             }
@@ -210,7 +209,7 @@ class Joining extends AbstractFunction implements AggregateFunction {
             int trimSize = 0;
 
             int totalLength = 0;
-            for (String s : list) {
+            for (final String s : list) {
                 totalLength += s.length();
                 trimSize++;
                 if (totalLength >= maxStringLength) {

@@ -16,24 +16,24 @@
 
 package stroom.search;
 
-import stroom.annotation.api.AnnotationFields;
+import stroom.annotation.shared.AnnotationDecorationFields;
 import stroom.dictionary.api.DictionaryStore;
 import stroom.dictionary.shared.DictionaryDoc;
 import stroom.docref.DocRef;
 import stroom.index.impl.IndexStore;
 import stroom.index.shared.IndexConstants;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.Format;
-import stroom.query.api.v2.ParamSubstituteUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.SearchRequestSource.SourceType;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.Format;
+import stroom.query.api.ParamUtil;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.SearchRequestSource.SourceType;
+import stroom.query.api.TableSettings;
 import stroom.query.common.v2.EventRef;
 import stroom.query.common.v2.EventRefs;
 import stroom.search.impl.EventSearchTask;
@@ -332,12 +332,12 @@ abstract class AbstractInteractiveSearchTest extends AbstractSearchTest {
     @Test
     void dictionaryTest2() {
         final DocRef docRef1 = dictionaryStore.createDocument("users");
-        DictionaryDoc dic1 = dictionaryStore.readDocument(docRef1);
+        final DictionaryDoc dic1 = dictionaryStore.readDocument(docRef1);
         dic1.setData("user1\nuser2\nuser5");
         dictionaryStore.writeDocument(dic1);
 
         final DocRef docRef2 = dictionaryStore.createDocument("command");
-        DictionaryDoc dic2 = dictionaryStore.readDocument(docRef2);
+        final DictionaryDoc dic2 = dictionaryStore.readDocument(docRef2);
         dic2.setData("msg");
         dictionaryStore.writeDocument(dic2);
 
@@ -357,12 +357,12 @@ abstract class AbstractInteractiveSearchTest extends AbstractSearchTest {
     @Test
     void dictionaryTest3() {
         final DocRef docRef1 = dictionaryStore.createDocument("users");
-        DictionaryDoc dic1 = dictionaryStore.readDocument(docRef1);
+        final DictionaryDoc dic1 = dictionaryStore.readDocument(docRef1);
         dic1.setData("user1\nuser2\nuser5");
         dictionaryStore.writeDocument(dic1);
 
         final DocRef docRef2 = dictionaryStore.createDocument("command");
-        DictionaryDoc dic2 = dictionaryStore.readDocument(docRef2);
+        final DictionaryDoc dic2 = dictionaryStore.readDocument(docRef2);
         dic2.setData("msg foo bar");
         dictionaryStore.writeDocument(dic2);
 
@@ -405,7 +405,7 @@ abstract class AbstractInteractiveSearchTest extends AbstractSearchTest {
                                  final boolean extractValues) {
 
         // code to test the results when they come back
-        Consumer<Map<String, List<Row>>> resultMapConsumer = resultMap -> {
+        final Consumer<Map<String, List<Row>>> resultMapConsumer = resultMap -> {
             for (final List<Row> values : resultMap.values()) {
                 if (expectResultCount == 0) {
                     assertThat(values.size()).isEqualTo(0);
@@ -509,26 +509,26 @@ abstract class AbstractInteractiveSearchTest extends AbstractSearchTest {
         final Column streamIdColumn = Column.builder()
                 .id("1")
                 .name("Stream Id")
-                .expression(ParamSubstituteUtil.makeParam(IndexConstants.STREAM_ID))
+                .expression(ParamUtil.create(IndexConstants.STREAM_ID))
                 .build();
 
         final Column eventIdColumn = Column.builder()
                 .id("2")
                 .name("Event Id")
-                .expression(ParamSubstituteUtil.makeParam(IndexConstants.EVENT_ID))
+                .expression(ParamUtil.create(IndexConstants.EVENT_ID))
                 .build();
 
         final Column timeColumn = Column.builder()
                 .id("3")
                 .name("Event Time")
-                .expression(ParamSubstituteUtil.makeParam("EventTime"))
+                .expression(ParamUtil.create("EventTime"))
                 .format(Format.DATE_TIME)
                 .build();
 
         final Column statusColumn = Column.builder()
                 .id("4")
                 .name("Status")
-                .expression(ParamSubstituteUtil.makeParam(AnnotationFields.STATUS))
+                .expression(ParamUtil.create(AnnotationDecorationFields.ANNOTATION_STATUS))
                 .build();
 
         final DocRef resultPipeline = commonIndexingTestHelper.getSearchResultPipeline();

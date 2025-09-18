@@ -3,9 +3,9 @@ package stroom.feed.impl;
 import stroom.docref.DocRef;
 import stroom.feed.api.FeedStore;
 import stroom.feed.shared.FeedDoc;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.security.api.SecurityContext;
 import stroom.security.mock.MockSecurityContext;
 import stroom.security.shared.DocumentPermission;
@@ -21,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,7 +63,7 @@ class TestMetaSecurityFilterImpl {
                                 .uuid(feed + UUID_SUFFIX)
                                 .name(feed)
                                 .build())
-                        .collect(Collectors.toList()));
+                        .toList());
     }
 
     @Test

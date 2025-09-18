@@ -8,6 +8,7 @@ import stroom.proxy.app.DataDirProvider;
 import stroom.proxy.repo.LogStream;
 import stroom.proxy.repo.LogStream.EventType;
 import stroom.receive.common.AttributeMapFilter;
+import stroom.receive.common.AttributeMapFilterFactory;
 import stroom.util.io.ByteCountInputStream;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
@@ -135,7 +136,7 @@ public class InstantForwardFile {
 
                 // Write data.
                 final String compression = attributeMap.get(StandardHeaderArguments.COMPRESSION);
-                String fileName;
+                final String fileName;
                 if (StandardHeaderArguments.COMPRESSION_ZIP.equalsIgnoreCase(compression)) {
                     fileName = "data.zip";
                 } else if (StandardHeaderArguments.COMPRESSION_GZIP.equalsIgnoreCase(compression)) {

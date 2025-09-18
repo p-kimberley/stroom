@@ -14,7 +14,7 @@ import java.util.Objects;
 
 @JsonPropertyOrder(alphabetic = true)
 @JsonInclude(Include.NON_NULL)
-public class TableBuilderAnalyticProcessConfig extends AnalyticProcessConfig {
+public final class TableBuilderAnalyticProcessConfig extends AnalyticProcessConfig {
 
     @JsonProperty
     private final boolean enabled;
@@ -41,7 +41,7 @@ public class TableBuilderAnalyticProcessConfig extends AnalyticProcessConfig {
                                              @JsonProperty("maxMetaCreateTimeMs") final Long maxMetaCreateTimeMs,
                                              @JsonProperty("timeToWaitForData") final SimpleDuration timeToWaitForData,
                                              @JsonProperty("dataRetention") final SimpleDuration dataRetention,
-                                             @JsonProperty("runAsUser") UserRef runAsUser) {
+                                             @JsonProperty("runAsUser") final UserRef runAsUser) {
         this.enabled = enabled;
         this.node = node;
         this.errorFeed = errorFeed;

@@ -32,7 +32,7 @@ import stroom.security.shared.AppPermission;
 import stroom.security.shared.AppPermissionResource;
 import stroom.security.shared.AppUserPermissionsReport;
 import stroom.util.client.DataGridUtil;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserRef;
 import stroom.widget.util.client.MultiSelectionModelImpl;
 
@@ -82,7 +82,7 @@ public class AppPermissionsEditPresenter
         this.securityContext = securityContext;
 
         dataGrid = new MyDataGrid<>();
-        selectionModel = new MultiSelectionModelImpl<>(dataGrid);
+        selectionModel = new MultiSelectionModelImpl<>();
         final DataGridSelectionEventManager<AppPermission> selectionEventManager = new DataGridSelectionEventManager<>(
                 dataGrid,
                 selectionModel,
@@ -227,7 +227,7 @@ public class AppPermissionsEditPresenter
 
     private TickBoxState getTickBoxState(final AppPermission permission) {
         if (currentPermissions != null) {
-            if (GwtNullSafe.collectionContains(currentPermissions.getExplicitPermissions(), permission)) {
+            if (NullSafe.collectionContains(currentPermissions.getExplicitPermissions(), permission)) {
                 return TickBoxState.TICK;
             } else if (currentPermissions.getInheritedPermissions().containsKey(permission)) {
                 return TickBoxState.HALF_TICK;
@@ -235,10 +235,10 @@ public class AppPermissionsEditPresenter
 
             // See if implied by administrator.
             if (!AppPermission.ADMINISTRATOR.equals(permission)) {
-                if (GwtNullSafe.collectionContains(currentPermissions.getExplicitPermissions(),
+                if (NullSafe.collectionContains(currentPermissions.getExplicitPermissions(),
                         AppPermission.ADMINISTRATOR)) {
                     return TickBoxState.HALF_TICK;
-                } else if (GwtNullSafe.containsKey(
+                } else if (NullSafe.containsKey(
                         currentPermissions.getInheritedPermissions(),
                         AppPermission.ADMINISTRATOR)) {
                     return TickBoxState.HALF_TICK;
@@ -268,7 +268,7 @@ public class AppPermissionsEditPresenter
     }
 
     private SafeHtml getDetails() {
-        AppUserPermissionsReport currentPermissions = getCurrentPermissions();
+        final AppUserPermissionsReport currentPermissions = getCurrentPermissions();
         final DescriptionBuilder sb = new DescriptionBuilder();
         final AppPermission permission = getSelectionModel().getSelected();
         if (permission != null) {
@@ -314,7 +314,7 @@ public class AppPermissionsEditPresenter
             sb.addTitle(directTitle);
         }
 
-        if (GwtNullSafe.hasItems(paths)) {
+        if (NullSafe.hasItems(paths)) {
             sb.addNewLine();
             sb.addNewLine();
             sb.addTitle(inheritedTitle);

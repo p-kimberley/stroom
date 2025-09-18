@@ -3,9 +3,9 @@ package stroom.dashboard.client.table;
 import stroom.dashboard.client.table.cf.ConditionalFormattingDynamicStyles;
 import stroom.dashboard.client.table.cf.ConditionalFormattingSwatchUtil;
 import stroom.preferences.client.UserPreferencesManager;
-import stroom.query.api.v2.ConditionalFormattingRule;
-import stroom.query.api.v2.ConditionalFormattingType;
-import stroom.query.api.v2.TextAttributes;
+import stroom.query.api.ConditionalFormattingRule;
+import stroom.query.api.ConditionalFormattingType;
+import stroom.query.api.TextAttributes;
 import stroom.query.client.presenter.TableRow;
 import stroom.security.client.presenter.ClassNameBuilder;
 
@@ -29,7 +29,7 @@ public class TableRowStyles implements RowStyles<TableRow> {
     public String getStyleNames(final TableRow row, final int rowIndex) {
         final ClassNameBuilder classNameBuilder = new ClassNameBuilder();
         if (row != null && row.getMatchingRule() != null && !userPreferencesManager.isHideConditionalStyles()) {
-            ConditionalFormattingRule rule = conditionalFormattingRules.get(row.getMatchingRule());
+            final ConditionalFormattingRule rule = conditionalFormattingRules.get(row.getMatchingRule());
             if (rule != null) {
                 // Fixed styles.
                 if (rule.getFormattingType() == null ||

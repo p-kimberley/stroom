@@ -1,14 +1,14 @@
 package stroom.meta.impl.db;
 
-import stroom.datasource.api.v2.QueryField;
 import stroom.db.util.CommonExpressionMapper;
 import stroom.db.util.TermHandler;
 import stroom.db.util.TermHandlerFactory;
 import stroom.meta.impl.MetaKeyDao;
 import stroom.meta.impl.db.jooq.tables.MetaVal;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.util.NullSafe;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.datasource.QueryField;
+import stroom.util.shared.NullSafe;
 
 import org.jooq.Condition;
 import org.jooq.Field;
@@ -36,11 +36,11 @@ class MetaExpressionMapper implements Function<ExpressionItem, Condition> {
     }
 
     public void map(final QueryField dataSourceField) {
-        Optional<Integer> idOptional = metaKeyDao.getIdForName(dataSourceField.getFldName());
+        final Optional<Integer> idOptional = metaKeyDao.getIdForName(dataSourceField.getFldName());
 
         if (idOptional.isPresent()) {
-            int id = idOptional.get();
-            Field<Long> valueField = createValueField(id);
+            final int id = idOptional.get();
+            final Field<Long> valueField = createValueField(id);
 
             final TermHandler<Long> termHandler = termHandlerFactory.create(
                     dataSourceField,
@@ -53,10 +53,10 @@ class MetaExpressionMapper implements Function<ExpressionItem, Condition> {
                                     .collect(Collectors.toList());
                         } catch (final NumberFormatException e) {
                             throw new NumberFormatException("Error parsing value \"" +
-                                    values +
-                                    "\" as number for field '" +
-                                    dataSourceField.getFldName() +
-                                    "'");
+                                                            values +
+                                                            "\" as number for field '" +
+                                                            dataSourceField.getFldName() +
+                                                            "'");
                         }
                     });
 
@@ -81,7 +81,7 @@ class MetaExpressionMapper implements Function<ExpressionItem, Condition> {
             final Field<Long> metaIdField,
             final Set<Integer> usedValKeys) {
 
-        for (Integer id : usedValKeys) {
+        for (final Integer id : usedValKeys) {
             final MetaVal metaVal = getAliasedMetaValTable(id);
 
             query = query.leftOuterJoin(metaVal)
@@ -103,7 +103,7 @@ class MetaExpressionMapper implements Function<ExpressionItem, Condition> {
             final Field<Long> metaIdField,
             final Set<Integer> usedValKeys) {
 
-        for (Integer id : usedValKeys) {
+        for (final Integer id : usedValKeys) {
             final MetaVal metaVal = getAliasedMetaValTable(id);
 
             fromPart = fromPart.leftOuterJoin(metaVal)

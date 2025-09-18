@@ -22,14 +22,14 @@ import stroom.docref.DocRef;
 import stroom.document.client.event.DirtyEvent;
 import stroom.document.client.event.DirtyEvent.DirtyHandler;
 import stroom.document.client.event.HasDirtyHandlers;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.query.client.ExpressionTreePresenter;
 import stroom.query.client.ExpressionUiHandlers;
 import stroom.query.client.presenter.FieldSelectionListModel;
 import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
 import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.menu.client.presenter.IconMenuItem;
 import stroom.widget.menu.client.presenter.Item;
@@ -92,7 +92,7 @@ public class EditExpressionPresenter extends MyPresenterWidget<EditExpressionPre
         registerHandler(expressionPresenter.addDataSelectionHandler(event -> setButtonsEnabled()));
         registerHandler(expressionPresenter.addContextMenuHandler(event -> {
             final List<Item> menuItems = addExpressionActionsToMenu();
-            if (GwtNullSafe.hasItems(menuItems)) {
+            if (NullSafe.hasItems(menuItems)) {
                 showMenu(menuItems, event.getPopupPosition());
             }
         }));

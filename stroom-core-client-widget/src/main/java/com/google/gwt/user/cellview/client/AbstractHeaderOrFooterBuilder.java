@@ -5,12 +5,9 @@
 
 package com.google.gwt.user.cellview.client;
 
-import stroom.svg.shared.SvgImage;
-import stroom.util.shared.GwtNullSafe;
-import stroom.widget.util.client.SvgImageUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.gwt.cell.client.Cell;
-import com.google.gwt.dom.builder.shared.DivBuilder;
 import com.google.gwt.dom.builder.shared.ElementBuilderBase;
 import com.google.gwt.dom.builder.shared.HtmlBuilderFactory;
 import com.google.gwt.dom.builder.shared.HtmlTableSectionBuilder;
@@ -19,16 +16,12 @@ import com.google.gwt.dom.builder.shared.TableSectionBuilder;
 import com.google.gwt.dom.client.Document;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.TableRowElement;
-import com.google.gwt.safehtml.shared.SafeHtml;
 import com.google.gwt.safehtml.shared.SafeHtmlBuilder;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<T>, FooterBuilder<T> {
-
-    private static final SafeHtml ARROW_UP_SAFE_HTML = SvgImageUtil.toSafeHtml(SvgImage.ARROW_UP);
-    private static final SafeHtml ARROW_DOWN_SAFE_HTML = SvgImageUtil.toSafeHtml(SvgImage.ARROW_DOWN);
 
     private final boolean isFooter;
     private boolean isSortIconStartOfLine = true;
@@ -62,14 +55,14 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
     }
 
     public Column<T, ?> getColumn(final Element elem) {
-        String cellId = this.getColumnId(elem);
+        final String cellId = this.getColumnId(elem);
         return cellId == null
                 ? null
                 : this.idToColumnMap.get(cellId);
     }
 
     public Header<?> getHeader(final Element elem) {
-        String headerId = this.getHeaderId(elem);
+        final String headerId = this.getHeaderId(elem);
         return headerId == null
                 ? null
                 : this.idToHeaderMap.getValue(headerId);
@@ -103,7 +96,7 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
 
     protected final void enableColumnHandlers(final ElementBuilderBase<?> builder,
                                               final Column<T, ?> column) {
-        String columnId = "column-" + Document.get().createUniqueId();
+        final String columnId = "column-" + Document.get().createUniqueId();
         this.idToColumnMap.put(columnId, column);
         builder.attribute("__gwt_column", columnId);
     }
@@ -128,36 +121,9 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
         }
 
         out.attribute("__gwt_header", headerId);
-        SafeHtmlBuilder sb = new SafeHtmlBuilder();
+        final SafeHtmlBuilder sb = new SafeHtmlBuilder();
         header.render(context, sb);
         out.html(sb.toSafeHtml());
-    }
-
-    protected final void renderSortableHeader(final ElementBuilderBase<?> out,
-                                              final Cell.Context context,
-                                              final Header<?> header,
-                                              final boolean isSorted,
-                                              final boolean isSortAscending) {
-        if (isSorted && !this.isFooter) {
-            DivBuilder outerDiv = out.startDiv();
-            outerDiv.className("dataGridSortableHeaderOuterDiv");
-
-            DivBuilder nameHolder = outerDiv.startDiv();
-            nameHolder.className("dataGridSortableHeaderNameHolder");
-            this.renderHeader(nameHolder, context, header);
-            nameHolder.endDiv();
-
-            DivBuilder imageHolder = outerDiv.startDiv();
-            imageHolder.className("dataGridSortableHeaderImageHolder");
-
-            imageHolder.html(this.getSortIcon(isSortAscending));
-            imageHolder.endDiv();
-
-            outerDiv.endDiv();
-
-        } else {
-            this.renderHeader(out, context, header);
-        }
     }
 
     protected final TableRowBuilder startRow() {
@@ -168,7 +134,7 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
         if (this.section.getDepth() < 1) {
             throw new IllegalStateException("Cannot start a row.  Did you call TableRowBuilder.end() too many times?");
         } else {
-            TableRowBuilder row = this.section.startTR();
+            final TableRowBuilder row = this.section.startTR();
             row.attribute("__gwt_header_row", this.rowIndex);
             ++this.rowIndex;
             return row;
@@ -201,8 +167,8 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
         if (elem == null) {
             return null;
         } else {
-            String value = elem.getAttribute(attribute);
-            return GwtNullSafe.isNonEmptyString(value)
+            final String value = elem.getAttribute(attribute);
+            return NullSafe.isNonEmptyString(value)
                     ? value
                     : null;
         }
@@ -210,12 +176,6 @@ public abstract class AbstractHeaderOrFooterBuilder<T> implements HeaderBuilder<
 
     private String getHeaderId(final Element elem) {
         return this.getElementAttribute(elem, "__gwt_header");
-    }
-
-    private SafeHtml getSortIcon(final boolean isAscending) {
-        return isAscending
-                ? ARROW_UP_SAFE_HTML
-                : ARROW_DOWN_SAFE_HTML;
     }
 
 

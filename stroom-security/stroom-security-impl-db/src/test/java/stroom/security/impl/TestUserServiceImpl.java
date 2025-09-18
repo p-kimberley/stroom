@@ -17,9 +17,11 @@
 package stroom.security.impl;
 
 
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
+import stroom.security.api.UserService;
 import stroom.security.impl.db.SecurityDbConnProvider;
 import stroom.security.impl.db.SecurityTestUtil;
+import stroom.security.shared.FindUserContext;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.QuickFilterExpressionParser;
 import stroom.security.shared.User;
@@ -155,11 +157,11 @@ class TestUserServiceImpl {
         final PageRequest pageRequest = new PageRequest(0, 100);
         final ExpressionOperator expression = QuickFilterExpressionParser
                 .parse(filter, UserFields.DEFAULT_FIELDS, UserFields.ALL_FIELDS_MAP);
-        return new FindUserCriteria(pageRequest, null, expression, false);
+        return new FindUserCriteria(pageRequest, null, expression, FindUserContext.PERMISSIONS);
     }
 
     private User createUser(final String baseName) {
-        User userRef = userService.getOrCreateUser(String.format("%s_%s", baseName, UUID.randomUUID()));
+        final User userRef = userService.getOrCreateUser(String.format("%s_%s", baseName, UUID.randomUUID()));
         assertThat(userRef).isNotNull();
         final Optional<User> user = userService.loadByUuid(userRef.getUuid());
         assertThat(user).isPresent();
@@ -167,7 +169,7 @@ class TestUserServiceImpl {
     }
 
     private User createUserGroup(final String baseName) {
-        User userRef = userService.getOrCreateUserGroup(String.format("%s_%s", baseName, UUID.randomUUID()));
+        final User userRef = userService.getOrCreateUserGroup(String.format("%s_%s", baseName, UUID.randomUUID()));
         assertThat(userRef).isNotNull();
         final Optional<User> user = userService.loadByUuid(userRef.getUuid());
         assertThat(user).isPresent();

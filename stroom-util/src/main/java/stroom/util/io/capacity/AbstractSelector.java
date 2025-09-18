@@ -1,12 +1,12 @@
 package stroom.util.io.capacity;
 
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.HasCapacity;
 import stroom.util.shared.HasCapacityInfo;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -36,7 +36,7 @@ public abstract class AbstractSelector implements HasCapacitySelector {
         return list;
     }
 
-    public <T extends HasCapacity> T select(List<T> list) {
+    public <T extends HasCapacity> T select(final List<T> list) {
         LOGGER.trace(() -> LogUtil.message("select() called on {} for items [{}]",
                 this.getClass().getSimpleName(),
                 dumpList(list)));
@@ -137,8 +137,8 @@ public abstract class AbstractSelector implements HasCapacitySelector {
     @Override
     public String toString() {
         return getName() + " (fallback: "
-                + NullSafe.get(fallbackSelector, selector ->
+               + NullSafe.get(fallbackSelector, selector ->
                 selector.getClass().getSimpleName())
-                + ")";
+               + ")";
     }
 }

@@ -16,21 +16,21 @@
 
 package stroom.state.impl;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.IndexField;
-import stroom.datasource.api.v2.QueryField;
 import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.index.shared.IndexFieldImpl;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchTaskProgress;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.Query;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchTaskProgress;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.IndexFieldProvider;
 import stroom.query.common.v2.ResultStore;
 import stroom.query.common.v2.ResultStoreFactory;
@@ -42,10 +42,10 @@ import stroom.state.shared.StateDoc;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
 import stroom.task.shared.TaskProgress;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -76,6 +76,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
     private final ResultStoreFactory resultStoreFactory;
     private final TaskManager taskManager;
     private final TaskContextFactory taskContextFactory;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public StateSearchProvider(final Executor executor,
@@ -85,7 +86,8 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
                                final CoprocessorsFactory coprocessorsFactory,
                                final ResultStoreFactory resultStoreFactory,
                                final TaskManager taskManager,
-                               final TaskContextFactory taskContextFactory) {
+                               final TaskContextFactory taskContextFactory,
+                               final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.executor = executor;
         this.stateDocStore = stateDocStore;
         this.stateDocCache = stateDocCache;
@@ -94,6 +96,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
         this.resultStoreFactory = resultStoreFactory;
         this.taskManager = taskManager;
         this.taskContextFactory = taskContextFactory;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     private StateDoc getStateDoc(final DocRef docRef) {
@@ -108,10 +111,7 @@ public class StateSearchProvider implements SearchProvider, IndexFieldProvider {
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
         final StateDoc doc = getStateDoc(criteria.getDataSourceRef());
         final List<QueryField> fields = StateFieldUtil.getQueryableFields(doc.getStateType());
-        return FieldInfoResultPageBuilder
-                .builder(criteria)
-                .addAll(fields)
-                .build();
+        return fieldInfoResultPageFactory.create(criteria, fields);
     }
 
     @Override

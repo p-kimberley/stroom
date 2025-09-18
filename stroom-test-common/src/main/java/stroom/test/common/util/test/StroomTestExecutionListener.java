@@ -2,8 +2,10 @@ package stroom.test.common.util.test;
 
 import stroom.test.common.util.TestClassLogger;
 import stroom.test.common.util.db.DbTestUtil;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.SharedMetricRegistries;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestPlan;
@@ -24,7 +26,9 @@ public class StroomTestExecutionListener implements TestExecutionListener {
     private static volatile boolean DROPPED_TEST_DATABASES = false;
 
     @Override
-    public void testPlanExecutionStarted(TestPlan testPlan) {
+    public void testPlanExecutionStarted(final TestPlan testPlan) {
+//        initDropwizardMetricsRegistry();
+
         // If we don't have a DB conn don't bother doing anything, e.g. is a pure unit test
         // TODO: 12/09/2022 There ought to be a better way to do this so we can avoid logging
         //  stuff about a DB for a pure unit test, but not sure we can tell what is a db
@@ -40,12 +44,12 @@ public class StroomTestExecutionListener implements TestExecutionListener {
                         if (!DROPPED_TEST_DATABASES) {
                             try {
                                 DbTestUtil.dropUnusedTestDatabases();
-                            } catch (Exception e) {
+                            } catch (final Exception e) {
                                 final Throwable rootCause = ExceptionUtils.getRootCause(e);
                                 if (rootCause instanceof SQLException
-                                        && rootCause.getMessage().contains("No suitable driver found")) {
+                                    && rootCause.getMessage().contains("No suitable driver found")) {
                                     LOGGER.info("No DB connection to drop test databases. " +
-                                            "Assuming this is not an integration test");
+                                                "Assuming this is not an integration test");
                                 } else {
                                     throw e;
                                 }
@@ -67,9 +71,11 @@ public class StroomTestExecutionListener implements TestExecutionListener {
     }
 
     @Override
-    public void testPlanExecutionFinished(TestPlan testPlan) {
+    public void testPlanExecutionFinished(final TestPlan testPlan) {
         // Called after all tests have run on this JVM.
         LOGGER.info("Finished test plan");
+
+//        clearDropwizardMetricsRegistry();
 
         TestClassLogger.writeTestClassesLogToDisk();
 
@@ -88,5 +94,25 @@ public class StroomTestExecutionListener implements TestExecutionListener {
         return NullSafe.test(
                 System.getenv(KEEP_TEST_DATABASES),
                 str -> str.equalsIgnoreCase("true"));
+    }
+
+    private void initDropwizardMetricsRegistry() {
+        // This normally gets done by dropwizard on boot
+        try {
+            SharedMetricRegistries.getDefault();
+            LOGGER.info("Using existing static metrics registry");
+        } catch (final IllegalStateException e) {
+            LOGGER.info("Creating new static metrics registry for testing");
+            SharedMetricRegistries.setDefault("defaultRegistry", new MetricRegistry());
+        }
+    }
+
+    private void clearDropwizardMetricsRegistry() {
+        LOGGER.info("Clearing metrics registry");
+        final MetricRegistry registry = SharedMetricRegistries.getDefault();
+        if (registry != null) {
+            registry.getNames()
+                    .forEach(registry::remove);
+        }
     }
 }

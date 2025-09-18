@@ -1,6 +1,6 @@
 package stroom.test.common.data;
 
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import java.util.List;
 import java.util.function.Function;
@@ -37,7 +37,7 @@ public abstract class AbstractXmlDataWriterBuilder {
         final String recordFormatStr = buildRecordFormatString(fields);
 
         return dataRecord -> {
-            String[] valuesArr = new String[dataRecord.values().size()];
+            final String[] valuesArr = new String[dataRecord.values().size()];
             dataRecord.values().toArray(valuesArr);
             return String.format(recordFormatStr, (Object[]) valuesArr);
         };

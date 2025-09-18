@@ -4,13 +4,13 @@ import stroom.proxy.app.ProxyConfig;
 import stroom.proxy.app.ProxyOpenIdConfig;
 import stroom.proxy.app.ProxyPathConfig;
 import stroom.security.openid.api.AbstractOpenIdConfig;
-import stroom.util.NullSafe;
 import stroom.util.io.PathConfig;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.AbstractConfig;
 import stroom.util.shared.IsProxyConfig;
 import stroom.util.shared.NotInjectableConfig;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
@@ -69,7 +69,7 @@ public class GenerateProxyConfigProvidersModule {
                 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             """;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
 //        final ConfigMapper configMapper = new ConfigMapper();
         final Set<String> simpleNames = new HashSet<>();
         final Map<String, List<String>> simpleNameToFullNamesMap = new HashMap<>();
@@ -96,10 +96,10 @@ public class GenerateProxyConfigProvidersModule {
                                     .append(interfaceClass.getSimpleName())
                                     .append("\n")
                                     .append(buildMethod(
-                                    simpleNames,
-                                    simpleNameToFullNamesMap,
-                                    clazz,
-                                    interfaceClass)));
+                                            simpleNames,
+                                            simpleNameToFullNamesMap,
+                                            clazz,
+                                            interfaceClass)));
                     return stringBuilder.toString();
                 })
                 .collect(Collectors.joining("\n"));
@@ -195,7 +195,7 @@ public class GenerateProxyConfigProvidersModule {
         final String simpleClassName = clazz.getSimpleName();
         // Fix the name for nested classes
         final String fullClassName = clazz.getName()
-                .replace("$", ".");
+                .replace('$', '.');
 
         simpleNameToFullNamesMap.computeIfAbsent(simpleClassName, k -> new ArrayList<>())
                 .add(fullClassName);
@@ -236,7 +236,7 @@ public class GenerateProxyConfigProvidersModule {
     }
 
     private static void updateFile(final String content) {
-        Path pwd = Paths.get(".")
+        final Path pwd = Paths.get(".")
                 .toAbsolutePath()
                 .normalize();
 
@@ -258,7 +258,7 @@ public class GenerateProxyConfigProvidersModule {
             LOGGER.info("Writing file " + moduleFile.toAbsolutePath());
             Files.writeString(moduleFile, content);
 
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException("Error reading content of " + moduleFile);
         }
     }

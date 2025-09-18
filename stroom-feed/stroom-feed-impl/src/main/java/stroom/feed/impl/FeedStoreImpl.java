@@ -25,7 +25,6 @@ import stroom.docstore.api.StoreFactory;
 import stroom.docstore.api.UniqueNameUtil;
 import stroom.feed.api.FeedStore;
 import stroom.feed.shared.FeedDoc;
-import stroom.importexport.api.ImportConverter;
 import stroom.importexport.shared.ImportSettings;
 import stroom.importexport.shared.ImportState;
 import stroom.security.api.SecurityContext;
@@ -40,6 +39,9 @@ import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,26 +52,37 @@ public class FeedStoreImpl implements FeedStore {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(FeedStoreImpl.class);
 
+    private static final List<String> SUPPORTED_ENCODINGS;
+
+    static {
+        final List<String> list = new ArrayList<>();
+        list.add("UTF-8");
+        list.add("UTF-16LE");
+        list.add("UTF-16BE");
+        list.add("UTF-32LE");
+        list.add("UTF-32BE");
+        list.add("ASCII");
+        list.addAll(Charset.availableCharsets().keySet());
+        SUPPORTED_ENCODINGS = Collections.unmodifiableList(list);
+    }
+
     private final Store<FeedDoc> store;
     private final FeedNameValidator feedNameValidator;
     private final SecurityContext securityContext;
     private final FeedSerialiser serialiser;
     private final Provider<FsVolumeGroupService> fsVolumeGroupServiceProvider;
-    private final ImportConverter importConverter;
 
     @Inject
     public FeedStoreImpl(final StoreFactory storeFactory,
                          final FeedNameValidator feedNameValidator,
                          final FeedSerialiser serialiser,
                          final SecurityContext securityContext,
-                         final Provider<FsVolumeGroupService> fsVolumeGroupServiceProvider,
-                         final ImportConverter importConverter) {
+                         final Provider<FsVolumeGroupService> fsVolumeGroupServiceProvider) {
         this.fsVolumeGroupServiceProvider = fsVolumeGroupServiceProvider;
         this.store = storeFactory.createStore(serialiser, FeedDoc.TYPE, FeedDoc.class);
         this.feedNameValidator = feedNameValidator;
         this.securityContext = securityContext;
         this.serialiser = serialiser;
-        this.importConverter = importConverter;
     }
 
     ////////////////////////////////////////////////////////////////////////
@@ -137,7 +150,7 @@ public class FeedStoreImpl implements FeedStore {
     }
 
     @Override
-    public DocRefInfo info(DocRef docRef) {
+    public DocRefInfo info(final DocRef docRef) {
         return store.info(docRef);
     }
 
@@ -210,14 +223,9 @@ public class FeedStoreImpl implements FeedStore {
 
         // If the imported feed's vol grp doesn't exist in this env use our default
         // or null it out
-        Map<String, byte[]> effectiveDataMap = importConverter.convert(
-                docRef,
-                dataMap,
-                importState,
-                importSettings,
-                securityContext.getUserIdentityForAudit());
+        Map<String, byte[]> effectiveDataMap = dataMap;
         try {
-            final FeedDoc feedDoc = serialiser.read(effectiveDataMap);
+            final FeedDoc feedDoc = serialiser.read(dataMap);
 
             final String volumeGroup = feedDoc.getVolumeGroup();
             if (volumeGroup != null) {
@@ -234,7 +242,7 @@ public class FeedStoreImpl implements FeedStore {
                     effectiveDataMap = serialiser.write(feedDoc);
                 }
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(LogUtil.message("Error de-serialising feed {}: {}",
                     docRef, e.getMessage()), e);
         }
@@ -258,7 +266,7 @@ public class FeedStoreImpl implements FeedStore {
     }
 
     @Override
-    public Set<DocRef> findAssociatedNonExplorerDocRefs(DocRef docRef) {
+    public Set<DocRef> findAssociatedNonExplorerDocRefs(final DocRef docRef) {
         return null;
     }
 
@@ -281,6 +289,11 @@ public class FeedStoreImpl implements FeedStore {
         return store.list();
     }
 
+    @Override
+    public List<String> fetchSupportedEncodings() {
+        return SUPPORTED_ENCODINGS;
+    }
+
     private String createUniqueName(final String name) {
         final Set<String> existingNames = list()
                 .stream()
@@ -294,7 +307,7 @@ public class FeedStoreImpl implements FeedStore {
         final List<DocRef> list = list();
         for (final DocRef docRef : list) {
             if (name.equals(docRef.getName()) &&
-                    (whitelistUuid == null || !whitelistUuid.equals(docRef))) {
+                (whitelistUuid == null || !whitelistUuid.equals(docRef))) {
                 return true;
             }
         }

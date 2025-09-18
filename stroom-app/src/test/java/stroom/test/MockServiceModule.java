@@ -2,6 +2,8 @@ package stroom.test;
 
 import stroom.activity.mock.MockActivityModule;
 import stroom.cache.impl.CacheModule;
+import stroom.cache.service.impl.CacheServiceModule;
+import stroom.cluster.lock.mock.MockClusterLockModule;
 import stroom.core.dataprocess.PipelineStreamTaskModule;
 import stroom.data.store.mock.MockStreamStoreModule;
 import stroom.dictionary.mock.MockWordListProviderModule;
@@ -11,7 +13,6 @@ import stroom.feed.api.VolumeGroupNameProvider;
 import stroom.feed.impl.MockFeedModule;
 import stroom.importexport.impl.ImportExportModule;
 import stroom.index.mock.MockIndexModule;
-import stroom.legacy.impex_6_1.LegacyImpexModule;
 import stroom.meta.mock.MockMetaModule;
 import stroom.node.mock.MockNodeServiceModule;
 import stroom.pipeline.xmlschema.MockXmlSchemaModule;
@@ -19,13 +20,14 @@ import stroom.planb.impl.MockPlanBModule;
 import stroom.processor.impl.MockProcessorModule;
 import stroom.resource.impl.MockResourceModule;
 import stroom.security.api.ContentPackUserService;
-import stroom.security.impl.UserService;
+import stroom.security.api.UserService;
 import stroom.security.mock.MockSecurityContext;
 import stroom.security.mock.MockSecurityContextModule;
 import stroom.security.shared.User;
 import stroom.state.impl.MockStateModule;
 import stroom.statistics.mock.MockInternalStatisticsModule;
 import stroom.task.impl.MockTaskModule;
+import stroom.test.common.MockMetricsModule;
 import stroom.util.entityevent.EntityEventBus;
 import stroom.util.http.BasicHttpClientFactory;
 import stroom.util.http.HttpClientFactory;
@@ -58,7 +60,9 @@ public class MockServiceModule extends AbstractModule {
         install(new MockJerseyModule());
         install(new MockActivityModule());
         install(new MockDocRefInfoModule());
+        install(new MockMetricsModule());
         install(new CacheModule());
+        install(new CacheServiceModule());
         install(new MockMetaModule());
         install(new MockStreamStoreModule());
         install(new MockWordListProviderModule());
@@ -69,7 +73,6 @@ public class MockServiceModule extends AbstractModule {
         install(new MockExplorerModule());
         install(new MockFeedModule());
         install(new ImportExportModule());
-        install(new LegacyImpexModule());
         install(new MockIndexModule());
         install(new MockNodeServiceModule());
         install(new stroom.pipeline.PipelineModule());
@@ -93,6 +96,7 @@ public class MockServiceModule extends AbstractModule {
         install(new MockXmlSchemaModule());
         install(new MockStateModule());
         install(new MockPlanBModule());
+        install(new MockClusterLockModule());
 
         bind(ContentPackUserService.class).to(MockSecurityContext.class);
         bind(HttpClientFactory.class).to(BasicHttpClientFactory.class);

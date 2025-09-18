@@ -50,7 +50,7 @@ import stroom.processor.shared.ProcessorListRow;
 import stroom.processor.shared.ProcessorListRowResultPage;
 import stroom.processor.shared.ProcessorResource;
 import stroom.processor.shared.ProcessorRow;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.client.api.ClientSecurityContext;
 import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
@@ -221,7 +221,7 @@ public class ProcessorListPresenter extends MyPresenterWidget<PagerView>
     }
 
     private void onChangeData(final ProcessorListRowResultPage data) {
-        ProcessorListRow selected = selectionModel.getSelected();
+        final ProcessorListRow selected = selectionModel.getSelected();
 
         if (nextSelection != null) {
             for (final ProcessorListRow row : data.getValues()) {
@@ -383,7 +383,7 @@ public class ProcessorListPresenter extends MyPresenterWidget<PagerView>
 
     private void addPriorityColumn() {
         final Column<ProcessorListRow, Number> priorityColumn = new Column<ProcessorListRow, Number>(
-                new ValueSpinnerCell(1, 100)) {
+                new ValueSpinnerCell(ProcessorFilter.MIN_PRIORITY, ProcessorFilter.MAX_PRIORITY)) {
             @Override
             public Number getValue(final ProcessorListRow row) {
                 Number priority = null;
@@ -416,7 +416,9 @@ public class ProcessorListPresenter extends MyPresenterWidget<PagerView>
 
     private void addMaxProcessingTasksColumn() {
         final Column<ProcessorListRow, Number> maxProcessingTasksColumn = new Column<ProcessorListRow, Number>(
-                new ValueSpinnerCell(0, Integer.MAX_VALUE)) {
+                new ValueSpinnerCell(
+                        ProcessorFilter.MIN_MAX_PROCESSING_TASKS,
+                        ProcessorFilter.MAX_MAX_PROCESSING_TASKS)) {
             @Override
             public Number getValue(final ProcessorListRow row) {
                 Number maxProcessingTasks = null;
@@ -548,7 +550,7 @@ public class ProcessorListPresenter extends MyPresenterWidget<PagerView>
     private void addRunAsUserColumn() {
         dataGrid.addResizableColumn(
                 DataGridUtil.userRefColumnBuilder(
-                                (ProcessorListRow row) -> {
+                                (final ProcessorListRow row) -> {
                                     if (row instanceof ProcessorFilterRow) {
                                         final ProcessorFilterRow processorFilterRow = (ProcessorFilterRow) row;
                                         return Optional
@@ -564,7 +566,7 @@ public class ProcessorListPresenter extends MyPresenterWidget<PagerView>
                                 securityContext,
                                 true,
                                 DisplayType.AUTO)
-                        .enabledWhen((ProcessorListRow row) -> {
+                        .enabledWhen((final ProcessorListRow row) -> {
                             if (row instanceof ProcessorFilterRow) {
                                 final ProcessorFilterRow processorFilterRow = (ProcessorFilterRow) row;
                                 return Optional

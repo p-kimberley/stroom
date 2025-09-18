@@ -17,13 +17,13 @@
 
 package stroom.explorer.impl;
 
-import stroom.docref.DocContentHighlights;
 import stroom.docref.DocRef;
 import stroom.docstore.shared.DocumentType;
 import stroom.explorer.api.ExplorerService;
 import stroom.explorer.shared.AdvancedDocumentFindRequest;
 import stroom.explorer.shared.AdvancedDocumentFindWithPermissionsRequest;
 import stroom.explorer.shared.BulkActionResult;
+import stroom.explorer.shared.DocContentHighlights;
 import stroom.explorer.shared.DocumentFindRequest;
 import stroom.explorer.shared.ExplorerNode;
 import stroom.explorer.shared.ExplorerResource.TagFetchMode;
@@ -35,6 +35,7 @@ import stroom.explorer.shared.FindInContentResult;
 import stroom.explorer.shared.FindResult;
 import stroom.explorer.shared.FindResultWithPermissions;
 import stroom.explorer.shared.PermissionInheritance;
+import stroom.util.shared.DocPath;
 import stroom.util.shared.ResultPage;
 
 import java.util.Collection;
@@ -55,6 +56,18 @@ class MockExplorerService implements ExplorerService {
                                final String docName,
                                final ExplorerNode destinationFolder,
                                final PermissionInheritance permissionInheritance) {
+        return null;
+    }
+
+    @Override
+    public ExplorerNode ensureFolderPath(final DocPath docPath, final PermissionInheritance permissionInheritance) {
+        return null;
+    }
+
+    @Override
+    public ExplorerNode ensureFolderPath(final DocPath docPath,
+                                         final ExplorerNode baseNode,
+                                         final PermissionInheritance permissionInheritance) {
         return null;
     }
 
@@ -167,4 +180,5 @@ class MockExplorerService implements ExplorerService {
     public String nodeTagsToString(final Set<String> tags) {
         return null;
     }
+
 }

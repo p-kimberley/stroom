@@ -1,7 +1,7 @@
 package stroom.security.impl.db;
 
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.security.impl.DocumentPermissionDao;
 import stroom.security.impl.TestModule;
 import stroom.security.impl.UserDao;
@@ -570,7 +570,7 @@ class TestDocPermissionDaoImpl {
     }
 
     private UserRef createUserOrGroup(final String name, final boolean group) {
-        User user = User.builder()
+        final User user = User.builder()
                 .subjectId(name)
                 .displayName(name)
                 .uuid(UUID.randomUUID().toString())

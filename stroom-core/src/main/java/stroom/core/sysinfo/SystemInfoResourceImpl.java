@@ -3,9 +3,9 @@ package stroom.core.sysinfo;
 import stroom.event.logging.api.StroomEventLoggingService;
 import stroom.event.logging.rs.api.AutoLogged;
 import stroom.event.logging.rs.api.AutoLogged.OperationType;
-import stroom.util.NullSafe;
 import stroom.util.logging.LogUtil;
 import stroom.util.rest.RestUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.sysinfo.HasSystemInfo.ParamInfo;
 import stroom.util.sysinfo.SystemInfoResult;
@@ -102,7 +102,7 @@ public class SystemInfoResourceImpl implements SystemInfoResource {
                         return systemInfoServiceProvider.get().get(providerName, queryParams)
                                 .orElseThrow(() ->
                                         new NotFoundException(LogUtil.message("Name {} not found", providerName)));
-                    } catch (Exception e) {
+                    } catch (final Exception e) {
                         LOGGER.error(LogUtil.message("Error getting system info for {}. {}",
                                 providerName, e.getMessage()), e);
                         throw e;

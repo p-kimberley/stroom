@@ -27,12 +27,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.xml.bind.annotation.XmlRootElement;
 
 import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
-@XmlRootElement(name = "parameters")
 public class Processor implements HasAuditInfo, HasUuid {
 
     public static final String ENTITY_TYPE = "Processor";
@@ -166,7 +164,7 @@ public class Processor implements HasAuditInfo, HasUuid {
         return processorType;
     }
 
-    public void setProcessorType(ProcessorType processorType) {
+    public void setProcessorType(final ProcessorType processorType) {
         this.processorType = processorType;
     }
 
@@ -215,7 +213,7 @@ public class Processor implements HasAuditInfo, HasUuid {
         return enabled;
     }
 
-    public void setEnabled(boolean enabled) {
+    public void setEnabled(final boolean enabled) {
         this.enabled = enabled;
     }
 
@@ -230,17 +228,17 @@ public class Processor implements HasAuditInfo, HasUuid {
     @Override
     public String toString() {
         return "Processor{" +
-                "id=" + id +
-                ", version=" + version +
-                ", createTimeMs=" + createTimeMs +
-                ", createUser='" + createUser + '\'' +
-                ", updateTimeMs=" + updateTimeMs +
-                ", updateUser='" + updateUser + '\'' +
-                ", processorType='" + processorType + '\'' +
-                ", pipelineUuid='" + pipelineUuid + '\'' +
-                ", enabled=" + enabled +
-                ", deleted=" + deleted +
-                '}';
+               "id=" + id +
+               ", version=" + version +
+               ", createTimeMs=" + createTimeMs +
+               ", createUser='" + createUser + '\'' +
+               ", updateTimeMs=" + updateTimeMs +
+               ", updateUser='" + updateUser + '\'' +
+               ", processorType='" + processorType + '\'' +
+               ", pipelineUuid='" + pipelineUuid + '\'' +
+               ", enabled=" + enabled +
+               ", deleted=" + deleted +
+               '}';
     }
 
     @Override
@@ -258,5 +256,21 @@ public class Processor implements HasAuditInfo, HasUuid {
     @Override
     public int hashCode() {
         return Objects.hash(id);
+    }
+
+    /**
+     * @return A new {@link DocRef} for this document's type with the supplied uuid.
+     */
+    public static DocRef getDocRef(final String uuid) {
+        return DocRef.builder(ENTITY_TYPE)
+                .uuid(uuid)
+                .build();
+    }
+
+    /**
+     * @return A new builder for creating a {@link DocRef} for this document's type.
+     */
+    public static DocRef.TypedBuilder buildDocRef() {
+        return DocRef.builder(ENTITY_TYPE);
     }
 }

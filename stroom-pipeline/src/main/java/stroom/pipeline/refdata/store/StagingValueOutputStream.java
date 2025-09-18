@@ -4,10 +4,10 @@ import stroom.bytebuffer.ByteBufferUtils;
 import stroom.bytebuffer.PooledByteBufferOutputStream;
 import stroom.bytebuffer.PooledByteBufferOutputStream.Factory;
 import stroom.pipeline.refdata.store.offheapstore.serdes.StagingValueSerde;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 
@@ -58,7 +58,7 @@ public class StagingValueOutputStream
         final byte[] paddingBytes = new byte[META_LENGTH];
         try {
             pooledByteBufferOutputStream.write(paddingBytes);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(LogUtil.message("Error padding out pooledByteBufferOutputStream: {}",
                     e.getMessage()), e);
         }
@@ -176,7 +176,7 @@ public class StagingValueOutputStream
                 valueBuffer = fullBuffer.slice(
                         VALUE_OFFSET,
                         fullBuffer.remaining() - META_LENGTH);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new RuntimeException(LogUtil.message("""
                                 Error slicing valueBuffer (offset: {}, length: {}) from fullBuffer: {}
                                 byteBuffer: {}""",

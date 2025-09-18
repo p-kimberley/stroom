@@ -17,7 +17,6 @@
 
 package stroom.search.solr;
 
-import stroom.datasource.api.v2.FieldType;
 import stroom.docref.DocRef;
 import stroom.docref.DocRefInfo;
 import stroom.docstore.api.AuditFieldFilter;
@@ -26,6 +25,7 @@ import stroom.docstore.api.StoreFactory;
 import stroom.docstore.api.UniqueNameUtil;
 import stroom.importexport.shared.ImportSettings;
 import stroom.importexport.shared.ImportState;
+import stroom.query.api.datasource.FieldType;
 import stroom.search.solr.shared.SolrIndexDoc;
 import stroom.search.solr.shared.SolrIndexField;
 import stroom.search.solr.shared.SolrSynchState;
@@ -113,7 +113,7 @@ public class SolrIndexStoreImpl implements SolrIndexStore {
     }
 
     @Override
-    public DocRefInfo info(DocRef docRef) {
+    public DocRefInfo info(final DocRef docRef) {
         return store.info(docRef);
     }
 
@@ -266,7 +266,7 @@ public class SolrIndexStoreImpl implements SolrIndexStore {
 
     private List<SolrIndexField> fetchSolrFields(final SolrClient solrClient,
                                                  final String collection,
-                                                 Map<String, SolrIndexField> existingFieldMap)
+                                                 final Map<String, SolrIndexField> existingFieldMap)
             throws SolrServerException, IOException {
         final FieldsResponse response = new Fields().process(solrClient, collection);
         final List<Map<String, Object>> fields = response.getFields();
@@ -409,7 +409,7 @@ public class SolrIndexStoreImpl implements SolrIndexStore {
     }
 
     @Override
-    public Set<DocRef> findAssociatedNonExplorerDocRefs(DocRef docRef) {
+    public Set<DocRef> findAssociatedNonExplorerDocRefs(final DocRef docRef) {
         return null;
     }
 

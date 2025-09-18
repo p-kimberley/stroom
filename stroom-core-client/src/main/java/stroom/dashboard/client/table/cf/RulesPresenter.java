@@ -23,16 +23,16 @@ import stroom.dashboard.client.table.TablePresenter;
 import stroom.dashboard.shared.ComponentConfig;
 import stroom.dashboard.shared.EmbeddedQueryComponentSettings;
 import stroom.dashboard.shared.TableComponentSettings;
-import stroom.datasource.api.v2.QueryField;
 import stroom.document.client.event.DirtyEvent;
 import stroom.document.client.event.DirtyEvent.DirtyHandler;
 import stroom.document.client.event.HasDirtyHandlers;
-import stroom.query.api.v2.ConditionalFormattingRule;
-import stroom.query.api.v2.ConditionalFormattingType;
+import stroom.query.api.ConditionalFormattingRule;
+import stroom.query.api.ConditionalFormattingType;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.client.presenter.SimpleFieldSelectionListModel;
 import stroom.query.shared.QueryTablePreferences;
 import stroom.svg.client.SvgPresets;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.RandomId;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.popup.client.event.ShowPopupEvent;
@@ -161,7 +161,7 @@ public class RulesPresenter
         registerHandler(moveUpButton.addClickHandler(event -> {
             final ConditionalFormattingRule rule = listPresenter.getSelectionModel().getSelected();
             if (rule != null) {
-                int index = rules.indexOf(rule);
+                final int index = rules.indexOf(rule);
                 if (index > 0) {
                     rules.remove(rule);
                     rules.add(index - 1, rule);
@@ -173,7 +173,7 @@ public class RulesPresenter
         registerHandler(moveDownButton.addClickHandler(event -> {
             final ConditionalFormattingRule rule = listPresenter.getSelectionModel().getSelected();
             if (rule != null) {
-                int index = rules.indexOf(rule);
+                final int index = rules.indexOf(rule);
                 if (index < rules.size() - 1) {
                     rules.remove(rule);
                     rules.add(index + 1, rule);
@@ -323,7 +323,7 @@ public class RulesPresenter
             // We have to deal in field names (aka column names) here as all the
             // exp tree code only has a single field/term name so can't cope with working with
             // ids and mapping to col name for the ui.
-            this.fields = GwtNullSafe.list(queryTablePreferences.getColumns())
+            this.fields = NullSafe.list(queryTablePreferences.getColumns())
                     .stream()
                     .map(TablePresenter::buildDsField)
                     .collect(Collectors.toList());

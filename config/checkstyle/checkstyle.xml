@@ -319,6 +319,9 @@
              value="Pattern variable name ''{0}'' must match pattern ''{1}''."/>
     </module>
 
+    <!-- Ensure un-changed local variables are marked final -->
+    <module name="FinalLocalVariable"/>
+
     <module name="ClassTypeParameterName">
       <!-- This is google's pattern K, T1, ConProvT, RowT -->
       <!--<property name="format" value="(^[A-Z][0-9]?)$|([A-Z][a-zA-Z0-9]*[T]$)"/>-->

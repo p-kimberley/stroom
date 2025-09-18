@@ -47,7 +47,7 @@ public class FileTransferServiceImpl implements FileTransferService {
      * @param outputStream The output stream to write the snapshot to.
      */
     @Override
-    public void fetchSnapshot(final SnapshotRequest request, final OutputStream outputStream) throws IOException {
+    public void fetchSnapshot(final SnapshotRequest request, final OutputStream outputStream) {
         // We will have already checked that we have a processing user but check again just in case.
         if (!securityContext.isProcessingUser()) {
             throw new PermissionException(securityContext.getUserRef(), "Only processing users can use this resource");
@@ -63,6 +63,7 @@ public class FileTransferServiceImpl implements FileTransferService {
      * @param fileHash
      * @param fileName
      * @param inputStream
+     * @param synchroniseMerge
      * @throws IOException
      */
     @Override
@@ -70,7 +71,8 @@ public class FileTransferServiceImpl implements FileTransferService {
                             final long metaId,
                             final String fileHash,
                             final String fileName,
+                            final boolean synchroniseMerge,
                             final InputStream inputStream) throws IOException {
-        partReceiver.receiveRemotePart(createTime, metaId, fileHash, fileName, inputStream);
+        partReceiver.receiveRemotePart(createTime, metaId, fileHash, fileName, synchroniseMerge, inputStream);
     }
 }

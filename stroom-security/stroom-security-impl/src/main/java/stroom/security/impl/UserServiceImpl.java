@@ -21,23 +21,25 @@ import stroom.docref.DocRef;
 import stroom.docrefinfo.api.DocRefInfoService;
 import stroom.security.api.ContentPackUserService;
 import stroom.security.api.SecurityContext;
+import stroom.security.api.UserService;
 import stroom.security.impl.event.PermissionChangeEvent;
 import stroom.security.impl.event.PermissionChangeEventBus;
 import stroom.security.shared.AppPermission;
 import stroom.security.shared.DocumentPermission;
+import stroom.security.shared.FindUserContext;
 import stroom.security.shared.FindUserCriteria;
 import stroom.security.shared.FindUserDependenciesCriteria;
 import stroom.security.shared.User;
 import stroom.storedquery.api.StoredQueryService;
 import stroom.ui.config.shared.UserPreferencesService;
 import stroom.util.AuditUtil;
-import stroom.util.NullSafe;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.CompareUtil;
 import stroom.util.shared.CriteriaFieldSort;
 import stroom.util.shared.HasUserDependencies;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.PermissionException;
 import stroom.util.shared.ResultPage;
@@ -162,7 +164,7 @@ class UserServiceImpl implements UserService, ContentPackUserService {
     }
 
     @Override
-    public User update(User user) {
+    public User update(final User user) {
         AuditUtil.stamp(securityContext, user);
         return securityContext.secureResult(AppPermission.MANAGE_USERS_PERMISSION, () -> {
             final User updatedUser = userDao.update(user);
@@ -183,12 +185,33 @@ class UserServiceImpl implements UserService, ContentPackUserService {
 
     @Override
     public ResultPage<User> find(final FindUserCriteria criteria) {
-        return securityContext.secureResult(() -> userDao.find(criteria));
+        return securityContext.secureResult(() -> {
+            if (securityContext.hasAppPermission(AppPermission.MANAGE_USERS_PERMISSION)) {
+                return userDao.find(criteria);
+            } else {
+                final String currentUserUuid = NullSafe
+                        .get(securityContext, SecurityContext::getUserRef, UserRef::getUuid);
+                return userDao.findRelatedUsers(currentUserUuid, criteria);
+            }
+        });
     }
 
     @Override
-    public UserRef getUserByUuid(final String uuid) {
-        return userCache.getByUuid(uuid).map(User::asRef).orElse(null);
+    public UserRef getUserByUuid(final String uuid, final FindUserContext context) {
+        if (uuid == null) {
+            return null;
+        }
+
+        final String currentUserUuid = NullSafe.get(securityContext, SecurityContext::getUserRef, UserRef::getUuid);
+        final Optional<User> optional = securityContext.secureResult(() -> {
+            if (securityContext.hasAppPermission(AppPermission.MANAGE_USERS_PERMISSION) ||
+                uuid.equals(currentUserUuid)) {
+                return userCache.getByUuid(uuid);
+            } else {
+                return userDao.getByUuid(uuid, currentUserUuid, context);
+            }
+        });
+        return optional.map(User::asRef).orElse(null);
     }
 
     @Override
@@ -327,7 +350,7 @@ class UserServiceImpl implements UserService, ContentPackUserService {
             int storedQueryCount = 0;
             try {
                 storedQueryCount = storedQueryService.deleteByOwner(userRef);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error deleting stored queries for user {}", userRef.toInfoString(), e);
                 // Swallow and carry on
             }
@@ -336,14 +359,14 @@ class UserServiceImpl implements UserService, ContentPackUserService {
                 userPrefCount = userPreferencesService.delete(userRef)
                         ? 1
                         : 0;
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error deleting user preferences for user {}", userRef.toInfoString(), e);
                 // Swallow and carry on
             }
             int activityCount = 0;
             try {
                 activityCount = activityService.deleteAllByOwner(userRef);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error deleting activities for user {}", userRef.toInfoString(), e);
                 // Swallow and carry on
             }

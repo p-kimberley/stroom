@@ -5,11 +5,11 @@ import stroom.config.global.shared.ConfigProperty;
 import stroom.config.impl.db.jooq.tables.records.ConfigRecord;
 import stroom.db.util.GenericDao;
 import stroom.db.util.JooqUtil;
-import stroom.util.NullSafe;
 import stroom.util.exception.DataChangedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.PropertyPath;
 
 import jakarta.inject.Inject;
@@ -133,7 +133,7 @@ class ConfigPropertyDaoImpl implements ConfigPropertyDao {
                         updateTracker(context, updatedConfigProperty);
                         return updatedConfigProperty;
                     });
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             if (e instanceof DataChangedException) {
                 // Possible someone has made a direct change in the db, naughty, so change the tracker
                 // such that the props will get refreshed on all nodes
@@ -157,8 +157,8 @@ class ConfigPropertyDaoImpl implements ConfigPropertyDao {
         return JooqUtil.transactionResult(globalConfigDbConnProvider, context -> {
             updateTracker(context, System.currentTimeMillis());
             return context.deleteFrom(CONFIG)
-                    .where(CONFIG.NAME.eq(name))
-                    .execute() > 0;
+                           .where(CONFIG.NAME.eq(name))
+                           .execute() > 0;
         });
     }
 

@@ -16,6 +16,7 @@
 
 package stroom.query.shared;
 
+import stroom.dashboard.shared.ColumnValues;
 import stroom.dashboard.shared.DashboardSearchResponse;
 import stroom.dashboard.shared.ValidateExpressionResult;
 import stroom.docref.DocRef;
@@ -50,6 +51,7 @@ public interface QueryResource extends RestResource, DirectRestService, FetchWit
 
     String DOWNLOAD_SEARCH_RESULTS_PATH_PATH = "/downloadSearchResults";
     String SEARCH_PATH_PART = "/search";
+    String COLUMN_VALUES_PATH_PART = "/columnValues";
     String NODE_NAME_PATH_PARAM = "/{nodeName}";
 
     @GET
@@ -90,9 +92,30 @@ public interface QueryResource extends RestResource, DirectRestService, FetchWit
             summary = "Download search results",
             operationId = "downloadQuerySearchResultsLocal")
     default ResourceGeneration downloadSearchResults(
-            @Parameter(description = "request", required = true) DownloadQueryResultsRequest request) {
+            @Parameter(description = "request", required = true) final DownloadQueryResultsRequest request) {
         return downloadSearchResults(null, request);
     }
+
+
+    @POST
+    @Path(COLUMN_VALUES_PATH_PART + NODE_NAME_PATH_PARAM)
+    @Operation(
+            summary = "Get unique column values so the user can filter table results more easily",
+            operationId = "getColumnValues")
+    ColumnValues getColumnValues(
+            @PathParam("nodeName") String nodeName,
+            @Parameter(description = "request", required = true) QueryColumnValuesRequest request);
+
+    @POST
+    @Path(COLUMN_VALUES_PATH_PART)
+    @Operation(
+            summary = "Get unique column values so the user can filter table results more easily",
+            operationId = "getColumnValues")
+    default ColumnValues getColumnValues(
+            @Parameter(description = "request", required = true) final QueryColumnValuesRequest request) {
+        return getColumnValues(null, request);
+    }
+
 
     @POST
     @Path(SEARCH_PATH_PART + NODE_NAME_PATH_PARAM)
@@ -109,7 +132,7 @@ public interface QueryResource extends RestResource, DirectRestService, FetchWit
             summary = "Perform a new search or get new results",
             operationId = "querySearchLocal")
     default DashboardSearchResponse search(
-            @Parameter(description = "request", required = true) QuerySearchRequest request) {
+            @Parameter(description = "request", required = true) final QuerySearchRequest request) {
         return search(null, request);
     }
 
@@ -148,4 +171,12 @@ public interface QueryResource extends RestResource, DirectRestService, FetchWit
             summary = "Fetch the datasource referenced by a query",
             operationId = "fetchQueryDataSource")
     DocRef fetchQueryDataSource(DocRef queryDocRef);
+
+    @POST
+    @Path("/fetchDataSourceFromQueryString")
+    @Operation(
+            summary = "Fetch a data source from a query string",
+            operationId = "fetchDataSourceFromQueryString")
+    DocRef fetchDataSourceFromQueryString(
+            @Parameter(description = "query", required = true) String query);
 }

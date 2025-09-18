@@ -1,11 +1,11 @@
 package stroom.proxy.app.handler;
 
 import stroom.proxy.repo.FeedKey;
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.string.StringIdUtil;
 
 import java.io.IOException;
@@ -402,7 +402,7 @@ public class DirUtil {
     private static Optional<DirId> findDir(final Path path,
                                            final Mode mode,
                                            final Predicate<String> filenamePredicate,
-                                           boolean warnIfInvalid) {
+                                           final boolean warnIfInvalid) {
 
         LOGGER.trace("find - path: {}, mode: {}", path, mode);
         try (final Stream<Path> dirStream = findDirectories(path)) {

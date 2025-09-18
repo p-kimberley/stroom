@@ -22,7 +22,7 @@ import stroom.item.client.SelectionBox;
 import stroom.preferences.client.EditorPreferencesPresenter.EditorPreferencesView;
 import stroom.ui.config.shared.UserPreferences.EditorKeyBindings;
 import stroom.ui.config.shared.UserPreferences.Toggle;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.gwt.event.logical.shared.ValueChangeEvent;
 import com.google.gwt.uibinder.client.UiBinder;
@@ -78,7 +78,7 @@ public final class EditorPreferencesViewImpl
     public void setEditorTheme(final String editorTheme) {
         String localDisplayName = editorTheme;
         if (localDisplayName != null) {
-            localDisplayName = localDisplayName.replace("_", " ");
+            localDisplayName = localDisplayName.replace('_', ' ');
             localDisplayName = Character.toUpperCase(localDisplayName.charAt(0))
                     + localDisplayName.substring(1);
         }
@@ -90,7 +90,7 @@ public final class EditorPreferencesViewImpl
     public void setEditorThemes(final List<String> editorThemes) {
         this.editorTheme.clear();
 
-        final List<EditorThemeName> editorThemeNames = GwtNullSafe.stream(editorThemes)
+        final List<EditorThemeName> editorThemeNames = NullSafe.stream(editorThemes)
                 .map(this::createEditorThemeItem)
                 .collect(Collectors.toList());
 
@@ -104,14 +104,14 @@ public final class EditorPreferencesViewImpl
     }
 
     @Override
-    public void setEditorKeyBindings(EditorKeyBindings editorKeyBindings) {
+    public void setEditorKeyBindings(final EditorKeyBindings editorKeyBindings) {
         this.editorKeyBindings.setValue(editorKeyBindings.getDisplayValue());
     }
 
     private EditorThemeName createEditorThemeItem(final String editorTheme) {
         String displayName = editorTheme;
         if (displayName != null) {
-            displayName = displayName.replace("_", " ");
+            displayName = displayName.replace('_', ' ');
             displayName = Character.toUpperCase(displayName.charAt(0))
                     + displayName.substring(1);
         }

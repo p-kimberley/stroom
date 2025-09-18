@@ -10,14 +10,12 @@ import stroom.event.logging.mock.MockStroomEventLoggingService;
 import stroom.explorer.impl.ExplorerConfig;
 import stroom.node.api.NodeInfo;
 import stroom.node.api.NodeService;
+import stroom.query.common.v2.ExpressionPredicateFactory;
 import stroom.security.impl.AuthenticationConfig;
 import stroom.security.impl.StroomOpenIdConfig;
 import stroom.test.common.util.test.AbstractMultiNodeResourceTest;
 import stroom.ui.config.shared.ExtendedUiConfig;
 import stroom.ui.config.shared.UiConfig;
-import stroom.util.filter.FilterFieldMapper;
-import stroom.util.filter.FilterFieldMappers;
-import stroom.util.filter.QuickFilterPredicateFactory;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.PropertyPath;
@@ -33,7 +31,8 @@ import org.mockito.quality.Strictness;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -67,8 +66,7 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
     private static final ListConfigResponse FULL_PROP_LIST = new ListConfigResponse(
             List.of(CONFIG_PROPERTY_1, CONFIG_PROPERTY_2, CONFIG_PROPERTY_3),
-            "node1a",
-            "");
+            "node1a");
 
     private static final int BASE_PORT = 7000;
 
@@ -104,7 +102,7 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
         final ListConfigResponse expectedResponse = new ListConfigResponse(List.of(
                 configProperty
-        ), "node1a", "");
+        ), "node1a");
 
         final GlobalConfigCriteria criteria = new GlobalConfigCriteria("some");
 
@@ -246,9 +244,11 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
         final String subPath = "";
 
-        ConfigProperty newConfigProperty = new ConfigProperty(PropertyPath.fromPathString("a.new.config.prop"));
+        final ConfigProperty newConfigProperty = new ConfigProperty(
+                PropertyPath.fromPathString("a.new.config.prop"));
 
-        ConfigProperty expectedConfigProperty = new ConfigProperty(PropertyPath.fromPathString("a.new.config.prop"));
+        final ConfigProperty expectedConfigProperty = new ConfigProperty(
+                PropertyPath.fromPathString("a.new.config.prop"));
         expectedConfigProperty.setId(1);
         expectedConfigProperty.setVersion(1);
 
@@ -265,11 +265,13 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
         initNodes();
 
-        ConfigProperty existingConfigProperty = new ConfigProperty(PropertyPath.fromPathString("a.new.config.prop"));
+        final ConfigProperty existingConfigProperty = new ConfigProperty(
+                PropertyPath.fromPathString("a.new.config.prop"));
         existingConfigProperty.setId(1);
         existingConfigProperty.setVersion(1);
 
-        ConfigProperty expectedConfigProperty = new ConfigProperty(PropertyPath.fromPathString("a.new.config.prop"));
+        final ConfigProperty expectedConfigProperty = new ConfigProperty(
+                PropertyPath.fromPathString("a.new.config.prop"));
         expectedConfigProperty.setId(1);
         expectedConfigProperty.setVersion(2);
 
@@ -289,8 +291,8 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
     void fetchExtendedUiConfig() {
         initNodes();
 
-        String subPath = GlobalConfigResource.FETCH_EXTENDED_UI_CONFIG_SUB_PATH;
-        ExtendedUiConfig expectedResponse = new ExtendedUiConfig();
+        final String subPath = GlobalConfigResource.FETCH_EXTENDED_UI_CONFIG_SUB_PATH;
+        final ExtendedUiConfig expectedResponse = new ExtendedUiConfig();
 
         final ExtendedUiConfig response = doGetTest(
                 subPath,
@@ -314,30 +316,26 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
         final GlobalConfigService globalConfigService = createNamedMock(GlobalConfigService.class, node);
         final StroomEventLoggingService stroomEventLoggingService = new MockStroomEventLoggingService();
 
-        final FilterFieldMappers<ConfigProperty> fieldMappers = FilterFieldMappers.of(
-                FilterFieldMapper.of(GlobalConfigResource.FIELD_DEF_NAME, ConfigProperty::getNameAsString)
-        );
-
         when(globalConfigService.list(Mockito.any(GlobalConfigCriteria.class)))
                 .thenAnswer(invocation -> {
                     System.out.println("list called");
                     try {
-                        GlobalConfigCriteria criteria = invocation.getArgument(0);
+                        final GlobalConfigCriteria criteria = invocation.getArgument(0);
+                        final ExpressionPredicateFactory expressionPredicateFactory = new ExpressionPredicateFactory();
 
-                        final ListConfigResponse response = new ListConfigResponse(
-                                QuickFilterPredicateFactory.filterStream(
-                                                criteria.getQuickFilterInput(),
-                                                fieldMappers,
-                                                FULL_PROP_LIST.stream())
-                                        .peek(configProperty ->
-                                                configProperty.setYamlOverrideValue(node.getNodeName()))
-                                        .collect(Collectors.toList()),
-                                "node1a",
-                                QuickFilterPredicateFactory.fullyQualifyInput(
-                                        criteria.getQuickFilterInput(),
-                                        fieldMappers));
-                        return response;
-                    } catch (Exception e) {
+                        Stream<ConfigProperty> stream = FULL_PROP_LIST.stream();
+                        stream = expressionPredicateFactory.filterAndSortStream(
+                                stream,
+                                criteria.getQuickFilterInput(),
+                                GlobalConfigService.FIELD_PROVIDER,
+                                GlobalConfigService.VALUE_FUNCTION_FACTORIES,
+                                Optional.empty());
+                        final List<ConfigProperty> list = stream
+                                .peek(configProperty -> configProperty.setYamlOverrideValue(node.getNodeName()))
+                                .toList();
+
+                        return new ListConfigResponse(list, "node1a");
+                    } catch (final Exception e) {
                         e.printStackTrace(System.err);
                         throw e;
                     }
@@ -345,7 +343,7 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
         when(globalConfigService.fetch(Mockito.any()))
                 .thenAnswer(invocation -> {
-                    PropertyPath propertyPath = invocation.getArgument(0);
+                    final PropertyPath propertyPath = invocation.getArgument(0);
                     return FULL_PROP_LIST.stream()
                             .peek(configProperty -> {
                                 configProperty.setYamlOverrideValue(node.getNodeName());
@@ -356,7 +354,7 @@ class TestGlobalConfigResourceImpl extends AbstractMultiNodeResourceTest<GlobalC
 
         when(globalConfigService.update(Mockito.any()))
                 .thenAnswer(invocation -> {
-                    ConfigProperty configProperty = invocation.getArgument(0);
+                    final ConfigProperty configProperty = invocation.getArgument(0);
                     configProperty.setId(1);
                     configProperty.setVersion(configProperty.getVersion() == null
                             ? 1

@@ -37,8 +37,7 @@ class TestUnsignedBytesInstancesThree {
     @Test
     void testPutAll() {
         final ByteBuffer byteBuffer = ByteBuffer.allocate(10);
-        for (final UnsignedBytesInstances unsignedBytes : UnsignedBytesInstances.values()) {
-
+        UnsignedBytesInstances.allPositive(unsignedBytes -> {
             byteBuffer.clear();
             unsignedBytes.put(byteBuffer, 1L);
 
@@ -53,7 +52,7 @@ class TestUnsignedBytesInstancesThree {
             unsignedBytes.put(byteBuffer, unsignedBytes.getMaxVal());
 
             LOGGER.info("Buffer {}", ByteBufferUtils.byteBufferInfo(byteBuffer));
-        }
+        });
     }
 
     private void doValTest(final long val) {
@@ -141,7 +140,7 @@ class TestUnsignedBytesInstancesThree {
 
     @Test
     void incrementAll() {
-        long max = THREE_UNSIGNED_BYTES.getMaxVal();
+        final long max = THREE_UNSIGNED_BYTES.getMaxVal();
         final int len = 3;
         final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(len);
         // Try increment for all 16.2mil values
@@ -161,14 +160,13 @@ class TestUnsignedBytesInstancesThree {
     @Test
     void testIncrementAll_max() {
         final ByteBuffer byteBuffer = ByteBuffer.allocate(10);
-
-        for (final UnsignedBytesInstances unsignedBytes : UnsignedBytesInstances.values()) {
+        UnsignedBytesInstances.allPositive(unsignedBytes -> {
             byteBuffer.clear();
 
             unsignedBytes.put(byteBuffer, unsignedBytes.getMaxVal() - 1);
             byteBuffer.flip();
 
-            long val = unsignedBytes.get(byteBuffer);
+            final long val = unsignedBytes.get(byteBuffer);
             byteBuffer.flip();
 
             LOGGER.info("Buffer {}", ByteBufferUtils.byteBufferInfo(byteBuffer));
@@ -178,27 +176,26 @@ class TestUnsignedBytesInstancesThree {
 
             unsignedBytes.increment(byteBuffer);
 
-            long val2 = unsignedBytes.get(byteBuffer);
+            final long val2 = unsignedBytes.get(byteBuffer);
 
             LOGGER.info("unsignedBytes: {}, val: {}, val2: {}",
                     unsignedBytes, ModelStringUtil.formatCsv(val), ModelStringUtil.formatCsv(val2));
 
             assertThat(val2)
                     .isEqualTo(val + 1);
-        }
+        });
     }
 
     @Test
     void testIncrementAll_zero() {
         final ByteBuffer byteBuffer = ByteBuffer.allocate(10);
-
-        for (final UnsignedBytesInstances unsignedBytes : UnsignedBytesInstances.values()) {
+        UnsignedBytesInstances.allPositive(unsignedBytes -> {
             byteBuffer.clear();
 
             unsignedBytes.put(byteBuffer, 0L);
             byteBuffer.flip();
 
-            long val = unsignedBytes.get(byteBuffer);
+            final long val = unsignedBytes.get(byteBuffer);
             byteBuffer.flip();
 
             LOGGER.info("Buffer {}", ByteBufferUtils.byteBufferInfo(byteBuffer));
@@ -208,14 +205,14 @@ class TestUnsignedBytesInstancesThree {
 
             unsignedBytes.increment(byteBuffer);
 
-            long val2 = unsignedBytes.get(byteBuffer);
+            final long val2 = unsignedBytes.get(byteBuffer);
 
             LOGGER.info("unsignedBytes: {}, val: {}, val2: {}",
                     unsignedBytes, ModelStringUtil.formatCsv(val), ModelStringUtil.formatCsv(val2));
 
             assertThat(val2)
                     .isEqualTo(val + 1);
-        }
+        });
     }
 
     @Test
@@ -262,7 +259,7 @@ class TestUnsignedBytesInstancesThree {
 
     @Test
     void testDecrement() {
-        int len = THREE_UNSIGNED_BYTES.length();
+        final int len = THREE_UNSIGNED_BYTES.length();
         final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(len);
 
         // the following will test all values but takes a good few minutes
@@ -284,14 +281,13 @@ class TestUnsignedBytesInstancesThree {
     @Test
     void testDecrementAll() {
         final ByteBuffer byteBuffer = ByteBuffer.allocate(10);
-
-        for (final UnsignedBytesInstances unsignedBytes : UnsignedBytesInstances.values()) {
+        UnsignedBytesInstances.allPositive(unsignedBytes -> {
             byteBuffer.clear();
 
             unsignedBytes.put(byteBuffer, unsignedBytes.getMaxVal());
             byteBuffer.flip();
 
-            long val = unsignedBytes.get(byteBuffer);
+            final long val = unsignedBytes.get(byteBuffer);
             byteBuffer.flip();
 
             LOGGER.info("Buffer {}", ByteBufferUtils.byteBufferInfo(byteBuffer));
@@ -301,11 +297,11 @@ class TestUnsignedBytesInstancesThree {
 
             unsignedBytes.decrement(byteBuffer);
 
-            long val2 = unsignedBytes.get(byteBuffer);
+            final long val2 = unsignedBytes.get(byteBuffer);
 
             assertThat(val2)
                     .isEqualTo(val - 1);
-        }
+        });
     }
 
     @Test
@@ -347,7 +343,7 @@ class TestUnsignedBytesInstancesThree {
 
 //        LOGGER.info("Buffer {}", ByteBufferUtils.byteBufferToHexAll(byteBuffer));
 
-        long val2 = THREE_UNSIGNED_BYTES.get(byteBuffer, 0);
+        final long val2 = THREE_UNSIGNED_BYTES.get(byteBuffer, 0);
 
         assertThat(byteBuffer.capacity()).isEqualTo(cap);
         assertThat(byteBuffer.position()).isEqualTo(pos);

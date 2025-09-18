@@ -25,12 +25,12 @@ import stroom.explorer.shared.ExplorerTreeFilter;
 import stroom.explorer.shared.NodeFlag;
 import stroom.meta.shared.MetaFields;
 import stroom.pipeline.shared.PipelineDoc;
-import stroom.query.api.v2.ExpressionOperator;
+import stroom.query.api.ExpressionOperator;
 import stroom.query.client.presenter.SimpleFieldSelectionListModel;
 import stroom.security.shared.DocumentPermission;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.ui.config.shared.QueryConfig;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.view.client.presenter.ViewSettingsPresenter.ViewSettingsView;
 import stroom.view.shared.ViewDoc;
 
@@ -73,7 +73,7 @@ public class ViewSettingsPresenter extends DocumentEditPresenter<ViewSettingsVie
         // Filter the pipeline picker by tags, if configured
         uiConfigCache.get(extendedUiConfig -> {
             if (extendedUiConfig != null) {
-                GwtNullSafe.consume(
+                NullSafe.consume(
                         extendedUiConfig.getQuery(),
                         QueryConfig::getViewPipelineSelectorIncludedTags,
                         ExplorerTreeFilter::createTagQuickFilterInput,

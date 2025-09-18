@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * String hash map that does not care about key case.
@@ -38,8 +39,8 @@ class CIStringHashMap implements Map<String, String> {
     }
 
     @Override
-    public String getOrDefault(Object key, String defaultVal) {
-        String val = map.get(new CIString((String) key));
+    public String getOrDefault(final Object key, final String defaultVal) {
+        final String val = map.get(new CIString((String) key));
         return val == null
                 ? defaultVal
                 : val;
@@ -118,6 +119,10 @@ class CIStringHashMap implements Map<String, String> {
         return map.toString();
     }
 
+    public Map<String, String> getKeyMap() {
+        return map.keySet().stream().collect(Collectors.toMap(CIString::getLowerKey, CIString::getKey));
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -135,6 +140,19 @@ class CIStringHashMap implements Map<String, String> {
         return Objects.hash(map);
     }
 
+    /**
+     * @param normaliseKeys If true, all keys will be converted to lower case, else
+     *                      will be left in their original case.
+     */
+    public Map<String, String> asMap(final boolean normaliseKeys) {
+        final Function<Entry<CIString, String>, String> keyMapper = normaliseKeys
+                ? entry -> entry.getKey().lowerKey
+                : entry -> entry.getKey().key;
+
+        return map.entrySet()
+                .stream()
+                .collect(Collectors.toMap(keyMapper, Entry::getValue));
+    }
 
     // --------------------------------------------------------------------------------
 
@@ -151,6 +169,10 @@ class CIStringHashMap implements Map<String, String> {
 
         public String getKey() {
             return key;
+        }
+
+        public String getLowerKey() {
+            return lowerKey;
         }
 
         @Override

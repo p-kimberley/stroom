@@ -6,11 +6,11 @@ import stroom.security.api.UserIdentity;
 import stroom.security.common.impl.UpdatableToken;
 import stroom.security.common.impl.UserIdentitySessionUtil;
 import stroom.security.shared.HasUserRef;
-import stroom.util.NullSafe;
 import stroom.util.authentication.HasRefreshable;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.UserRef;
 
 import jakarta.servlet.http.HttpSession;
@@ -74,11 +74,11 @@ public class UserIdentityImpl
 
     @Override
     public String getSessionId() {
-        return httpSession.getId();
+        return NullSafe.get(httpSession, HttpSession::getId);
     }
 
     public void invalidateSession() {
-        httpSession.invalidate();
+        NullSafe.consume(httpSession, HttpSession::invalidate);
     }
 
     /**
@@ -86,7 +86,9 @@ public class UserIdentityImpl
      * to re-authenticate with the IDP.
      */
     public void removeUserFromSession() {
-        UserIdentitySessionUtil.set(httpSession, null);
+        if (httpSession != null) {
+            UserIdentitySessionUtil.set(httpSession, null);
+        }
     }
 
 //    /**
@@ -113,7 +115,7 @@ public class UserIdentityImpl
 
             try {
                 optUserIdentity = UserIdentitySessionUtil.get(httpSession);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.debug(() -> LogUtil.message(
                         "Error getting identity from session, likely due to it being removed at logout: {}",
                         e.getMessage()));

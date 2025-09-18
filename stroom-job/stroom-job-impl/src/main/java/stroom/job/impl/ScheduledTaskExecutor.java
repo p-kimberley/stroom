@@ -23,13 +23,13 @@ import stroom.node.api.NodeInfo;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
-import stroom.util.NullSafe;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.scheduler.SimpleScheduleExec;
 import stroom.util.scheduler.TriggerFactory;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.scheduler.Schedule;
 import stroom.util.shared.scheduler.ScheduleType;
 import stroom.util.thread.CustomThreadFactory;
@@ -171,11 +171,16 @@ class ScheduledTaskExecutor {
         int unManagedTaskCount = 0;
         final boolean isThisNodeEnabled = isThisNodeEnabled();
         for (final ScheduledJob scheduledJob : scheduledJobsMap.keySet()) {
+            LOGGER.trace(() -> LogUtil.message(
+                    "execute() - name: '{}', managed: {}, isThisNodeEnabled: {}, enabled: {}, schedule: {}",
+                    scheduledJob.getName(), scheduledJob.isManaged(), isThisNodeEnabled,
+                    scheduledJob.isEnabled(), scheduledJob.getSchedule()));
+
             // Managed jobs don't run on disabled nodes, but un-managed do as they are things
             // like lock keep-alive and meta flush which still need to happen
             if (isThisNodeEnabled || !scheduledJob.isManaged()) {
+                final String taskName = scheduledJob.getName();
                 try {
-                    final String taskName = scheduledJob.getName();
                     final ScheduledJobFunction function = create(scheduledJob);
                     if (function != null) {
                         if (scheduledJob.isManaged()) {
@@ -189,7 +194,8 @@ class ScheduledTaskExecutor {
                                 LOGGER.logDurationIfDebugEnabled(
                                         function, () -> scheduledJobToStr(scheduledJob));
                             } catch (final RuntimeException e) {
-                                LOGGER.error("Error executing task '{}'", taskName, e);
+                                LOGGER.error("Error executing task '{}' - {}",
+                                        taskName, LogUtil.exceptionMessage(e), e);
                             }
                         });
 
@@ -197,9 +203,18 @@ class ScheduledTaskExecutor {
                                 .runAsync(runnable, executor)
                                 .whenComplete((r, t) ->
                                         function.getRunning().set(false));
+                    } else {
+                        LOGGER.trace(() -> LogUtil.message(
+                                "execute() - Not executing {}", scheduledJobToStr(scheduledJob)));
                     }
                 } catch (final RuntimeException e) {
-                    LOGGER.error(e.getMessage(), e);
+                    LOGGER.error("Error executing {} - {}. Enable DEBUG for stack trace.",
+                            scheduledJobToStr(scheduledJob), LogUtil.exceptionMessage(e));
+                    LOGGER.debug(() -> LogUtil.message(
+                                    "Error executing {} - {}",
+                                    scheduledJobToStr(scheduledJob),
+                                    LogUtil.exceptionMessage(e)),
+                            e);
                 }
             } else {
                 LOGGER.debug(() -> LogUtil.message("Ignoring [{}] as this node '{}' is disabled",
@@ -207,7 +222,7 @@ class ScheduledTaskExecutor {
             }
         }
         if (LOGGER.isDebugEnabled()
-                && (unManagedTaskCount > 0 || managedTaskCount > 0)) {
+            && (unManagedTaskCount > 0 || managedTaskCount > 0)) {
             LOGGER.debug("Initiated {} un-managed and {} managed tasks asynchronously",
                     unManagedTaskCount, managedTaskCount);
         }
@@ -240,7 +255,7 @@ class ScheduledTaskExecutor {
             try {
                 boolean isJobEnabledOnNode = true;
                 SimpleScheduleExec scheduler = null;
-                JobNodeTracker jobNodeTracker;
+                final JobNodeTracker jobNodeTracker;
 
                 final JobNodeTrackers trackers = jobNodeTrackerCache.getTrackers();
                 jobNodeTracker = trackers.getTrackerForJobName(scheduledJob.getName());
@@ -255,7 +270,7 @@ class ScheduledTaskExecutor {
                             LOGGER.error("Job node tracker has null job node for: " + scheduledJob.getName());
                         } else {
                             isJobEnabledOnNode = jobNode.getJob().isEnabled()
-                                    && jobNode.isEnabled();
+                                                 && jobNode.isEnabled();
                             scheduler = trackers.getScheduleExec(jobNode);
                         }
                     }
@@ -264,8 +279,8 @@ class ScheduledTaskExecutor {
                 }
 
                 if (scheduler != null
-                        && (isJobEnabledOnNode || scheduler.isRunIfDisabled())
-                        && scheduler.execute()) {
+                    && (isJobEnabledOnNode || scheduler.isRunIfDisabled())
+                    && scheduler.execute()) {
 //                    LOGGER.trace("Returning runnable for method: {} - {} - {}", methodReference, enabled, scheduler);
                     final Provider<Runnable> consumerProvider = scheduledJobsMap.get(scheduledJob);
                     if (jobNodeTracker != null) {

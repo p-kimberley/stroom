@@ -1,9 +1,9 @@
 package stroom.state.impl;
 
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.common.v2.DateExpressionParser;
 import stroom.state.impl.dao.ScyllaDbColumn;
 import stroom.util.logging.LambdaLogger;
@@ -58,8 +58,8 @@ public class ScyllaDbExpressionUtil {
     private static Relation convertTerm(final Map<String, ScyllaDbColumn> columnMap,
                                         final ExpressionTerm term,
                                         final DateTimeSettings dateTimeSettings) {
-        String field = term.getField();
-        Condition condition = term.getCondition();
+        final String field = term.getField();
+        final Condition condition = term.getCondition();
         String value = term.getValue();
 
         final ScyllaDbColumn column = columnMap.get(field);

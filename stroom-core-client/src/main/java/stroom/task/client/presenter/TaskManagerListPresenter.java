@@ -25,10 +25,10 @@ import stroom.data.client.event.DataSelectionEvent;
 import stroom.data.client.event.DataSelectionEvent.DataSelectionHandler;
 import stroom.data.client.event.HasDataSelectionHandlers;
 import stroom.data.client.presenter.ColumnSizeConstants;
+import stroom.data.client.presenter.CriteriaUtil;
 import stroom.data.client.presenter.RestDataProvider;
 import stroom.data.grid.client.EndColumn;
 import stroom.data.grid.client.MyDataGrid;
-import stroom.data.grid.client.OrderByColumn;
 import stroom.data.grid.client.PagerView;
 import stroom.data.table.client.Refreshable;
 import stroom.dispatch.client.RestErrorHandler;
@@ -53,8 +53,8 @@ import stroom.task.shared.TerminateTaskProgressRequest;
 import stroom.util.client.DataGridUtil;
 import stroom.util.client.DelayedUpdate;
 import stroom.util.shared.Expander;
-import stroom.util.shared.GwtNullSafe;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 import stroom.util.shared.UserRef;
 import stroom.util.shared.UserRef.DisplayType;
@@ -177,6 +177,7 @@ public class TaskManagerListPresenter
             protected void exec(final Range range,
                                 final Consumer<TaskProgressResponse> dataConsumer,
                                 final RestErrorHandler errorHandler) {
+                CriteriaUtil.setSortList(criteria, dataGrid.getColumnSortList());
                 TaskManagerListPresenter.this.range = range;
                 TaskManagerListPresenter.this.dataConsumer = dataConsumer;
                 delayedUpdate.reset();
@@ -187,17 +188,6 @@ public class TaskManagerListPresenter
 
         // Handle use of the expander column.
         dataProvider.setTreeRowHandler(new TreeRowHandler<TaskProgress>(treeAction, dataGrid, expanderColumn));
-
-        dataGrid.addColumnSortHandler(event -> {
-            if (event.getColumn() instanceof OrderByColumn<?, ?>) {
-                final OrderByColumn<?, ?> orderByColumn = (OrderByColumn<?, ?>) event.getColumn();
-                criteria.setSort(orderByColumn.getField(), !event.isSortAscending(), orderByColumn.isIgnoreCase());
-                // As we get data async from all nodes we can't be sure when we have finished so
-                // need to clear the expandAllRequestState prior to fetching
-                treeAction.resetExpandAllRequestState();
-                dataProvider.refresh();
-            }
-        });
     }
 
     @Override
@@ -244,6 +234,13 @@ public class TaskManagerListPresenter
                 }
 //                internalRefresh();
             }
+        }));
+
+        registerHandler(dataGrid.addColumnSortHandler(event -> {
+            // As we get data async from all nodes we can't be sure when we have finished so
+            // need to clear the expandAllRequestState prior to fetching
+            treeAction.resetExpandAllRequestState();
+            dataProvider.refresh();
         }));
     }
 
@@ -343,7 +340,7 @@ public class TaskManagerListPresenter
         dataGrid.addResizableColumn(
                 DataGridUtil.userRefColumnBuilder(
                                 TaskProgress::getUserRef, getEventBus(), securityContext, DisplayType.AUTO)
-                        .enabledWhen(taskProgress -> GwtNullSafe
+                        .enabledWhen(taskProgress -> NullSafe
                                 .getOrElse(taskProgress, TaskProgress::getUserRef, UserRef::isEnabled, false))
                         .withSorting(FindTaskProgressCriteria.FIELD_USER)
                         .build(),
@@ -395,17 +392,17 @@ public class TaskManagerListPresenter
                 .row(TableCell.header("Task", 2))
                 .row("Name", row.getTaskName())
                 .row("Node", getNodeName(row))
-                .row("User", GwtNullSafe.get(row, TaskProgress::getUserRef, UserRef::getDisplayName))
+                .row("User", NullSafe.get(row, TaskProgress::getUserRef, UserRef::getDisplayName))
                 .row("Submit Time", dateTimeFormatter.format(row.getSubmitTimeMs()))
                 .row("Age", ModelStringUtil.formatDurationString(row.getAgeMs()))
-                .row("Id", GwtNullSafe.get(row.getId(), TaskId::getId));
+                .row("Id", NullSafe.get(row.getId(), TaskId::getId));
 
-        GwtNullSafe.consume(row.getId(), TaskId::getParentId, TaskId::getId, parentId ->
+        NullSafe.consume(row.getId(), TaskId::getParentId, TaskId::getId, parentId ->
                 tableBuilder.row("Parent Id", parentId));
 
         tableBuilder.row("Thread Name", row.getThreadName());
 
-        GwtNullSafe.consume(row.getTaskInfo(), info ->
+        NullSafe.consume(row.getTaskInfo(), info ->
                 tableBuilder.row(
                         TableCell.builder()
                                 .value("Info")
@@ -430,7 +427,7 @@ public class TaskManagerListPresenter
             final Function<TaskProgress, String> extractor) {
         final Function<TaskProgress, SafeHtml> colouredCellFunc = getColouredCellFunc(extractor);
 
-        return (TaskProgress row) -> {
+        return (final TaskProgress row) -> {
             final SafeHtml colouredText = colouredCellFunc.apply(row);
             if (wrapToggleButton.isOn()) {
                 return HtmlBuilder.builder()

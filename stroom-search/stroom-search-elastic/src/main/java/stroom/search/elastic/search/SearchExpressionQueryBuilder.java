@@ -17,16 +17,16 @@
 
 package stroom.search.elastic.search;
 
-import stroom.datasource.api.v2.FieldType;
-import stroom.datasource.api.v2.IndexField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
-import stroom.query.api.v2.ExpressionTerm.Condition;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.datasource.FieldType;
+import stroom.query.api.datasource.IndexField;
 import stroom.query.common.v2.DateExpressionParser;
 import stroom.query.common.v2.IndexFieldCache;
 import stroom.search.elastic.shared.ElasticIndexField;
@@ -47,7 +47,6 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -100,7 +99,7 @@ public class SearchExpressionQueryBuilder {
                             .map(this::getQuery)
                             .filter(Objects::nonNull).toList();
 
-                    BoolQuery.Builder boolQueryBuilder = QueryBuilders.bool();
+                    final BoolQuery.Builder boolQueryBuilder = QueryBuilders.bool();
                     final Op op = operator.getOp();
                     if (op == null || op.equals(Op.AND)) {
                         innerChildQueries.forEach(boolQueryBuilder::must);
@@ -218,7 +217,7 @@ public class SearchExpressionQueryBuilder {
                     return BoolQuery.of(q -> q
                             .should(terms.stream()
                                     .map(term -> buildQueryFn.apply(fieldName, term))
-                                    .collect(Collectors.toList()))
+                                    .toList())
                     )._toQuery();
                 } else {
                     return buildQueryFn.apply(fieldName, expression);
@@ -274,8 +273,8 @@ public class SearchExpressionQueryBuilder {
             final TriFunction<Condition, String, String, FieldValue> valueParser,
             final DocRef docRef
     ) {
-        FieldValue fieldValue;
-        List<FieldValue> fieldValues;
+        final FieldValue fieldValue;
+        final List<FieldValue> fieldValues;
 
         switch (condition) {
             case EQUALS -> {
@@ -295,7 +294,7 @@ public class SearchExpressionQueryBuilder {
             case IN -> {
                 fieldValues = tokenizeExpression(rawValue)
                         .map(val -> valueParser.apply(condition, fieldName, val))
-                        .collect(Collectors.toList());
+                        .toList();
                 return QueryBuilders
                         .terms(q -> q
                                 .field(fieldName)
@@ -332,7 +331,7 @@ public class SearchExpressionQueryBuilder {
             case BETWEEN -> {
                 fieldValues = tokenizeExpression(rawValue)
                         .map(val -> valueParser.apply(condition, fieldName, val))
-                        .collect(Collectors.toList());
+                        .toList();
                 if (fieldValues.size() != 2) {
                     throw new IllegalArgumentException(
                             "Two values needed for between query. Only " + fieldValues.size() + " provided");
@@ -397,7 +396,7 @@ public class SearchExpressionQueryBuilder {
             } else {
                 throw new IllegalArgumentException();
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new IllegalArgumentException("Invalid IPv4 address format: " + value + " for field \"" +
                     fieldName + "\"");
         }

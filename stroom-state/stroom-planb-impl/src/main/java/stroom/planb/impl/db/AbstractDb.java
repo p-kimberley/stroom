@@ -1,584 +1,216 @@
 package stroom.planb.impl.db;
 
 import stroom.bytebuffer.ByteBufferUtils;
-import stroom.bytebuffer.impl6.ByteBufferFactory;
-import stroom.entity.shared.ExpressionCriteria;
-import stroom.expression.api.DateTimeSettings;
-import stroom.lmdb.LmdbConfig;
-import stroom.lmdb2.BBKV;
-import stroom.lmdb2.KV;
-import stroom.lmdb2.LmdbEnvDir;
-import stroom.lmdb2.LmdbKeySequence;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Format;
-import stroom.query.common.v2.ExpressionPredicateFactory;
-import stroom.query.common.v2.ExpressionPredicateFactory.ValueFunctionFactories;
-import stroom.query.common.v2.ValFunctionFactory;
-import stroom.query.language.functions.FieldIndex;
-import stroom.query.language.functions.Val;
-import stroom.query.language.functions.ValuesConsumer;
-import stroom.util.concurrent.UncheckedInterruptedException;
-import stroom.util.io.FileUtil;
+import stroom.bytebuffer.impl6.ByteBuffers;
+import stroom.planb.impl.db.PlanBEnv.EnvInf;
+import stroom.planb.shared.PlanBDoc;
+import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.logging.LogUtil;
 import stroom.util.shared.HasPrimitiveValue;
 
-import org.lmdbjava.CursorIterable;
-import org.lmdbjava.CursorIterable.KeyVal;
+import org.lmdbjava.CopyFlags;
 import org.lmdbjava.Dbi;
 import org.lmdbjava.DbiFlags;
-import org.lmdbjava.Env;
-import org.lmdbjava.EnvFlags;
-import org.lmdbjava.KeyRange;
-import org.lmdbjava.KeyRangeType;
 import org.lmdbjava.PutFlags;
+import org.lmdbjava.Stat;
 import org.lmdbjava.Txn;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Iterator;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.OptionalInt;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+public abstract class AbstractDb<K, V> implements Db<K, V> {
 
-public abstract class AbstractDb<K, V> implements AutoCloseable {
+    protected static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(AbstractDb.class);
 
-    private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(AbstractDb.class);
-    private static final int CURRENT_SCHEMA_VERSION = 1;
+    private static final String NAME = "db";
+    private static final String INFO_NAME = "info_db";
 
-    private static final byte[] NAME = "db".getBytes(UTF_8);
-    private static final byte[] INFO_NAME = "info_db".getBytes(UTF_8);
-    private static final int CONCURRENT_READERS = 10;
+    protected final PutFlags[] putFlags;
 
-    private final Semaphore concurrentReaderSemaphore;
+    protected final PlanBEnv env;
+    protected final ByteBuffers byteBuffers;
+    protected final PlanBDoc doc;
+    protected final Dbi<ByteBuffer> dbi;
+    protected final Dbi<ByteBuffer> infoDbi;
+    protected final SchemaInfo schemaInfo;
 
-    private final LmdbKeySequence lmdbKeySequence;
-    final Serde<K, V> serde;
-    final ByteBufferFactory byteBufferFactory;
-    final Env<ByteBuffer> env;
-    final Dbi<ByteBuffer> dbi;
-    final Dbi<ByteBuffer> infoDbi;
-    private final DBWriter dbWriter;
-    private final ReentrantLock writeTxnLock = new ReentrantLock();
-    private final ReentrantLock dbCommitLock = new ReentrantLock();
-    private final boolean readOnly;
-
-    private final Runnable commitRunnable;
-
-    public AbstractDb(final Path path,
-                      final ByteBufferFactory byteBufferFactory,
-                      final Serde<K, V> serde,
-                      final Long mapSize,
+    public AbstractDb(final PlanBEnv env,
+                      final ByteBuffers byteBuffers,
+                      final PlanBDoc doc,
                       final Boolean overwrite,
-                      final boolean readOnly) {
-        final LmdbEnvDir lmdbEnvDir = new LmdbEnvDir(path, true);
-        this.byteBufferFactory = byteBufferFactory;
-        this.serde = serde;
-        this.readOnly = readOnly;
-        concurrentReaderSemaphore = new Semaphore(CONCURRENT_READERS);
-        lmdbKeySequence = new LmdbKeySequence(byteBufferFactory);
+                      final HashClashCommitRunnable hashClashCommitRunnable,
+                      final SchemaInfo schema) {
+        this.env = env;
+        this.byteBuffers = byteBuffers;
+        this.doc = doc;
 
-        if (readOnly) {
-            LOGGER.info(() -> "Opening: " + path);
-        } else {
-            LOGGER.info(() -> "Creating: " + path);
-        }
-
-        final Env.Builder<ByteBuffer> builder = Env.create()
-                .setMapSize(mapSize == null
-                        ? LmdbConfig.DEFAULT_MAX_STORE_SIZE.getBytes()
-                        : mapSize)
-                .setMaxDbs(2)
-                .setMaxReaders(CONCURRENT_READERS);
-
-        if (readOnly) {
-            env = builder.open(lmdbEnvDir.getEnvDir().toFile(),
-                    EnvFlags.MDB_NOTLS,
-                    EnvFlags.MDB_NOLOCK,
-                    EnvFlags.MDB_RDONLY_ENV);
-        } else {
-            env = builder.open(lmdbEnvDir.getEnvDir().toFile(),
-                    EnvFlags.MDB_NOTLS);
-        }
         dbi = env.openDbi(NAME, DbiFlags.MDB_CREATE);
 
-        if (readOnly) {
-            dbWriter = null;
-            this.commitRunnable = null;
-
-            // Read schema version.
-            infoDbi = env.openDbi(INFO_NAME, DbiFlags.MDB_CREATE);
-            try (final Txn<ByteBuffer> txn = env.txnRead()) {
-                final int schemaVersion = readSchemaVersion(txn);
-                LOGGER.debug("Read schema version {}", schemaVersion);
-            }
-
-        } else {
-            // Read and write schema version.
-            infoDbi = env.openDbi(INFO_NAME, DbiFlags.MDB_CREATE);
-            try (final Txn<ByteBuffer> txn = env.txnWrite()) {
-                final int schemaVersion = readSchemaVersion(txn);
-                LOGGER.debug("Read schema version {}", schemaVersion);
-                writeSchemaVersion(txn, CURRENT_SCHEMA_VERSION);
-            }
-
-            // If we do not prefix values then we can simply put rows.
-            if (!serde.hasPrefix()) {
-                // Do nothing special on commit.
-                this.commitRunnable = () -> {
-                };
-
-                // If the value has no key prefix, i.e. we are not using key hashes then just try to put.
-                if (overwrite == null || overwrite) {
-                    // Put and overwrite any existing key/value.
-                    dbWriter = dbi::put;
-                } else {
-                    // Put but do not overwrite any existing key/value.
-                    dbWriter = (writeTxn, keyByteBuffer, valueByteBuffer) ->
-                            dbi.put(writeTxn, keyByteBuffer, valueByteBuffer, PutFlags.MDB_NOOVERWRITE);
-                }
-            } else {
-                // Warn on hash clashes.
-                final HashClashCommitRunnable hashClashCommitRunnable = new HashClashCommitRunnable();
-                this.commitRunnable = hashClashCommitRunnable;
-
-                if (overwrite == null || overwrite) {
-                    dbWriter = (writeTxn, keyByteBuffer, valueByteBuffer) -> {
-                        // First try to put without overwriting existing values.
-                        if (!dbi.put(writeTxn, keyByteBuffer, valueByteBuffer, PutFlags.MDB_NOOVERWRITE)) {
-                            // We didn't manage to put so see if we can find the existing KV pair.
-                            serde.createPrefixPredicate(new BBKV(keyByteBuffer, valueByteBuffer),
-                                    predicate -> lmdbKeySequence.find(
-                                            dbi,
-                                            writeTxn,
-                                            keyByteBuffer,
-                                            valueByteBuffer,
-                                            predicate,
-                                            match -> {
-                                                final ByteBuffer foundKey = match.foundKey();
-                                                if (foundKey != null) {
-                                                    // We need to copy the buffer to use it after delete.
-                                                    final ByteBuffer copy = byteBufferFactory.acquire(foundKey.limit());
-                                                    try {
-                                                        copy.put(foundKey);
-                                                        copy.flip();
-
-                                                        dbi.delete(writeTxn, copy);
-                                                        if (!dbi.put(writeTxn,
-                                                                copy,
-                                                                valueByteBuffer,
-                                                                PutFlags.MDB_NOOVERWRITE)) {
-                                                            throw new RuntimeException("Unable to put after delete");
-                                                        }
-
-                                                    } finally {
-                                                        byteBufferFactory.release(copy);
-                                                    }
-
-                                                } else {
-                                                    // If we didn't find the item then insert it with a new sequence
-                                                    // number.
-                                                    putAtNewSequenceNumber(
-                                                            writeTxn,
-                                                            keyByteBuffer,
-                                                            valueByteBuffer,
-                                                            hashClashCommitRunnable,
-                                                            match.nextSequenceNumber());
-                                                }
-                                            }));
-                        }
-                    };
-
-                } else {
-                    dbWriter = (writeTxn, keyByteBuffer, valueByteBuffer) -> {
-                        // First try to put without overwriting existing values.
-                        if (!dbi.put(writeTxn, keyByteBuffer, valueByteBuffer, PutFlags.MDB_NOOVERWRITE)) {
-                            // We didn't manage to put so see if we can find the existing KV pair.
-                            serde.createPrefixPredicate(new BBKV(keyByteBuffer, valueByteBuffer),
-                                    predicate -> lmdbKeySequence.find(
-                                            dbi,
-                                            writeTxn,
-                                            keyByteBuffer,
-                                            valueByteBuffer,
-                                            predicate,
-                                            match -> {
-                                                // If we didn't find the item then insert it with a new sequence number.
-                                                if (match.foundKey() == null) {
-                                                    putAtNewSequenceNumber(
-                                                            writeTxn,
-                                                            keyByteBuffer,
-                                                            valueByteBuffer,
-                                                            hashClashCommitRunnable,
-                                                            match.nextSequenceNumber());
-                                                }
-                                            }));
-                        }
-                    };
-                }
-            }
-        }
-    }
-
-    private void putAtNewSequenceNumber(final Txn<ByteBuffer> writeTxn,
-                                        final ByteBuffer keyByteBuffer,
-                                        final ByteBuffer valueByteBuffer,
-                                        final HashClashCommitRunnable hashClashCommitRunnable,
-                                        final long sequenceNumber) {
-        // We must have had a hash clash here because we didn't find a row for the key even
-        // though the db contains the key hash.
-        hashClashCommitRunnable.increment();
-
-        lmdbKeySequence.addSequenceNumber(keyByteBuffer, serde.getKeyLength(), sequenceNumber, sequenceKeyBuffer -> {
-            if (!dbi.put(writeTxn, sequenceKeyBuffer, valueByteBuffer, PutFlags.MDB_NOOVERWRITE)) {
-                throw new RuntimeException("Unable to put at sequence " + sequenceNumber);
-            }
-        });
-    }
-
-    private static class HashClashCommitRunnable implements Runnable {
-
-        private int hashClashes;
-
-        public void increment() {
-            // We must have had a hash clash here because we didn't find a row for the key even
-            // though the db contains the key hash.
-            hashClashes++;
-        }
-
-        @Override
-        public void run() {
-            if (hashClashes > 0) {
-                // We prob don't want to warn but will keep for now until we know how big the issue is.
-                LOGGER.warn(() -> "We had " + hashClashes + " hash clashes since last commit");
-                hashClashes = 0;
-            }
-        }
-    }
-
-    public void merge(final Path source) {
-        write(writer -> {
-            final Env.Builder<ByteBuffer> builder = Env.create()
-                    .setMaxDbs(1)
-                    .setMaxReaders(1);
-            try (final Env<ByteBuffer> sourceEnv = builder.open(source.toFile(),
-                    EnvFlags.MDB_NOTLS,
-                    EnvFlags.MDB_NOLOCK,
-                    EnvFlags.MDB_RDONLY_ENV)) {
-                final Dbi<ByteBuffer> sourceDbi = sourceEnv.openDbi(NAME);
-                try (final Txn<ByteBuffer> readTxn = sourceEnv.txnRead()) {
-                    try (final CursorIterable<ByteBuffer> cursorIterable = sourceDbi.iterate(readTxn)) {
-                        for (final KeyVal<ByteBuffer> keyVal : cursorIterable) {
-                            ByteBuffer key = keyVal.key();
-                            ByteBuffer value = keyVal.val();
-                            if (key.limit() > serde.getKeyLength()) {
-                                key = key.slice(0, serde.getKeyLength());
-                            }
-                            insert(writer, key, value);
-                        }
-                    }
-                }
-            }
+        // Read and validate that the schema is as expected.
+        infoDbi = env.openDbi(INFO_NAME, DbiFlags.MDB_CREATE);
+        this.schemaInfo = env.read(txn -> {
+            final Optional<SchemaInfo> optionalSchemaInfo = readSchema(txn);
+            // Validate schema.
+            return optionalSchemaInfo
+                    .map(actual -> {
+                        validateSchema(schema, actual);
+                        return actual;
+                    })
+                    .orElse(schema);
         });
 
-        // Delete source now we have merged.
-        FileUtil.deleteDir(source);
-    }
+        if (!env.isReadOnly()) {
+            env.write(writer -> {
+                // Write schema.
+                writeSchema(writer, schema);
 
-    public void condense(final long condenseBeforeMs,
-                         final long deleteBeforeMs) {
-        // Don't condense by default.
-    }
-
-    boolean insert(final Writer writer,
-                   final KV<K, V> kv) {
-        return insert(writer, kv.key(), kv.val());
-    }
-
-    boolean insert(final Writer writer,
-                   final K key,
-                   final V value) {
-        return serde.createKeyByteBuffer(key, keyByteBuffer ->
-                serde.createValueByteBuffer(key, value, valueByteBuffer ->
-                        insert(writer, keyByteBuffer, valueByteBuffer)));
-    }
-
-    private boolean insert(final Writer writer,
-                           final ByteBuffer keyByteBuffer,
-                           final ByteBuffer valueByteBuffer) {
-        dbWriter.write(writer.getWriteTxn(), keyByteBuffer, valueByteBuffer);
-        writer.tryCommit();
-        return true;
-    }
-
-    public static class Writer implements AutoCloseable {
-
-        private final Env<ByteBuffer> env;
-        private final ReentrantLock dbCommitLock;
-        private final Runnable commitListener;
-        private final ReentrantLock writeTxnLock;
-        private Txn<ByteBuffer> writeTxn;
-        private int commitCount = 0;
-
-        public Writer(final Env<ByteBuffer> env,
-                      final ReentrantLock dbCommitLock,
-                      final Runnable commitListener,
-                      final ReentrantLock writeTxnLock) {
-            this.env = env;
-            this.dbCommitLock = dbCommitLock;
-            this.commitListener = commitListener;
-            this.writeTxnLock = writeTxnLock;
-
-            // We are only allowed a single write txn and we can only write with a single thread so ensure this is the
-            // case.
-            writeTxnLock.lock();
+                // Read and set the hash clash count.
+                hashClashCommitRunnable.setHashClashes(readHashClashes(writer.getWriteTxn()));
+            });
+            hashClashCommitRunnable.setRunnable(txn ->
+                    writeHashClashes(txn, hashClashCommitRunnable.getHashClashes()));
         }
 
-        Txn<ByteBuffer> getWriteTxn() {
-            if (writeTxn == null) {
-                writeTxn = env.txnWrite();
-            }
-            return writeTxn;
+        this.putFlags = overwrite
+                ? new PutFlags[]{}
+                : new PutFlags[]{PutFlags.MDB_NOOVERWRITE};
+    }
+
+    protected void validateSchema(final SchemaInfo expected,
+                                  final SchemaInfo actual) {
+        // Validate schema version.
+        if (!Objects.equals(expected.getSchemaVersion(), actual.getSchemaVersion())) {
+            throw new RuntimeException(LogUtil.message("Schema version mismatch for '{}': expected={}, actual={}",
+                    doc.getName(),
+                    expected.getSchemaVersion(),
+                    actual.getSchemaVersion()));
         }
 
-        void tryCommit() {
-            commitCount++;
-            if (commitCount > 10000) {
-                commit();
-            }
+        // Validate key schema.
+        if (!Objects.equals(expected.getKeySchema(), actual.getKeySchema())) {
+            throw new RuntimeException(LogUtil.message("Key schema mismatch for '{}': expected={}, actual={}",
+                    doc.getName(),
+                    expected.getKeySchema(),
+                    actual.getKeySchema()));
         }
 
-        void commit() {
-            dbCommitLock.lock();
-            try {
-                if (writeTxn != null) {
-                    try {
-                        writeTxn.commit();
-                    } finally {
-                        try {
-                            writeTxn.close();
-                        } finally {
-                            writeTxn = null;
-                        }
-                    }
-                }
-
-                commitCount = 0;
-                commitListener.run();
-            } finally {
-                dbCommitLock.unlock();
-            }
-        }
-
-        @Override
-        public void close() {
-            try {
-                commit();
-            } finally {
-                writeTxnLock.unlock();
-            }
-        }
-    }
-
-    Writer createWriter() {
-        return new Writer(env, dbCommitLock, commitRunnable, writeTxnLock);
-    }
-
-    <T> T write(final Function<Writer, T> function) {
-        try (final Writer writer = new Writer(env, dbCommitLock, commitRunnable, writeTxnLock)) {
-            return function.apply(writer);
-        }
-    }
-
-    void write(final Consumer<Writer> consumer) {
-        try (final Writer writer = new Writer(env, dbCommitLock, commitRunnable, writeTxnLock)) {
-            consumer.accept(writer);
-        }
-    }
-
-    public void lockCommits(final Runnable runnable) {
-        dbCommitLock.lock();
-        try {
-            runnable.run();
-        } finally {
-            dbCommitLock.unlock();
-        }
-    }
-
-    <R> R read(final Function<Txn<ByteBuffer>, R> function) {
-        try {
-            concurrentReaderSemaphore.acquire();
-            try {
-                try (final Txn<ByteBuffer> readTxn = env.txnRead()) {
-                    return function.apply(readTxn);
-                }
-            } finally {
-                concurrentReaderSemaphore.release();
-            }
-        } catch (final InterruptedException e) {
-            LOGGER.debug(e::getMessage, e);
-            Thread.currentThread().interrupt();
-            throw new UncheckedInterruptedException(e);
-        }
-    }
-
-    public Optional<V> get(final K key) {
-        return read(readTxn -> get(readTxn, key));
-    }
-
-    private Optional<V> get(final Txn<ByteBuffer> readTxn, final K key) {
-        return serde.createKeyByteBuffer(key, keyByteBuffer ->
-                serde.createPrefixPredicate(key, predicate -> {
-                    // Just try to get directly first without the overhead of a cursor.
-                    Optional<V> optional = getDirect(readTxn, keyByteBuffer, predicate);
-                    if (optional.isPresent()) {
-                        return optional;
-                    }
-
-                    // We tried directly so now try looking beyond the provided key to see if there are any sequence
-                    // appended keys.
-                    return getWithCursor(readTxn, keyByteBuffer, predicate);
-                }));
-    }
-
-    /**
-     * Direct lookup for exact key, assuming that there are no sequence rows.
-     */
-    private Optional<V> getDirect(final Txn<ByteBuffer> readTxn,
-                                  final ByteBuffer keyByteBuffer,
-                                  final Predicate<BBKV> predicate) {
-        final ByteBuffer valueByteBuffer = dbi.get(readTxn, keyByteBuffer);
-        final BBKV kv = new BBKV(keyByteBuffer, valueByteBuffer);
-        if (predicate.test(kv)) {
-            return Optional.of(serde.getVal(kv));
-        }
-        return Optional.empty();
-    }
-
-    /**
-     * After trying and failing to get a value directly by exact key, iterate over any subsequent sequence rows that
-     * may exist.
-     */
-    private Optional<V> getWithCursor(final Txn<ByteBuffer> readTxn,
-                                      final ByteBuffer keyByteBuffer,
-                                      final Predicate<BBKV> predicate) {
-        final KeyRange<ByteBuffer> keyRange =
-                new KeyRange<>(KeyRangeType.FORWARD_GREATER_THAN, keyByteBuffer, keyByteBuffer);
-        try (final CursorIterable<ByteBuffer> cursor = dbi.iterate(readTxn, keyRange)) {
-            final Iterator<KeyVal<ByteBuffer>> iterator = cursor.iterator();
-            while (iterator.hasNext()
-                   && !Thread.currentThread().isInterrupted()) {
-                final BBKV kv = BBKV.create(iterator.next());
-
-                // Stop iterating if we go beyond the prefix.
-                if (!ByteBufferUtils.containsPrefix(kv.key(), keyByteBuffer)) {
-                    return Optional.empty();
-                }
-
-                if (predicate.test(kv)) {
-                    return Optional.of(serde.getVal(kv));
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    public void search(final ExpressionCriteria criteria,
-                       final FieldIndex fieldIndex,
-                       final DateTimeSettings dateTimeSettings,
-                       final ExpressionPredicateFactory expressionPredicateFactory,
-                       final ValuesConsumer consumer) {
-        // Ensure we have fields for all expression criteria.
-        final List<String> fields = ExpressionUtil.fields(criteria.getExpression());
-        fields.forEach(fieldIndex::create);
-
-        final ValueFunctionFactories<Val[]> valueFunctionFactories = createValueFunctionFactories(fieldIndex);
-        final Optional<Predicate<Val[]>> optionalPredicate = expressionPredicateFactory
-                .create(criteria.getExpression(), valueFunctionFactories, dateTimeSettings);
-        final Predicate<Val[]> predicate = optionalPredicate.orElse(vals -> true);
-        final Function<KeyVal<ByteBuffer>, Val>[] valExtractors = serde.getValExtractors(fieldIndex);
-
-        // TODO : It would be faster if we limit the iteration to keys based on the criteria.
-        read(readTxn -> {
-            try (final CursorIterable<ByteBuffer> cursorIterable = dbi.iterate(readTxn)) {
-                for (final KeyVal<ByteBuffer> keyVal : cursorIterable) {
-                    final Val[] vals = new Val[valExtractors.length];
-                    for (int i = 0; i < vals.length; i++) {
-                        vals[i] = valExtractors[i].apply(keyVal);
-                    }
-                    if (predicate.test(vals)) {
-                        consumer.accept(vals);
-                    }
-                }
-            }
-            return null;
-        });
-    }
-
-    ValueFunctionFactories<Val[]> createValueFunctionFactories(final FieldIndex fieldIndex) {
-        return fieldName -> {
-            final Integer index = fieldIndex.getPos(fieldName);
-            if (index == null) {
-                throw new RuntimeException("Unexpected field: " + fieldName);
-            }
-            return new ValFunctionFactory(Column.builder().format(Format.TEXT).build(), index);
-        };
-    }
-
-    public long count() {
-        return read(readTxn -> dbi.stat(readTxn).entries);
-    }
-
-    public boolean isReadOnly() {
-        return readOnly;
-    }
-
-    private int readSchemaVersion(final Txn<ByteBuffer> txn) {
-        int version = -1;
-        try {
-            final ByteBuffer valueBuffer = infoDbi.get(txn, InfoKey.SCHEMA_VERSION.getByteBuffer());
-            if (valueBuffer != null) {
-                version = valueBuffer.getInt();
-            }
-
-        } catch (final Exception e) {
-            LOGGER.debug(e::getMessage, e);
-        }
-        return version;
-    }
-
-    private void writeSchemaVersion(final Txn<ByteBuffer> txn, final int schemaVersion) {
-        final ByteBuffer byteBuffer = byteBufferFactory.acquire(Integer.BYTES);
-        try {
-            byteBuffer.putInt(schemaVersion);
-            byteBuffer.flip();
-            infoDbi.put(txn, InfoKey.SCHEMA_VERSION.getByteBuffer(), byteBuffer);
-        } finally {
-            byteBufferFactory.release(byteBuffer);
+        // Validate value schema.
+        if (!Objects.equals(expected.getValueSchema(), actual.getValueSchema())) {
+            throw new RuntimeException(LogUtil.message("Value schema mismatch for '{}': expected={}, actual={}",
+                    doc.getName(),
+                    expected.getValueSchema(),
+                    actual.getValueSchema()));
         }
     }
 
     @Override
-    public void close() {
-        env.close();
+    public final long count() {
+        return env.read(readTxn -> dbi.stat(readTxn).entries);
     }
 
-    private interface DBWriter {
+    private Optional<SchemaInfo> readSchema(final Txn<ByteBuffer> txn) {
+        final OptionalInt optionalSchemaVersion = readInfoInt(txn, InfoKey.SCHEMA_VERSION);
+        if (optionalSchemaVersion.isEmpty()) {
+            return Optional.empty();
+        }
+        final String keySchema = readInfoString(txn, InfoKey.KEY_SCHEMA).orElse(null);
+        final String valueSchema = readInfoString(txn, InfoKey.VALUE_SCHEMA).orElse(null);
+        final SchemaInfo schemaInfo = new SchemaInfo(optionalSchemaVersion.getAsInt(), keySchema, valueSchema);
+        LOGGER.debug(() -> LogUtil.message("store={}, schemaInfo={}", doc.getName(), schemaInfo));
+        return Optional.of(schemaInfo);
+    }
 
-        void write(Txn<ByteBuffer> writeTxn,
-                   ByteBuffer keyByteBuffer,
-                   ByteBuffer valueByteBuffer);
+    private OptionalInt readInfoInt(final Txn<ByteBuffer> txn,
+                                    final InfoKey infoKey) {
+        OptionalInt version = OptionalInt.empty();
+        try {
+            final ByteBuffer valueBuffer = infoDbi.get(txn, infoKey.getByteBuffer());
+            if (valueBuffer != null) {
+                final int v = valueBuffer.getInt();
+                version = OptionalInt.of(v);
+            }
+        } catch (final Exception e) {
+            debug(e);
+        }
+        return version;
+    }
+
+    private Optional<String> readInfoString(final Txn<ByteBuffer> txn,
+                                            final InfoKey infoKey) {
+        Optional<String> info = Optional.empty();
+        try {
+            final ByteBuffer valueBuffer = infoDbi.get(txn, infoKey.getByteBuffer());
+            if (valueBuffer != null) {
+                final String string = ByteBufferUtils.toString(valueBuffer);
+                info = Optional.of(string);
+            }
+        } catch (final Exception e) {
+            error(e);
+        }
+        return info;
+    }
+
+    private void writeSchema(final LmdbWriter writer, final SchemaInfo schemaInfo) {
+        writeInfoInt(writer.getWriteTxn(), InfoKey.SCHEMA_VERSION, schemaInfo.getSchemaVersion());
+        writeInfoString(writer.getWriteTxn(), InfoKey.KEY_SCHEMA, schemaInfo.getKeySchema());
+        writeInfoString(writer.getWriteTxn(), InfoKey.VALUE_SCHEMA, schemaInfo.getValueSchema());
+        writer.commit();
+    }
+
+    private void writeInfoInt(final Txn<ByteBuffer> txn,
+                              final InfoKey infoKey,
+                              final int schemaVersion) {
+        byteBuffers.useInt(schemaVersion, byteBuffer -> {
+            infoDbi.put(txn, infoKey.getByteBuffer(), byteBuffer);
+        });
+    }
+
+    private void writeInfoString(final Txn<ByteBuffer> txn,
+                                 final InfoKey infoKey,
+                                 final String info) {
+        if (info != null) {
+            final byte[] bytes = info.getBytes(StandardCharsets.UTF_8);
+            byteBuffers.useBytes(bytes, byteBuffer -> {
+                infoDbi.put(txn, infoKey.getByteBuffer(), byteBuffer);
+            });
+        }
+    }
+
+
+    private int readHashClashes(final Txn<ByteBuffer> txn) {
+        int hashClashes = -1;
+        try {
+            final ByteBuffer valueBuffer = infoDbi.get(txn, InfoKey.HASH_CLASHES.getByteBuffer());
+            if (valueBuffer != null) {
+                hashClashes = valueBuffer.getInt();
+            }
+
+        } catch (final Exception e) {
+            debug(e);
+        }
+        return hashClashes;
+    }
+
+    private void writeHashClashes(final Txn<ByteBuffer> txn, final int schemaVersion) {
+        byteBuffers.useInt(schemaVersion, byteBuffer -> {
+            infoDbi.put(txn, InfoKey.HASH_CLASHES.getByteBuffer(), byteBuffer);
+        });
     }
 
     private enum InfoKey implements HasPrimitiveValue {
         SCHEMA_VERSION(0),
-        HASH_CLASHES(1);
+        HASH_CLASHES(1),
+        KEY_SCHEMA(2),
+        VALUE_SCHEMA(3);
 
         private final byte primitiveValue;
         private final ByteBuffer byteBuffer;
@@ -598,5 +230,86 @@ public abstract class AbstractDb<K, V> implements AutoCloseable {
         public ByteBuffer getByteBuffer() {
             return byteBuffer.duplicate();
         }
+    }
+
+    @Override
+    public LmdbWriter createWriter() {
+        return env.createWriter();
+    }
+
+    @Override
+    public void write(final Consumer<LmdbWriter> consumer) {
+        try (final LmdbWriter writer = createWriter()) {
+            consumer.accept(writer);
+        }
+    }
+
+    @Override
+    public void compact(final Path destination) {
+        env.copy(destination.toFile(), CopyFlags.MDB_CP_COMPACT);
+    }
+
+    @Override
+    public void lock(final Runnable runnable) {
+        env.lock(runnable);
+    }
+
+    @Override
+    public void close() {
+        env.close();
+    }
+
+    public final String getInfoString() {
+        final Inf inf = getInfo();
+        if (inf == null) {
+            return null;
+        }
+        return JsonUtil.writeValueAsString(inf);
+    }
+
+    protected SchemaInfo getSchemaInfo() {
+        return schemaInfo;
+    }
+
+    public final Inf getInfo() {
+        try {
+            return env.read(txn -> {
+                try {
+                    final EnvInf envInf = env.getInfo();
+                    final Stat stat = dbi.stat(txn);
+                    final DbInf dbInf = new DbInf("db", stat);
+                    final int schemaVersion = schemaInfo.getSchemaVersion();
+
+                    return new Inf(
+                            envInf,
+                            Collections.singletonList(dbInf),
+                            env.isReadOnly(),
+                            schemaVersion,
+                            readHashClashes(txn));
+                } catch (final Exception e) {
+                    debug(e);
+                }
+                return null;
+            });
+        } catch (final Exception e) {
+            debug(e);
+        }
+        return null;
+    }
+
+    protected void debug(final Exception e) {
+        LOGGER.debug(LogUtil.message("store={}, message={}", doc.getName(), e.getMessage()), e);
+    }
+
+    protected void error(final Exception e) {
+        LOGGER.debug(LogUtil.message("store={}, message={}", doc.getName(), e.getMessage()), e);
+    }
+
+    public record Inf(EnvInf env, List<DbInf> db, boolean readOnly, int schemaVersion, int hashClashes) {
+
+    }
+
+    public record DbInf(String name, Stat stat) {
+
     }
 }

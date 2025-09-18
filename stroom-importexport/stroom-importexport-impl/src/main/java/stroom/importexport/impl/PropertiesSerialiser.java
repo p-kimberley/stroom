@@ -7,7 +7,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 public final class PropertiesSerialiser {
 
@@ -36,7 +35,7 @@ public final class PropertiesSerialiser {
                     .stream()
                     .map(Object::toString)
                     .sorted()
-                    .collect(Collectors.toList());
+                    .toList();
 
             for (String key : keys) {
                 String val = properties.getProperty(key);
@@ -57,18 +56,18 @@ public final class PropertiesSerialiser {
      * Converts unicodes to encoded &#92;uxxxx and escapes
      * special characters with a preceding slash
      */
-    private static String saveConvert(String theString,
-                                      boolean escapeSpace,
-                                      boolean escapeUnicode) {
-        int len = theString.length();
+    private static String saveConvert(final String theString,
+                                      final boolean escapeSpace,
+                                      final boolean escapeUnicode) {
+        final int len = theString.length();
         int bufLen = len * 2;
         if (bufLen < 0) {
             bufLen = Integer.MAX_VALUE;
         }
-        StringBuffer outBuffer = new StringBuffer(bufLen);
+        final StringBuffer outBuffer = new StringBuffer(bufLen);
 
         for (int x = 0; x < len; x++) {
-            char aChar = theString.charAt(x);
+            final char aChar = theString.charAt(x);
             // Handle common case first, selecting largest block that
             // avoids the specials below
             if ((aChar > 61) && (aChar < 127)) {
@@ -131,7 +130,7 @@ public final class PropertiesSerialiser {
      *
      * @param nibble the nibble to convert.
      */
-    private static char toHex(int nibble) {
+    private static char toHex(final int nibble) {
         return hexDigit[(nibble & 0xF)];
     }
 

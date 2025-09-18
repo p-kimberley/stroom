@@ -18,11 +18,11 @@ package stroom.widget.tab.client.view;
 
 import com.google.gwt.user.client.ui.Widget;
 
-abstract class AbstractTabSelector extends Widget {
+public abstract class AbstractTabSelector extends Widget {
 
     public abstract void setText(String text);
 
-    protected void setKeyboardSelected(boolean selected) {
+    protected void setKeyboardSelected(final boolean selected) {
     }
 
     protected void setHover(final boolean hover) {

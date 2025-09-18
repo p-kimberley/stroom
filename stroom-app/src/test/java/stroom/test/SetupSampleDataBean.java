@@ -25,7 +25,7 @@ import stroom.docref.DocRef;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.feed.api.FeedProperties;
 import stroom.feed.api.FeedStore;
-import stroom.importexport.impl.ImportExportSerializer;
+import stroom.importexport.api.ImportExportSerializer;
 import stroom.importexport.shared.ImportSettings;
 import stroom.index.api.IndexVolumeGroupService;
 import stroom.index.impl.IndexStore;
@@ -40,9 +40,9 @@ import stroom.processor.shared.Processor;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.ProcessorType;
 import stroom.processor.shared.QueryData;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionOperator.Op;
-import stroom.query.api.v2.ExpressionTerm;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
 import stroom.receive.common.StreamTargetStreamHandlers;
 import stroom.security.impl.AppPermissionDao;
 import stroom.security.impl.UserDao;
@@ -285,7 +285,7 @@ public final class SetupSampleDataBean {
         }
     }
 
-    private static void logDocRefs(List<DocRef> entities, String entityTypes) {
+    private static void logDocRefs(final List<DocRef> entities, final String entityTypes) {
         LOGGER.info("Listing loaded {}:", entityTypes);
         entities.stream()
                 .map(DocRef::getName)
@@ -382,7 +382,7 @@ public final class SetupSampleDataBean {
                         LOGGER.info("Loading data from {}", dir.toAbsolutePath().normalize());
                         // Load data.
                         final DataLoader dataLoader = new DataLoader(feedProperties, streamTargetStreamHandlers);
-                        long startTime = System.currentTimeMillis();
+                        final long startTime = System.currentTimeMillis();
 
                         // Then load event data.
                         dataLoader.read(dir, false, startTime);

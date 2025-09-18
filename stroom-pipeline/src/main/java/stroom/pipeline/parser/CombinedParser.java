@@ -48,9 +48,9 @@ import stroom.pipeline.xml.converter.ParserFactory;
 import stroom.pipeline.xml.converter.json.JSONParserFactory;
 import stroom.pipeline.xml.converter.xmlfragment.XMLFragmentParser;
 import stroom.svg.shared.SvgImage;
-import stroom.util.NullSafe;
 import stroom.util.io.PathCreator;
 import stroom.util.io.StreamUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 import stroom.util.xml.SAXParserFactoryFactory;
 
@@ -143,7 +143,7 @@ public class CombinedParser extends AbstractParser implements SupportsCodeInject
 
     @Override
     protected XMLReader createReader() throws SAXException {
-        XMLReader xmlReader = switch (getMode()) {
+        final XMLReader xmlReader = switch (getMode()) {
             case XML -> createXMLReader();
             case XML_FRAGMENT, DATA_SPLITTER -> createTextConverter();
             case JSON -> createJSONReader();
@@ -160,7 +160,7 @@ public class CombinedParser extends AbstractParser implements SupportsCodeInject
             // TODO : Create a parser type registry that the UI selects from to
             // reduce the danger of incorrect names.
             if (type.equalsIgnoreCase("XML")
-                    || type.equalsIgnoreCase(TextConverterDoc.TextConverterType.NONE.getDisplayValue())) {
+                || type.equalsIgnoreCase(TextConverterDoc.TextConverterType.NONE.getDisplayValue())) {
                 mode = Mode.XML;
             } else if (type.equalsIgnoreCase("JSON")) {
                 mode = Mode.JSON;
@@ -197,7 +197,7 @@ public class CombinedParser extends AbstractParser implements SupportsCodeInject
 
 
     private XMLReader createXMLReader() throws SAXException {
-        SAXParser parser;
+        final SAXParser parser;
         try {
             parser = PARSER_FACTORY.newSAXParser();
         } catch (final ParserConfigurationException e) {
@@ -351,8 +351,8 @@ public class CombinedParser extends AbstractParser implements SupportsCodeInject
             final TextConverterDoc tc = textConverterStore.readDocument(docRef);
             if (tc == null) {
                 final String message = "Text converter \"" +
-                        docRef.getName() +
-                        "\" appears to have been deleted";
+                                       docRef.getName() +
+                                       "\" appears to have been deleted";
                 throw ProcessException.create(message);
             }
 

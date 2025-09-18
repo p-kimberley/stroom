@@ -30,10 +30,11 @@ import stroom.preferences.client.UserPreferencesManager;
 import stroom.svg.client.SvgPresets;
 import stroom.svg.shared.SvgImage;
 import stroom.ui.config.client.UiConfigCache;
-import stroom.util.shared.GwtNullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.widget.button.client.ButtonPanel;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.button.client.InlineSvgToggleButton;
+import stroom.widget.button.client.SvgButton;
 import stroom.widget.util.client.MouseUtil;
 
 import com.google.gwt.core.client.GWT;
@@ -63,11 +64,11 @@ public class MarkdownEditPresenter
     private final UiConfigCache uiConfigCache;
     private final InlineSvgToggleButton editModeButton;
     private final ButtonView helpButton;
-    private final ButtonPanel toolbar;
     private final MarkdownConverter markdownConverter;
     private boolean reading;
     private boolean readOnly = true;
     private boolean editMode = false;
+    private List<ButtonView> insertedButtons;
 
     @Inject
     public MarkdownEditPresenter(final EventBus eventBus,
@@ -92,10 +93,7 @@ public class MarkdownEditPresenter
         editModeButton.setSvg(SvgImage.EDIT);
         editModeButton.setTitle("Edit");
         editModeButton.setEnabled(true);
-
-        toolbar = new ButtonPanel();
-        toolbar.addButton(editModeButton);
-        helpButton = toolbar.addButton(SvgPresets.HELP.title("Documentation help"));
+        helpButton = SvgButton.create(SvgPresets.HELP.title("Documentation help"));
 
         registerHandler(eventBus.addHandler(ChangeCurrentPreferencesEvent.getType(), event ->
                 updateMarkdownOnIFramePresenter()));
@@ -106,7 +104,21 @@ public class MarkdownEditPresenter
         if (readOnly) {
             return Collections.emptyList();
         }
-        return Collections.singletonList(toolbar);
+        return Collections.singletonList(createToolbar());
+    }
+
+    private ButtonPanel createToolbar() {
+        final ButtonPanel toolbar = new ButtonPanel();
+        if (insertedButtons != null) {
+            toolbar.addButtons(insertedButtons);
+        }
+        toolbar.addButton(editModeButton);
+        toolbar.addButton(helpButton);
+        return toolbar;
+    }
+
+    public void setInsertedButtons(final List<ButtonView> insertedButtons) {
+        this.insertedButtons = insertedButtons;
     }
 
     @Override
@@ -171,7 +183,7 @@ public class MarkdownEditPresenter
         updateEditState();
 
 //        // No content do default to edit mode
-//        if (GwtNullSafe.isBlankString(rawMarkdown)) {
+//        if (NullSafe.isBlankString(rawMarkdown)) {
 //            GWT.log("setText, editMode: true");
 //            setEditMode(true);
 ////            editModeButton.setState(true);
@@ -187,7 +199,7 @@ public class MarkdownEditPresenter
     private void updateEditState() {
         final String rawMarkdown = markdownPreviewPresenter.getText();
         // No content do default to edit mode
-        if (GwtNullSafe.isBlankString(rawMarkdown) && !readOnly) {
+        if (NullSafe.isBlankString(rawMarkdown) && !readOnly) {
             GWT.log("setText, editMode: true");
             setEditMode(true);
 //            editModeButton.setState(true);
@@ -202,7 +214,7 @@ public class MarkdownEditPresenter
         uiConfigCache.get(result -> {
             if (result != null) {
                 final String helpUrl = result.getHelpUrlDocumentation();
-                if (!GwtNullSafe.isBlankString(helpUrl)) {
+                if (!NullSafe.isBlankString(helpUrl)) {
                     Window.open(helpUrl, "_blank", "");
                 } else {
                     AlertEvent.fireError(

@@ -5,18 +5,18 @@ import stroom.lmdb.LmdbConfig;
 import stroom.lmdb2.LmdbEnv;
 import stroom.lmdb2.LmdbEnvDir;
 import stroom.lmdb2.LmdbEnvDirFactory;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.SearchRequestSource;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.QueryKey;
+import stroom.query.api.SearchRequestSource;
+import stroom.query.api.TableSettings;
 import stroom.query.language.functions.ExpressionContext;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ref.ErrorConsumer;
-import stroom.util.NullSafe;
 import stroom.util.io.FileUtil;
 import stroom.util.io.PathCreator;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -191,7 +191,7 @@ public class LmdbDataStoreFactory implements DataStoreFactory {
                         return FileVisitResult.CONTINUE;
                     }
                 });
-            } catch (IOException | RuntimeException e) {
+            } catch (final IOException | RuntimeException e) {
                 LOGGER.error("Error calculating disk usage for path {}",
                         searchResultStoreDir.normalize(), e);
                 // Return -1 to indicate a failure

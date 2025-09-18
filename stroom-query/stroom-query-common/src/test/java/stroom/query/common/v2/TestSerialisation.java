@@ -17,41 +17,33 @@
 package stroom.query.common.v2;
 
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.expression.api.UserTimeZone;
-import stroom.query.api.v2.Column;
-import stroom.query.api.v2.DateTimeFormatSettings;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionTerm.Condition;
-import stroom.query.api.v2.FlatResult;
-import stroom.query.api.v2.Format;
-import stroom.query.api.v2.Format.Type;
-import stroom.query.api.v2.IncludeExcludeFilter;
-import stroom.query.api.v2.NumberFormatSettings;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.QueryKey;
-import stroom.query.api.v2.ResultRequest;
-import stroom.query.api.v2.Row;
-import stroom.query.api.v2.SearchRequest;
-import stroom.query.api.v2.SearchResponse;
-import stroom.query.api.v2.Sort;
-import stroom.query.api.v2.TableResult;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.Column;
+import stroom.query.api.DateTimeFormatSettings;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.FlatResult;
+import stroom.query.api.Format;
+import stroom.query.api.Format.Type;
+import stroom.query.api.IncludeExcludeFilter;
+import stroom.query.api.NumberFormatSettings;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.Query;
+import stroom.query.api.QueryKey;
+import stroom.query.api.ResultRequest;
+import stroom.query.api.Row;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.SearchResponse;
+import stroom.query.api.Sort;
+import stroom.query.api.TableResult;
+import stroom.query.api.TableSettings;
+import stroom.query.api.UserTimeZone;
 import stroom.query.test.util.ConsoleColour;
 import stroom.util.io.StreamUtil;
 import stroom.util.json.JsonUtil;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import jakarta.xml.bind.JAXBException;
-import jakarta.xml.bind.annotation.XmlAccessType;
-import jakarta.xml.bind.annotation.XmlAccessorType;
-import jakarta.xml.bind.annotation.XmlElement;
-import jakarta.xml.bind.annotation.XmlElementWrapper;
-import jakarta.xml.bind.annotation.XmlElements;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import jakarta.xml.bind.annotation.XmlType;
 import org.assertj.core.util.diff.DiffUtils;
 import org.assertj.core.util.diff.Patch;
 import org.junit.jupiter.api.Test;
@@ -130,7 +122,7 @@ class TestSerialisation {
     }
 
     @Test
-    void testPolymorphic() throws IOException, JAXBException {
+    void testPolymorphic() throws IOException {
         final List<Base> list = new ArrayList<>();
         list.add(new Sub1(2, 5));
         list.add(new Sub2(8, "test"));
@@ -140,7 +132,7 @@ class TestSerialisation {
     }
 
     @Test
-    void testPolymorphic2() throws IOException, JAXBException {
+    void testPolymorphic2() throws IOException {
         final List<Object> list = new ArrayList<>();
         list.add(1);
         list.add(2);
@@ -154,16 +146,16 @@ class TestSerialisation {
     }
 
     @Test
-    void testSearchRequestSerialisation() throws IOException, JAXBException {
+    void testSearchRequestSerialisation() throws IOException {
         test(getSearchRequest(), SearchRequest.class, "testSearchRequestSerialisation");
     }
 
     @Test
-    void testSearchResponseSerialisation() throws IOException, JAXBException {
+    void testSearchResponseSerialisation() throws IOException {
         test(getSearchResponse(), SearchResponse.class, "testSearchResponseSerialisation");
     }
 
-    private <T> void test(final T objIn, final Class<T> type, final String testName) throws IOException, JAXBException {
+    private <T> void test(final T objIn, final Class<T> type, final String testName) throws IOException {
         testJSON(objIn, type, testName);
 //        testXML(objIn, type, testName);
     }
@@ -174,7 +166,7 @@ class TestSerialisation {
         final Path actualFileIn = dir.resolve(testName + "-JSON.actual.in.json");
         final Path actualFileOut = dir.resolve(testName + "-JSON.actual.out.json");
 
-        String serialisedIn = JsonUtil.writeValueAsString(objIn);
+        final String serialisedIn = JsonUtil.writeValueAsString(objIn);
 //        System.out.println(serialisedIn);
 
         if (!Files.isRegularFile(expectedFile)) {
@@ -187,19 +179,19 @@ class TestSerialisation {
 
         if (areDifferent) {
             System.out.println("\n If you are satisfied that the differences are justified, i.e. the java model has " +
-                    "changed then run the following:");
+                               "changed then run the following:");
             System.out.println("cp "
-                    + actualFileIn.toAbsolutePath().normalize()
-                    + " "
-                    + expectedFile.toAbsolutePath().normalize());
+                               + actualFileIn.toAbsolutePath().normalize()
+                               + " "
+                               + expectedFile.toAbsolutePath().normalize());
         }
 
         final String expected = StreamUtil.fileToString(expectedFile);
         assertEqualsIgnoreWhitespace(expected, serialisedIn);
 
         // Now deserialise the string from the serialised object
-        T objOut = JsonUtil.readValue(serialisedIn, type);
-        String serialisedOut = JsonUtil.writeValueAsString(objOut);
+        final T objOut = JsonUtil.readValue(serialisedIn, type);
+        final String serialisedOut = JsonUtil.writeValueAsString(objOut);
 //        System.out.println(serialisedOut);
         StreamUtil.stringToFile(serialisedOut, actualFileOut);
 
@@ -251,9 +243,9 @@ class TestSerialisation {
             });
             System.out.println("\n To see the diff in Vim run:");
             System.out.println("vimdiff "
-                    + expectedFile.toAbsolutePath().normalize()
-                    + " "
-                    + actualFile.toAbsolutePath().normalize());
+                               + expectedFile.toAbsolutePath().normalize()
+                               + " "
+                               + actualFile.toAbsolutePath().normalize());
             return true;
         } else {
             System.out.println("\n Files are the same");
@@ -379,9 +371,8 @@ class TestSerialisation {
             @JsonSubTypes.Type(value = Sub1.class, name = "sub1"),
             @JsonSubTypes.Type(value = Sub2.class, name = "sub2")
     })
-    public abstract static class Base {
+    public abstract static sealed class Base permits Sub1, Sub2 {
 
-        @XmlElement
         private int num;
 
         public Base() {
@@ -415,11 +406,8 @@ class TestSerialisation {
         }
     }
 
-    @XmlAccessorType(XmlAccessType.FIELD)
-    @XmlType(name = "sub1", propOrder = {"num2"})
-    public static class Sub1 extends Base {
+    public static final class Sub1 extends Base {
 
-        @XmlElement
         private int num2;
 
         public Sub1() {
@@ -459,11 +447,8 @@ class TestSerialisation {
         }
     }
 
-    @XmlAccessorType(XmlAccessType.FIELD)
-    @XmlType(name = "sub2", propOrder = {"str"})
-    public static class Sub2 extends Base {
+    public static final class Sub2 extends Base {
 
-        @XmlElement
         private String str;
 
         public Sub2() {
@@ -507,14 +492,8 @@ class TestSerialisation {
         }
     }
 
-    @XmlAccessorType(XmlAccessType.FIELD)
-    @XmlRootElement(name = "lst")
     public static class Lst {
 
-        @XmlElementWrapper(name = "list")
-        @XmlElements({
-                @XmlElement(name = "sub1", type = Sub1.class),
-                @XmlElement(name = "sub2", type = Sub2.class)})
         private List<Base> list;
 
         public Lst() {
@@ -552,15 +531,8 @@ class TestSerialisation {
         }
     }
 
-    @XmlAccessorType(XmlAccessType.FIELD)
-    @XmlRootElement(name = "multi")
     public static class Multi {
 
-        @XmlElementWrapper(name = "list")
-        @XmlElements({
-                @XmlElement(name = "double", type = Double.class),
-                @XmlElement(name = "int", type = Integer.class),
-                @XmlElement(name = "string", type = String.class)})
         private List<Object> list;
 
         public Multi() {

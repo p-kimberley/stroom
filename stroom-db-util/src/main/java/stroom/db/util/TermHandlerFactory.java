@@ -1,9 +1,9 @@
 package stroom.db.util;
 
 import stroom.collection.api.CollectionService;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docrefinfo.api.DocRefInfoService;
+import stroom.query.api.datasource.QueryField;
 
 import jakarta.inject.Inject;
 import org.jooq.Field;
@@ -35,6 +35,6 @@ public class TermHandlerFactory {
                                      final boolean useName) {
         return new TermHandler<T>(dataSourceField,
                 field,
-                converter, wordListProvider, collectionService, docRefInfoService, useName);
+                converter, wordListProvider, collectionService, docRefInfoService, useName, false);
     }
 }

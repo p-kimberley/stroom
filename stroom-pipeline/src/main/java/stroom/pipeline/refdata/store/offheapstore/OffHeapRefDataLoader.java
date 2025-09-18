@@ -36,13 +36,14 @@ import stroom.pipeline.refdata.store.offheapstore.serdes.RangeStoreKeySerde;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
-import stroom.util.NullSafe;
+import stroom.util.NullSafeExtra;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.logging.DurationTimer;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.ModelStringUtil;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Range;
 
 import com.google.common.base.Preconditions;
@@ -175,7 +176,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
                 LOGGER.info("Waited for {} to acquire lock for {}",
                         timeToAcquireLock, refStreamDefinition);
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             throw ProcessException.wrap(UncheckedInterruptedException.create(LogUtil.message(
                     "Acquisition of lock for {} aborted due to thread interruption",
                     refStreamDefinition), e));
@@ -263,8 +264,8 @@ public class OffHeapRefDataLoader implements RefDataLoader {
                 currentLoaderState, processingState, putsToRefStoreCounter);
 
         if (LoaderState.INITIALISED.equals(currentLoaderState)
-                && ProcessingState.COMPLETE.equals(processingState)
-                && isRegularLoad()) {
+            && ProcessingState.COMPLETE.equals(processingState)
+            && isRegularLoad()) {
 
             markPutsComplete();
         }
@@ -335,9 +336,9 @@ public class OffHeapRefDataLoader implements RefDataLoader {
     }
 
     private void logLoadInfo(final ProcessingState processingState) {
-        final Duration overalDuration = NullSafe.durationTimer(overallTimer).get();
-        final Duration loadIntoStagingDuration = NullSafe.durationTimer(loadIntoStagingTimer).get();
-        final Duration transferStagedEntriesDuration = NullSafe.durationTimer(transferStagedEntriesTimer).get();
+        final Duration overalDuration = NullSafeExtra.durationTimer(overallTimer).get();
+        final Duration loadIntoStagingDuration = NullSafeExtra.durationTimer(loadIntoStagingTimer).get();
+        final Duration transferStagedEntriesDuration = NullSafeExtra.durationTimer(transferStagedEntriesTimer).get();
 
         LOGGER.info(LogUtil.inBoxOnNewLine(
                 """
@@ -381,7 +382,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
     }
 
     private void logMigrationInfo(final ProcessingState processingState) {
-        final Duration overalDuration = NullSafe.durationTimer(overallTimer).get();
+        final Duration overalDuration = NullSafeExtra.durationTimer(overallTimer).get();
 
         LOGGER.info(LogUtil.inBoxOnNewLine(
                 """
@@ -454,25 +455,32 @@ public class OffHeapRefDataLoader implements RefDataLoader {
     private void transferStagedEntries() {
         checkCurrentState(LoaderState.STAGED);
 
-        transferStagedEntriesTimer = DurationTimer.start();
-        try (final BatchingWriteTxn destBatchingWriteTxn = refStoreLmdbEnv.openBatchingWriteTxn(maxPutsBeforeCommit)) {
-            // We now hold the single write lock for the main ref store
+        final int putsToStagingStoreCount = putsToStagingStoreCounter.get();
+        LOGGER.debug("transferStagedEntries() - putsToStagingStoreCount: {}", putsToStagingStoreCount);
 
-            updateTaskContextInfoSupplier("Loading staged entries");
-            transferStagedKeyValueEntries(destBatchingWriteTxn);
-            transferStagedRangeValueEntries(destBatchingWriteTxn);
+        if (putsToStagingStoreCount > 0) {
+            transferStagedEntriesTimer = DurationTimer.start();
+            try (final BatchingWriteTxn destBatchingWriteTxn = refStoreLmdbEnv.openBatchingWriteTxn(
+                    maxPutsBeforeCommit)) {
+                // We now hold the single write lock for the main ref store
+                updateTaskContextInfoSupplier("Loading staged entries");
+                transferStagedKeyValueEntries(destBatchingWriteTxn);
+                transferStagedRangeValueEntries(destBatchingWriteTxn);
 
-            // Final commit
-            destBatchingWriteTxn.commit();
+                // Final commit
+                destBatchingWriteTxn.commit();
+            }
+            transferStagedEntriesTimer.stop();
+
+            LOGGER.debug(() -> LogUtil.getDurationMessage(
+                    LogUtil.message(
+                            "Transfer of {} entries from staging store to ref data store for pipe",
+                            ModelStringUtil.formatCsv(putsToStagingStoreCounter), getPipelineNameStr()),
+                    transferStagedEntriesTimer.get(),
+                    putsToStagingStoreCounter.get()));
+        } else {
+            updateTaskContextInfoSupplier("No staged entries");
         }
-        transferStagedEntriesTimer.stop();
-
-        LOGGER.debug(() -> LogUtil.getDurationMessage(
-                LogUtil.message(
-                        "Transfer of {} entries from staging store to ref data store for pipe",
-                        ModelStringUtil.formatCsv(putsToStagingStoreCounter), getPipelineNameStr()),
-                transferStagedEntriesTimer.get(),
-                putsToStagingStoreCounter.get()));
     }
 
     private <K> boolean isAppendableData(final BatchingWriteTxn batchingWriteTxn,
@@ -483,14 +491,14 @@ public class OffHeapRefDataLoader implements RefDataLoader {
         final Optional<UID> optMaxUidInDb = entryStoreDb.getMaxUid(batchingWriteTxn.getTxn(), pooledUidBuffer);
         final Set<UID> stagedUids = offHeapStagingStore.getStagedUids();
 
-        if (stagedUids.isEmpty()) {
-            throw new RuntimeException(LogUtil.message(
-                    "We should have at least one staged UID, else how did we get here"));
-        }
-
         final boolean isAppendable;
-        if (optMaxUidInDb.isEmpty()) {
+        if (stagedUids.isEmpty()) {
+            LOGGER.debug("isAppendableData() - No staged UIDs");
+            // Return value doesn't really matter as there is nothing to append/put
+            isAppendable = true;
+        } else if (optMaxUidInDb.isEmpty()) {
             // Totally empty DB, so we are appending
+            LOGGER.debug("isAppendableData() - Empty optMaxUidInDb");
             isAppendable = true;
         } else {
             final UID maxUidInDb = optMaxUidInDb.get();
@@ -509,7 +517,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
                 // but finished staging before us, so we are not appending. We could consider generating new UIDs
                 // under lock, but the likelihood of a concurrent load is probably minimal so not worth it.
                 LOGGER.warn("Unable to use APPEND mode, so ref load may be a bit slower. " +
-                                "maxUidInDb: {}, minUidInStaging: {}, db: {}, refStreamDefinition: {}",
+                            "maxUidInDb: {}, minUidInStaging: {}, db: {}, refStreamDefinition: {}",
                         maxUidInDb.getValue(),
                         minUidInStaging.getValue(),
                         entryStoreDb.getClass().getSimpleName(),
@@ -633,7 +641,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
                     putOutcome = PutOutcome.replacedEntry();
                     removedEntriesCount++;
                 } else {
-                    boolean areValuesEqual = valueStore.areValuesEqual(
+                    final boolean areValuesEqual = valueStore.areValuesEqual(
                             writeTxn, currValueStoreKeyBuffer, stagingValue);
                     if (areValuesEqual) {
                         // value is the same as the existing value so nothing to do
@@ -668,8 +676,8 @@ public class OffHeapRefDataLoader implements RefDataLoader {
         keyBuffer.clear();
 
         LOGGER.trace("Returning outcome: {}, inputCount: {}, newEntriesCount: {}, " +
-                        "replacedEntriesCount: {}, removedEntriesCount: {}, unchangedEntriesCount: {}, " +
-                        "ignoredCount: {}, nullCount: {}",
+                     "replacedEntriesCount: {}, removedEntriesCount: {}, unchangedEntriesCount: {}, " +
+                     "ignoredCount: {}, nullCount: {}",
                 putOutcome, putsToStagingStoreCounter, newEntriesCount, replacedEntriesCount, removedEntriesCount,
                 unchangedEntriesCount, ignoredCount, ignoredNullsCount);
 
@@ -768,7 +776,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
             if (offHeapStagingStore != null) {
                 offHeapStagingStore.close();
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error closing offHeapStagingStore: {}", e.getMessage(), e);
         }
 
@@ -776,7 +784,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
         pooledByteBuffers.forEach(pooledByteBuffer -> {
             try {
                 pooledByteBuffer.close();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 LOGGER.error("Error releasing pooled buffer: {}", e.getMessage(), e);
             }
         });
@@ -793,7 +801,7 @@ public class OffHeapRefDataLoader implements RefDataLoader {
 
     private void checkCurrentState(final LoaderState... validStates) {
         boolean isCurrentStateValid = false;
-        for (LoaderState loaderState : validStates) {
+        for (final LoaderState loaderState : validStates) {
             if (currentLoaderState.equals(loaderState)) {
                 isCurrentStateValid = true;
                 break;

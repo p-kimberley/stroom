@@ -1,7 +1,7 @@
 package stroom.analytics.impl;
 
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @JsonPropertyOrder({
         "detectTime",
@@ -130,7 +129,7 @@ public class Detection {
     }
 
     public static Builder builder(final Detection copy) {
-        Builder builder = new Builder();
+        final Builder builder = new Builder();
         builder.detectTime = copy.getDetectTime();
         builder.detectorName = copy.getDetectorName();
         builder.detectorUuid = copy.getDetectorUuid();
@@ -221,21 +220,21 @@ public class Detection {
         }
         final Detection detection = (Detection) o;
         return Objects.equals(detectTime, detection.detectTime) &&
-                Objects.equals(detectorName, detection.detectorName) &&
-                Objects.equals(detectorUuid, detection.detectorUuid) &&
-                Objects.equals(detectorVersion, detection.detectorVersion) &&
-                Objects.equals(detectorEnvironment, detection.detectorEnvironment) &&
-                Objects.equals(headline, detection.headline) &&
-                Objects.equals(detailedDescription, detection.detailedDescription) &&
-                Objects.equals(fullDescription, detection.fullDescription) &&
-                Objects.equals(detectionUniqueId, detection.detectionUniqueId) &&
-                Objects.equals(detectionRevision, detection.detectionRevision) &&
-                Objects.equals(defunct, detection.defunct) &&
-                Objects.equals(executionSchedule, detection.executionSchedule) &&
-                Objects.equals(executionTime, detection.executionTime) &&
-                Objects.equals(effectiveExecutionTime, detection.effectiveExecutionTime) &&
-                Objects.equals(values, detection.values) &&
-                Objects.equals(linkedEvents, detection.linkedEvents);
+               Objects.equals(detectorName, detection.detectorName) &&
+               Objects.equals(detectorUuid, detection.detectorUuid) &&
+               Objects.equals(detectorVersion, detection.detectorVersion) &&
+               Objects.equals(detectorEnvironment, detection.detectorEnvironment) &&
+               Objects.equals(headline, detection.headline) &&
+               Objects.equals(detailedDescription, detection.detailedDescription) &&
+               Objects.equals(fullDescription, detection.fullDescription) &&
+               Objects.equals(detectionUniqueId, detection.detectionUniqueId) &&
+               Objects.equals(detectionRevision, detection.detectionRevision) &&
+               Objects.equals(defunct, detection.defunct) &&
+               Objects.equals(executionSchedule, detection.executionSchedule) &&
+               Objects.equals(executionTime, detection.executionTime) &&
+               Objects.equals(effectiveExecutionTime, detection.effectiveExecutionTime) &&
+               Objects.equals(values, detection.values) &&
+               Objects.equals(linkedEvents, detection.linkedEvents);
     }
 
     @Override
@@ -261,23 +260,23 @@ public class Detection {
     @Override
     public String toString() {
         return "Detection{" +
-                "detectTime='" + detectTime + '\'' +
-                ", detectorName='" + detectorName + '\'' +
-                ", detectorUuid='" + detectorUuid + '\'' +
-                ", detectorVersion='" + detectorVersion + '\'' +
-                ", detectorEnvironment='" + detectorEnvironment + '\'' +
-                ", headline='" + headline + '\'' +
-                ", detailedDescription='" + detailedDescription + '\'' +
-                ", fullDescription='" + fullDescription + '\'' +
-                ", detectionUniqueId='" + detectionUniqueId + '\'' +
-                ", detectionRevision=" + detectionRevision +
-                ", defunct=" + defunct +
-                ", executionSchedule='" + executionSchedule + '\'' +
-                ", executionTime=" + executionTime +
-                ", effectiveExecutionTime=" + effectiveExecutionTime +
-                ", values=" + values +
-                ", linkedEvents=" + linkedEvents +
-                '}';
+               "detectTime='" + detectTime + '\'' +
+               ", detectorName='" + detectorName + '\'' +
+               ", detectorUuid='" + detectorUuid + '\'' +
+               ", detectorVersion='" + detectorVersion + '\'' +
+               ", detectorEnvironment='" + detectorEnvironment + '\'' +
+               ", headline='" + headline + '\'' +
+               ", detailedDescription='" + detailedDescription + '\'' +
+               ", fullDescription='" + fullDescription + '\'' +
+               ", detectionUniqueId='" + detectionUniqueId + '\'' +
+               ", detectionRevision=" + detectionRevision +
+               ", defunct=" + defunct +
+               ", executionSchedule='" + executionSchedule + '\'' +
+               ", executionTime=" + executionTime +
+               ", effectiveExecutionTime=" + effectiveExecutionTime +
+               ", values=" + values +
+               ", linkedEvents=" + linkedEvents +
+               '}';
     }
 
     public static Builder builder() {
@@ -444,7 +443,7 @@ public class Detection {
                     .stream()
                     .filter(entry -> entry.getKey() != null)
                     .map(entry -> new DetectionValue(entry.getKey(), entry.getValue()))
-                    .collect(Collectors.toList());
+                    .toList();
             return this;
         }
 

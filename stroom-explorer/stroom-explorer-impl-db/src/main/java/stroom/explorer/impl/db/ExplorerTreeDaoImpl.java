@@ -266,6 +266,26 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
     }
 
     @Override
+    public List<ExplorerTreeNode> getChildrenByNameAndType(final ExplorerTreeNode parent,
+                                                           final String name,
+                                                           final String type) {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(type);
+        return JooqUtil.contextResult(explorerDbConnProvider, context -> context
+                        .selectFrom(n)
+                        .where(n.ID.in(context
+                                .select(p.DESCENDANT)
+                                .from(p)
+                                .where(p.ANCESTOR.eq(parent.getId()))
+                                .and(p.DEPTH.eq(1))
+                                .orderBy(p.ORDER_INDEX)))
+                        .and(n.TYPE.eq(type))
+                        .and(n.NAME.eq(name))
+                        .fetch())
+                .map(this::mapRecord);
+    }
+
+    @Override
     public ExplorerTreeNode getParent(final ExplorerTreeNode child) {
         final List<ExplorerTreeNode> parents = JooqUtil.contextResult(explorerDbConnProvider, context ->
                         context
@@ -341,15 +361,15 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
     }
 
     private void removeTree(final Integer parentId) {
-        boolean closeGap = shouldCloseGapOnRemove();
-        List<ExplorerTreePath> pathSiblings = closeGap
+        final boolean closeGap = shouldCloseGapOnRemove();
+        final List<ExplorerTreePath> pathSiblings = closeGap
                 ? getAllTreePathSiblings(parentId)
                 : null;
-        Set<Integer> nodesToRemove = new HashSet<>();
+        final Set<Integer> nodesToRemove = new HashSet<>();
         int orderIndex = -1;
 
         final List<ExplorerTreePath> paths = getPathsToRemove(parentId);
-        for (ExplorerTreePath path : paths) {
+        for (final ExplorerTreePath path : paths) {
             removePath(path);
             nodesToRemove.add(path.getDescendant());
             if (closeGap && path.getDepth() == 1 && Objects.equals(path.getDescendant(), parentId)) {
@@ -405,8 +425,8 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
             throw new IllegalArgumentException("Node is already part of tree: " + child);
         } else {
             assertInsertParameters(parent, sibling, orderIndex);
-            boolean relatedNodeIsParent = parent != null;
-            List<ExplorerTreePath> pathsToClone = new ArrayList<>();
+            final boolean relatedNodeIsParent = parent != null;
+            final List<ExplorerTreePath> pathsToClone = new ArrayList<>();
             orderIndex = getPositionAndPathsToConnectSubTree(relatedNodeIsParent,
                     orderIndex,
                     parent,
@@ -443,7 +463,7 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
         assertCopyOrMoveParameters(nodeToMove, newParent, position, sibling);
         disconnectSubTree(nodeToMove);
         if (newParent != null || sibling != null) {
-            List<ExplorerTreePath> childPaths = getPathsIntoSubtree(nodeToMove);
+            final List<ExplorerTreePath> childPaths = getPathsIntoSubtree(nodeToMove);
             connectSubTree(newParent, position, sibling, childPaths);
         }
     }
@@ -463,7 +483,7 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
                                 .fetch())
                 .map(ExplorerTreeDaoImpl::mapExplorerPathRecord);
 
-        List<ExplorerTreePath> pathSiblings = getAllTreePathSiblings(node.getId());
+        final List<ExplorerTreePath> pathSiblings = getAllTreePathSiblings(node.getId());
         int oldPosition = -1;
 
         for (final ExplorerTreePath path : pathsToRemove) {
@@ -488,8 +508,8 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
                                 int position,
                                 final ExplorerTreeNode sibling,
                                 final List<ExplorerTreePath> childPaths) {
-        boolean relatedNodeIsParent = newParent != null;
-        List<ExplorerTreePath> pathsToClone = new ArrayList<>();
+        final boolean relatedNodeIsParent = newParent != null;
+        final List<ExplorerTreePath> pathsToClone = new ArrayList<>();
         position = getPositionAndPathsToConnectSubTree(relatedNodeIsParent, position, newParent, sibling, pathsToClone);
 
         for (final ExplorerTreePath childPath : childPaths) {
@@ -563,7 +583,7 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
         if (!orderIndexMatters) {
             return 0;
         } else {
-            List<ExplorerTreePath> children = getAllDirectTreePathChildren(parentId);
+            final List<ExplorerTreePath> children = getAllDirectTreePathChildren(parentId);
             if (position == -1) {
                 return children.size();
             } else {
@@ -638,7 +658,7 @@ class ExplorerTreeDaoImpl implements ExplorerTreeDao {
                                 .fetch())
                 .map(this::mapRecord);
 
-        if (list.size() == 0) {
+        if (list.isEmpty()) {
             return null;
         }
 

@@ -11,6 +11,7 @@ import stroom.security.shared.AbstractDocumentPermissionsChange.RemovePermission
 import stroom.security.shared.AbstractDocumentPermissionsChange.SetAllPermissionsFrom;
 import stroom.security.shared.AbstractDocumentPermissionsChange.SetDocumentUserCreatePermissions;
 import stroom.security.shared.AbstractDocumentPermissionsChange.SetPermission;
+import stroom.util.shared.SerialisationTestConstructor;
 import stroom.util.shared.UserRef;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -45,10 +47,20 @@ import java.util.Set;
         @JsonSubTypes.Type(value = SetAllPermissionsFrom.class, name = "SetAllPermissionsFrom"),
         @JsonSubTypes.Type(value = RemoveAllPermissions.class, name = "RemoveAllPermissions"),
 })
-public abstract class AbstractDocumentPermissionsChange {
+public abstract sealed class AbstractDocumentPermissionsChange permits
+        SetPermission,
+        RemovePermission,
+        AddDocumentUserCreatePermission,
+        RemoveDocumentUserCreatePermission,
+        SetDocumentUserCreatePermissions,
+        AddAllDocumentUserCreatePermissions,
+        RemoveAllDocumentUserCreatePermissions,
+        AddAllPermissionsFrom,
+        SetAllPermissionsFrom,
+        RemoveAllPermissions {
 
     @JsonInclude(Include.NON_NULL)
-    public static class SetPermission extends AbstractDocumentPermissionsChange {
+    public static final class SetPermission extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -64,6 +76,11 @@ public abstract class AbstractDocumentPermissionsChange {
             this.permission = permission;
         }
 
+        @SerialisationTestConstructor
+        private SetPermission() {
+            this(UserRef.builder().build(), DocumentPermission.VIEW);
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
@@ -74,7 +91,7 @@ public abstract class AbstractDocumentPermissionsChange {
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class RemovePermission extends AbstractDocumentPermissionsChange {
+    public static final class RemovePermission extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -86,13 +103,18 @@ public abstract class AbstractDocumentPermissionsChange {
             this.userRef = userRef;
         }
 
+        @SerialisationTestConstructor
+        private RemovePermission() {
+            this(UserRef.builder().build());
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class AddDocumentUserCreatePermission extends AbstractDocumentPermissionsChange {
+    public static final class AddDocumentUserCreatePermission extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -108,6 +130,11 @@ public abstract class AbstractDocumentPermissionsChange {
             this.documentType = documentType;
         }
 
+        @SerialisationTestConstructor
+        private AddDocumentUserCreatePermission() {
+            this(UserRef.builder().build(), "test");
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
@@ -118,7 +145,7 @@ public abstract class AbstractDocumentPermissionsChange {
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class RemoveDocumentUserCreatePermission extends AbstractDocumentPermissionsChange {
+    public static final class RemoveDocumentUserCreatePermission extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -134,6 +161,11 @@ public abstract class AbstractDocumentPermissionsChange {
             this.documentType = documentType;
         }
 
+        @SerialisationTestConstructor
+        private RemoveDocumentUserCreatePermission() {
+            this(UserRef.builder().build(), "test");
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
@@ -144,7 +176,7 @@ public abstract class AbstractDocumentPermissionsChange {
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class SetDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
+    public static final class SetDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -160,6 +192,11 @@ public abstract class AbstractDocumentPermissionsChange {
             this.documentTypes = documentTypes;
         }
 
+        @SerialisationTestConstructor
+        private SetDocumentUserCreatePermissions() {
+            this(UserRef.builder().build(), Collections.emptySet());
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
@@ -171,7 +208,7 @@ public abstract class AbstractDocumentPermissionsChange {
 
 
     @JsonInclude(Include.NON_NULL)
-    public static class AddAllDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
+    public static final class AddAllDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -182,13 +219,18 @@ public abstract class AbstractDocumentPermissionsChange {
             this.userRef = userRef;
         }
 
+        @SerialisationTestConstructor
+        private AddAllDocumentUserCreatePermissions() {
+            this(UserRef.builder().build());
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class RemoveAllDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
+    public static final class RemoveAllDocumentUserCreatePermissions extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final UserRef userRef;
@@ -199,6 +241,11 @@ public abstract class AbstractDocumentPermissionsChange {
             this.userRef = userRef;
         }
 
+        @SerialisationTestConstructor
+        private RemoveAllDocumentUserCreatePermissions() {
+            this(UserRef.builder().build());
+        }
+
         public UserRef getUserRef() {
             return userRef;
         }
@@ -206,7 +253,7 @@ public abstract class AbstractDocumentPermissionsChange {
 
 
     @JsonInclude(Include.NON_NULL)
-    public static class AddAllPermissionsFrom extends AbstractDocumentPermissionsChange {
+    public static final class AddAllPermissionsFrom extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final DocRef sourceDocRef;
@@ -217,13 +264,18 @@ public abstract class AbstractDocumentPermissionsChange {
             this.sourceDocRef = sourceDocRef;
         }
 
+        @SerialisationTestConstructor
+        private AddAllPermissionsFrom() {
+            this(new DocRef("test", "test"));
+        }
+
         public DocRef getSourceDocRef() {
             return sourceDocRef;
         }
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class SetAllPermissionsFrom extends AbstractDocumentPermissionsChange {
+    public static final class SetAllPermissionsFrom extends AbstractDocumentPermissionsChange {
 
         @JsonProperty
         private final DocRef sourceDocRef;
@@ -234,13 +286,18 @@ public abstract class AbstractDocumentPermissionsChange {
             this.sourceDocRef = sourceDocRef;
         }
 
+        @SerialisationTestConstructor
+        private SetAllPermissionsFrom() {
+            this(new DocRef("test", "test"));
+        }
+
         public DocRef getSourceDocRef() {
             return sourceDocRef;
         }
     }
 
     @JsonInclude(Include.NON_NULL)
-    public static class RemoveAllPermissions extends AbstractDocumentPermissionsChange {
+    public static final class RemoveAllPermissions extends AbstractDocumentPermissionsChange {
 
         public RemoveAllPermissions() {
         }

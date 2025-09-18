@@ -1,6 +1,6 @@
 package stroom.query.common.v2;
 
-import stroom.query.api.v2.QueryKey;
+import stroom.query.api.QueryKey;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,7 +60,7 @@ public class SearchProgressLog {
         final StringBuilder sb = new StringBuilder();
         sb.append("Query Key,");
         sb.append("Elapsed Time (ms)");
-        for (SearchPhase searchPhase : SearchPhase.values()) {
+        for (final SearchPhase searchPhase : SearchPhase.values()) {
             sb.append(",");
             sb.append(searchPhase.getDisplayName());
         }
@@ -145,7 +145,7 @@ public class SearchProgressLog {
             sb.append(",");
             sb.append(elapsedTime);
 
-            for (SearchPhase searchPhase : SearchPhase.values()) {
+            for (final SearchPhase searchPhase : SearchPhase.values()) {
                 sb.append(",");
                 final AtomicLong count = map.get(searchPhase);
                 if (count == null) {

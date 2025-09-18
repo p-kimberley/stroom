@@ -112,7 +112,7 @@ public class GeneratePipelineElementsDoc implements DocumentationGenerator {
     );
 
     @GeneratesDocumentation
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         final GeneratePipelineElementsDoc generatePipelineElementsDoc = new GeneratePipelineElementsDoc();
 
         generatePipelineElementsDoc.generatePipelineElementReferenceContent();
@@ -363,7 +363,7 @@ public class GeneratePipelineElementsDoc implements DocumentationGenerator {
                             argTypeStr);
                 })
                 .sorted(Comparator.comparing(PropertyInfo::name))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static String makePropertyName(final String methodName) {

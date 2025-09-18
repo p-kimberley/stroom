@@ -74,7 +74,7 @@ public class ImportSettings {
         }
 
         return ImportMode.IGNORE_CONFIRMATION.equals(importSettings.getImportMode())
-                || (ImportMode.ACTION_CONFIRMATION.equals(importSettings.getImportMode()) && importState.isAction());
+               || (ImportMode.ACTION_CONFIRMATION.equals(importSettings.getImportMode()) && importState.isAction());
     }
 
     public static Builder builder() {
@@ -108,11 +108,28 @@ public class ImportSettings {
         }
         final ImportSettings that = (ImportSettings) o;
         return enableFilters == that.enableFilters &&
-                useImportNames == that.useImportNames &&
-                useImportFolders == that.useImportFolders &&
-                importMode == that.importMode &&
-                Objects.equals(enableFiltersFromTime, that.enableFiltersFromTime) &&
-                Objects.equals(rootDocRef, that.rootDocRef);
+               useImportNames == that.useImportNames &&
+               useImportFolders == that.useImportFolders &&
+               importMode == that.importMode &&
+               Objects.equals(enableFiltersFromTime, that.enableFiltersFromTime) &&
+               Objects.equals(rootDocRef, that.rootDocRef);
+    }
+
+    /**
+     * toString to aid debugging import
+     *
+     * @return Meaningful string describing the object.
+     */
+    @Override
+    public String toString() {
+        return "ImportSettings{" +
+               "importMode=" + importMode +
+               ", enableFilters=" + enableFilters +
+               ", enableFiltersFromTime=" + enableFiltersFromTime +
+               ", useImportNames=" + useImportNames +
+               ", useImportFolders=" + useImportFolders +
+               ", rootDocRef=" + rootDocRef +
+               '}';
     }
 
     @Override
@@ -125,13 +142,19 @@ public class ImportSettings {
                 rootDocRef);
     }
 
+
+    // --------------------------------------------------------------------------------
+
+
     public enum ImportMode {
         CREATE_CONFIRMATION,
         ACTION_CONFIRMATION,
         IGNORE_CONFIRMATION
     }
 
+
     // --------------------------------------------------------------------------------
+
 
     public static class Builder {
 

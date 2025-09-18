@@ -22,7 +22,7 @@ import stroom.config.common.UriFactory;
 import stroom.security.identity.config.EmailConfig;
 import stroom.security.identity.config.IdentityConfig;
 import stroom.security.identity.config.SmtpConfig;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 
 import com.google.common.base.Preconditions;
 import jakarta.inject.Inject;
@@ -52,7 +52,7 @@ class EmailSender {
 
     public void send(final String emailAddress,
                      final String firstName,
-                     final String lastName, String resetToken) {
+                     final String lastName, final String resetToken) {
 
         final EmailConfig emailConfig = authenticationConfig.getEmailConfig();
         final SmtpConfig smtpConfig = Preconditions.checkNotNull(
@@ -78,7 +78,7 @@ class EmailSender {
                 .withTransportStrategy(smtpConfig.getTransportStrategy());
 
         if (!NullSafe.isEmptyString(smtpConfig.getUsername())
-                && !NullSafe.isEmptyString(smtpConfig.getPassword())) {
+            && !NullSafe.isEmptyString(smtpConfig.getPassword())) {
             mailerBuilder.withSMTPServer(
                     smtpConfig.getHost(),
                     smtpConfig.getPort(),
@@ -96,9 +96,9 @@ class EmailSender {
                 smtpConfig.getHost(),
                 smtpConfig.getPort());
 
-        try (Mailer mailer = mailerBuilder.buildMailer()) {
+        try (final Mailer mailer = mailerBuilder.buildMailer()) {
             mailer.sendMail(email);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             LOGGER.error("Error sending reset email to user {} ({}) at {}:{} - {}",
                     smtpConfig.getUsername(),
                     emailAddress,

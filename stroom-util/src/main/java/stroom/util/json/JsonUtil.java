@@ -16,9 +16,9 @@
 
 package stroom.util.json;
 
-import stroom.util.NullSafe;
 import stroom.util.exception.ThrowingConsumer;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -88,7 +88,7 @@ public final class JsonUtil {
         }
     }
 
-    public static <T> T readValue(String content, Class<T> valueType) {
+    public static <T> T readValue(final String content, final Class<T> valueType) {
         Preconditions.checkNotNull(content);
         Preconditions.checkNotNull(valueType);
         try {
@@ -190,16 +190,16 @@ public final class JsonUtil {
                     LOGGER.trace("jsonToken: {}", jsonToken);
 
                     if (jsonToken == null
-                            || (startRootToken == null && !(jsonToken == JsonToken.START_OBJECT))
-                            || jsonToken == endRootToken
-                            || remainingFields.isEmpty()) {
+                        || (startRootToken == null && !(jsonToken == JsonToken.START_OBJECT))
+                        || jsonToken == endRootToken
+                        || remainingFields.isEmpty()) {
                         break;
                     }
 
                     if (jsonToken == JsonToken.FIELD_NAME) {
                         final String fieldName = jParser.getCurrentName();
                         if (remainingFields.contains(fieldName)) {
-                            String value = jParser.nextTextValue();
+                            final String value = jParser.nextTextValue();
                             if (value != null) {
                                 results.put(fieldName, value);
                                 remainingFields.remove(fieldName);
@@ -222,7 +222,7 @@ public final class JsonUtil {
                         endRootToken = JsonToken.END_OBJECT;
                     }
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException(LogUtil.message(
                         "Error extracting fields '{}' from json:\n{}", keys, json));
             } finally {

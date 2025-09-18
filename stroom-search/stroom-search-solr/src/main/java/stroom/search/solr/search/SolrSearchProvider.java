@@ -16,21 +16,21 @@
 
 package stroom.search.solr.search;
 
-import stroom.datasource.api.v2.FindFieldCriteria;
-import stroom.datasource.api.v2.IndexField;
-import stroom.datasource.api.v2.QueryField;
 import stroom.dictionary.api.WordListProvider;
 import stroom.docref.DocRef;
-import stroom.expression.api.DateTimeSettings;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.ExpressionUtil;
-import stroom.query.api.v2.Query;
-import stroom.query.api.v2.SearchRequest;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionUtil;
+import stroom.query.api.Query;
+import stroom.query.api.SearchRequest;
+import stroom.query.api.datasource.FindFieldCriteria;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.CoprocessorSettings;
 import stroom.query.common.v2.CoprocessorsFactory;
 import stroom.query.common.v2.CoprocessorsImpl;
 import stroom.query.common.v2.DataStoreSettings;
-import stroom.query.common.v2.FieldInfoResultPageBuilder;
+import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.common.v2.IndexFieldCache;
 import stroom.query.common.v2.IndexFieldProvider;
 import stroom.query.common.v2.ResultStore;
@@ -42,7 +42,7 @@ import stroom.search.solr.shared.SolrIndexDataSourceFieldUtil;
 import stroom.search.solr.shared.SolrIndexDoc;
 import stroom.search.solr.shared.SolrIndexField;
 import stroom.security.api.SecurityContext;
-import stroom.util.NullSafe;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResultPage;
 
 import jakarta.inject.Inject;
@@ -72,6 +72,7 @@ public class SolrSearchProvider implements SearchProvider, IndexFieldProvider {
     private final SolrIndexStore solrIndexStore;
     private final SolrSearchExecutor solrSearchExecutor;
     private final IndexFieldCache indexFieldCache;
+    private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
 
     @Inject
     public SolrSearchProvider(final WordListProvider wordListProvider,
@@ -81,7 +82,8 @@ public class SolrSearchProvider implements SearchProvider, IndexFieldProvider {
                               final SolrIndexStore solrIndexStore,
                               final SecurityContext securityContext,
                               final SolrSearchExecutor solrSearchExecutor,
-                              final IndexFieldCache indexFieldCache) {
+                              final IndexFieldCache indexFieldCache,
+                              final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
         this.wordListProvider = wordListProvider;
         this.searchConfig = searchConfig;
         this.coprocessorsFactory = coprocessorsFactory;
@@ -90,18 +92,19 @@ public class SolrSearchProvider implements SearchProvider, IndexFieldProvider {
         this.securityContext = securityContext;
         this.solrSearchExecutor = solrSearchExecutor;
         this.indexFieldCache = indexFieldCache;
+        this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
     }
 
     @Override
     public ResultPage<QueryField> getFieldInfo(final FindFieldCriteria criteria) {
         return securityContext.useAsReadResult(() -> {
-            final FieldInfoResultPageBuilder builder = FieldInfoResultPageBuilder.builder(criteria);
             final SolrIndexDoc index = solrIndexStore.readDocument(criteria.getDataSourceRef());
-            if (index != null) {
-                final List<QueryField> fields = SolrIndexDataSourceFieldUtil.getDataSourceFields(index);
-                builder.addAll(fields);
+            if (index == null) {
+                return ResultPage.empty();
             }
-            return builder.build();
+
+            final List<QueryField> fields = SolrIndexDataSourceFieldUtil.getDataSourceFields(index);
+            return fieldInfoResultPageFactory.create(criteria, fields);
         });
     }
 
@@ -148,7 +151,7 @@ public class SolrSearchProvider implements SearchProvider, IndexFieldProvider {
     public Optional<QueryField> getTimeField(final DocRef docRef) {
         return securityContext.useAsReadResult(() -> {
             final SolrIndexDoc index = solrIndexStore.readDocument(docRef);
-            QueryField timeField = null;
+            final QueryField timeField = null;
             if (index.getTimeField() != null && !index.getTimeField().isBlank()) {
                 return Optional.of(QueryField.createDate(index.getTimeField()));
             }

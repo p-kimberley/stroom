@@ -19,12 +19,12 @@ package stroom.data.store.impl.fs;
 import stroom.data.shared.StreamTypeNames;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.SimpleMeta;
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import com.google.inject.Inject;
 
@@ -150,13 +150,13 @@ class FsPathHelper {
         if (FileStoreType.bgz.equals(getFileStoreType(streamTypeName))) {
             try {
                 outputStream = new BlockGZIPOutputFile(file);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 ioEx = e;
             }
         } else {
             try {
                 outputStream = new LockingFileOutputStream(file, isStreamTypeLazy(streamTypeName));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 ioEx = e;
             }
         }
@@ -175,20 +175,20 @@ class FsPathHelper {
      * [feedid]_[streamid]
      * </p>
      */
-    String getBaseName(Meta meta) {
+    String getBaseName(final Meta meta) {
         final String feedPath = fileSystemFeedPaths.getOrCreatePath(meta.getFeedName());
         return feedPath +
-                FILE_SEPARATOR_CHAR +
-                FsPrefixUtil.padId(meta.getId());
+               FILE_SEPARATOR_CHAR +
+               FsPrefixUtil.padId(meta.getId());
     }
 
     /**
      * Find all the descendants to this file.
      */
     List<Path> findAllDescendantStreamFileList(final Path parent) {
-        List<Path> rtn = new ArrayList<>();
-        List<Path> kids = findChildStreamFileList(parent);
-        for (Path kid : kids) {
+        final List<Path> rtn = new ArrayList<>();
+        final List<Path> kids = findChildStreamFileList(parent);
+        for (final Path kid : kids) {
             rtn.add(kid);
             rtn.addAll(findAllDescendantStreamFileList(kid));
         }
@@ -212,11 +212,11 @@ class FsPathHelper {
         final String paddedId = FsPrefixUtil.padId(meta.getId());
 
         final String fileName = "" +
-                feedPath +
-                FILE_SEPARATOR_CHAR +
-                paddedId +
-                "." +
-                buildRootExtension(streamTypeName);
+                                feedPath +
+                                FILE_SEPARATOR_CHAR +
+                                paddedId +
+                                "." +
+                                buildRootExtension(streamTypeName);
 
         Path result = volumePath;
         result = result
@@ -233,8 +233,8 @@ class FsPathHelper {
 
     private String buildRootExtension(final String streamTypeName) {
         return streamTypeExtensions.getExtension(streamTypeName) +
-                "." +
-                getFileStoreType(streamTypeName);
+               "." +
+               getFileStoreType(streamTypeName);
     }
 
     Set<Path> findRootStreamFiles(final String streamTypeName, final Path parentPath) {
@@ -242,7 +242,7 @@ class FsPathHelper {
             return Collections.emptySet();
         } else {
             final String rootExtension = buildRootExtension(streamTypeName);
-            try (Stream<Path> stream = Files.list(parentPath)) {
+            try (final Stream<Path> stream = Files.list(parentPath)) {
 
                 // Get all the files
                 final Set<Path> rootFilePaths = stream
@@ -252,7 +252,7 @@ class FsPathHelper {
                 LOGGER.trace(() -> LogUtil.message("found {} rootFilePaths for {}",
                         rootFilePaths.size(), parentPath));
                 return rootFilePaths;
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException(LogUtil.message(
                         "Error getting directory listing for '{}': {}", parentPath, e.getMessage()), e);
             }
@@ -263,7 +263,7 @@ class FsPathHelper {
      * Create a child file for a parent.
      */
     Path getChildPath(final Path parent, final String streamTypeName) {
-        StringBuilder builder = new StringBuilder(FileUtil.getCanonicalPath(parent));
+        final StringBuilder builder = new StringBuilder(FileUtil.getCanonicalPath(parent));
         // Drop ".dat" or ".bgz"
         builder.setLength(builder.lastIndexOf("."));
         builder.append(".");
@@ -276,7 +276,8 @@ class FsPathHelper {
     String decodeChildStreamType(final Path path) {
         Objects.requireNonNull(path);
 
-        final Pattern internalTypesPattern = Pattern.compile("\\.(" +
+        final Pattern internalTypesPattern = Pattern.compile(
+                "\\.(" +
                 streamTypeExtensions.getExtension(InternalStreamTypeNames.BOUNDARY_INDEX) + "|" +
                 streamTypeExtensions.getExtension(InternalStreamTypeNames.SEGMENT_INDEX) + "|" +
                 streamTypeExtensions.getExtension(InternalStreamTypeNames.MANIFEST) + ")");
@@ -300,7 +301,7 @@ class FsPathHelper {
      */
     List<Path> getFiles(final Path parent) throws IOException {
         String glob = parent.getFileName().toString();
-        int index = glob.lastIndexOf(".");
+        final int index = glob.lastIndexOf(".");
         if (index != -1) {
             glob = glob.substring(0, index);
         }
@@ -337,7 +338,7 @@ class FsPathHelper {
 
     boolean isStreamTypeLazy(final String streamTypeName) {
         return InternalStreamTypeNames.SEGMENT_INDEX.equals(streamTypeName)
-                || InternalStreamTypeNames.BOUNDARY_INDEX.equals(streamTypeName);
+               || InternalStreamTypeNames.BOUNDARY_INDEX.equals(streamTypeName);
     }
 
 
@@ -424,7 +425,7 @@ class FsPathHelper {
                         year = Integer.parseInt(path.getName(i + 2).toString());
                         month = Integer.parseInt(path.getName(i + 3).toString());
                         day = Integer.parseInt(path.getName(i + 4).toString());
-                    } catch (NumberFormatException e) {
+                    } catch (final NumberFormatException e) {
                         throw new IllegalArgumentException("Unable to extract date from path " + path, e);
                     }
                     final LocalDate localDate = LocalDate.of(year, month, day);

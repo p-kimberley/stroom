@@ -1,7 +1,7 @@
 package stroom.meta.api;
 
-import stroom.util.NullSafe;
 import stroom.util.date.DateUtil;
+import stroom.util.shared.NullSafe;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -10,11 +10,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 /**
  * Map that does not care about key case.
  */
 public class AttributeMap extends CIStringHashMap {
+
+    // Delimiter within a value
+    static final String VALUE_DELIMITER = ",";
+    static final Pattern VALUE_DELIMITER_PATTERN = Pattern.compile(Pattern.quote(VALUE_DELIMITER));
 
     private final boolean overrideEmbeddedMeta;
 
@@ -24,7 +29,9 @@ public class AttributeMap extends CIStringHashMap {
 
     public AttributeMap(final boolean overrideEmbeddedMeta, final Map<String, String> values) {
         this.overrideEmbeddedMeta = overrideEmbeddedMeta;
-        putAll(values);
+        if (values != null) {
+            putAll(values);
+        }
     }
 
     public AttributeMap() {
@@ -33,7 +40,9 @@ public class AttributeMap extends CIStringHashMap {
 
     public AttributeMap(final Map<String, String> values) {
         this.overrideEmbeddedMeta = false;
-        putAll(values);
+        if (values != null) {
+            putAll(values);
+        }
     }
 
     private AttributeMap(final Builder builder) {
@@ -91,7 +100,7 @@ public class AttributeMap extends CIStringHashMap {
     }
 
     /**
-     * Appends the time to the end of the existing value (delimited by {@link AttributeMapUtil#VALUE_DELIMITER})
+     * Appends the time to the end of the existing value (delimited by {@link AttributeMap#VALUE_DELIMITER})
      * or sets the value if not present. instant is converted to a normal date time string
      *
      * @return The previous value for the key.
@@ -103,8 +112,8 @@ public class AttributeMap extends CIStringHashMap {
             if (NullSafe.isEmptyString(val)) {
                 val = dateStr;
             } else {
-                if (!val.endsWith(AttributeMapUtil.VALUE_DELIMITER)) {
-                    val += AttributeMapUtil.VALUE_DELIMITER;
+                if (!val.endsWith(VALUE_DELIMITER)) {
+                    val += VALUE_DELIMITER;
                 }
                 val += dateStr;
             }
@@ -115,7 +124,7 @@ public class AttributeMap extends CIStringHashMap {
     }
 
     /**
-     * Appends the time to the end of the existing value (delimited by {@link AttributeMapUtil#VALUE_DELIMITER})
+     * Appends the time to the end of the existing value (delimited by {@link AttributeMap#VALUE_DELIMITER})
      * or sets the value if not present, but ONLY if item is not already present at the end of the current value.
      * instant is converted to a normal date time string.
      *
@@ -131,7 +140,7 @@ public class AttributeMap extends CIStringHashMap {
     }
 
     /**
-     * Appends the time to the end of the existing value (delimited by {@link AttributeMapUtil#VALUE_DELIMITER})
+     * Appends the time to the end of the existing value (delimited by {@link AttributeMap#VALUE_DELIMITER})
      * or sets the value if not present. instant is converted to a normal date time string
      *
      * @return The previous value for the key.
@@ -146,8 +155,8 @@ public class AttributeMap extends CIStringHashMap {
             if (NullSafe.isEmptyString(val)) {
                 val = normalisedItem;
             } else {
-                if (!val.endsWith(AttributeMapUtil.VALUE_DELIMITER)) {
-                    val += AttributeMapUtil.VALUE_DELIMITER;
+                if (!val.endsWith(VALUE_DELIMITER)) {
+                    val += VALUE_DELIMITER;
                 }
                 val += normalisedItem;
             }
@@ -158,7 +167,7 @@ public class AttributeMap extends CIStringHashMap {
     }
 
     /**
-     * Appends the time to the end of the existing value (delimited by {@link AttributeMapUtil#VALUE_DELIMITER})
+     * Appends the time to the end of the existing value (delimited by {@link AttributeMap#VALUE_DELIMITER})
      * or sets the value if not present, but ONLY if item is not already present at the end of the current value.
      * instant is converted to a normal date time string
      *
@@ -176,9 +185,9 @@ public class AttributeMap extends CIStringHashMap {
                 return super.put(key, val);
             } else {
                 boolean doAppend = false;
-                if (val.contains(AttributeMapUtil.VALUE_DELIMITER)) {
+                if (val.contains(AttributeMap.VALUE_DELIMITER)) {
                     // Multiple items, check last one
-                    if (!val.endsWith(AttributeMapUtil.VALUE_DELIMITER + item)) {
+                    if (!val.endsWith(AttributeMap.VALUE_DELIMITER + item)) {
                         doAppend = true;
                     }
                 } else {
@@ -188,8 +197,8 @@ public class AttributeMap extends CIStringHashMap {
                     }
                 }
                 if (doAppend) {
-                    if (!val.endsWith(AttributeMapUtil.VALUE_DELIMITER)) {
-                        val += AttributeMapUtil.VALUE_DELIMITER;
+                    if (!val.endsWith(AttributeMap.VALUE_DELIMITER)) {
+                        val += AttributeMap.VALUE_DELIMITER;
                     }
                     val += normalisedItem;
                     return super.put(key, val);
@@ -203,7 +212,7 @@ public class AttributeMap extends CIStringHashMap {
     }
 
     /**
-     * Appends the item to the end of the existing value (delimited by {@link AttributeMapUtil#VALUE_DELIMITER})
+     * Appends the item to the end of the existing value (delimited by {@link AttributeMap#VALUE_DELIMITER})
      * or sets the value if not present, but only if currentValuePredicate returns true. If currentValuePredicate
      * returns false, no change is made to the map
      *
@@ -226,8 +235,8 @@ public class AttributeMap extends CIStringHashMap {
                 if (NullSafe.isEmptyString(val)) {
                     val = normalisedItem;
                 } else {
-                    if (!val.endsWith(AttributeMapUtil.VALUE_DELIMITER)) {
-                        val += AttributeMapUtil.VALUE_DELIMITER;
+                    if (!val.endsWith(VALUE_DELIMITER)) {
+                        val += VALUE_DELIMITER;
                     }
                     val += normalisedItem;
                 }
@@ -243,14 +252,14 @@ public class AttributeMap extends CIStringHashMap {
     /**
      * Put an entry where the value is itself a collection of values, e.g. a list of files
      */
-    public String putCollection(final String key, Collection<String> values) {
+    public String putCollection(final String key, final Collection<String> values) {
         final String value;
         if (values == null) {
             value = null;
         } else if (values.isEmpty()) {
             value = "";
         } else {
-            value = String.join(AttributeMapUtil.VALUE_DELIMITER, values);
+            value = String.join(VALUE_DELIMITER, values);
         }
         return put(key, value);
     }
@@ -265,7 +274,7 @@ public class AttributeMap extends CIStringHashMap {
         if (NullSafe.isEmptyString(val)) {
             return Collections.emptyList();
         } else {
-            return AttributeMapUtil.VALUE_DELIMITER_PATTERN.splitAsStream(val)
+            return VALUE_DELIMITER_PATTERN.splitAsStream(val)
                     .toList();
         }
     }
@@ -273,7 +282,7 @@ public class AttributeMap extends CIStringHashMap {
     public boolean isDelimited(final String key) {
         final String val = get(key);
         return NullSafe.test(val, val2 ->
-                val2.contains(AttributeMapUtil.VALUE_DELIMITER));
+                val2.contains(VALUE_DELIMITER));
     }
 
     public static Builder copy(final AttributeMap copy) {
@@ -331,7 +340,7 @@ public class AttributeMap extends CIStringHashMap {
             return this;
         }
 
-        public Builder putCollection(final String key, Collection<String> values) {
+        public Builder putCollection(final String key, final Collection<String> values) {
             Objects.requireNonNull(key);
             attributes.putCollection(key, values);
             return this;

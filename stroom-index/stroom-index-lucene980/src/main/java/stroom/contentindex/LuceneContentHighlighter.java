@@ -16,7 +16,7 @@
 
 package stroom.contentindex;
 
-import stroom.docref.StringMatchLocation;
+import stroom.explorer.shared.StringMatchLocation;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 
@@ -110,7 +110,7 @@ public class LuceneContentHighlighter implements ContentHighlighter {
                     docId,
                     field,
                     18);
-        } catch (ListFullException e) {
+        } catch (final ListFullException e) {
             // Ignore.
         } catch (final Exception e) {
             LOGGER.error(e::getMessage, e);

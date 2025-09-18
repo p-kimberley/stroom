@@ -17,9 +17,9 @@
 package stroom.dashboard.shared;
 
 import stroom.docref.DocRef;
-import stroom.query.api.v2.OffsetRange;
-import stroom.query.api.v2.ResultRequest.Fetch;
-import stroom.query.api.v2.TableSettings;
+import stroom.query.api.OffsetRange;
+import stroom.query.api.ResultRequest.Fetch;
+import stroom.query.api.TableSettings;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -37,7 +37,7 @@ import java.util.Objects;
         "tableSettings",
         "requestedRange"})
 @JsonInclude(Include.NON_NULL)
-public class VisResultRequest extends ComponentResultRequest {
+public final class VisResultRequest extends ComponentResultRequest {
 
     @JsonProperty
     private final DocRef visualisation;
@@ -53,7 +53,7 @@ public class VisResultRequest extends ComponentResultRequest {
                             @JsonProperty("fetch") final Fetch fetch,
                             @JsonProperty("visualisation") final DocRef visualisation,
                             @JsonProperty("json") final String json,
-                            @JsonProperty("tableSettings") TableSettings tableSettings,
+                            @JsonProperty("tableSettings") final TableSettings tableSettings,
                             @JsonProperty("requestedRange") final OffsetRange requestedRange) {
         super(componentId, fetch);
         this.visualisation = visualisation;

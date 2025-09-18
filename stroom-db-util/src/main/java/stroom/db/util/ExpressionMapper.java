@@ -1,8 +1,9 @@
 package stroom.db.util;
 
-import stroom.datasource.api.v2.QueryField;
-import stroom.query.api.v2.ExpressionItem;
-import stroom.util.NullSafe;
+import stroom.query.api.ExpressionItem;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.datasource.QueryField;
+import stroom.util.shared.NullSafe;
 
 import org.jooq.Condition;
 import org.jooq.Field;
@@ -11,7 +12,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class ExpressionMapper implements Function<ExpressionItem, Condition> {
 
@@ -24,13 +24,18 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
         this.termHandlerFactory = termHandlerFactory;
     }
 
+    public void addHandler(final QueryField dataSourceField,
+                           final Function<ExpressionTerm, Condition> handler) {
+        expressionMapper.addHandler(dataSourceField, handler);
+    }
+
     /**
-     * Uses UUID for any {@link stroom.datasource.api.v2.DocRefField}s
+     * Uses UUID for any {@link stroom.query.api.datasource.DocRefField}s
      */
     public <T> ExpressionMapper map(final QueryField dataSourceField,
                                     final Field<T> field,
                                     final Converter<T> converter) {
-        expressionMapper.addHandler(dataSourceField, termHandlerFactory.create(
+        addHandler(dataSourceField, termHandlerFactory.create(
                 dataSourceField,
                 field,
                 MultiConverter.wrapConverter(converter)));
@@ -38,13 +43,13 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
     }
 
     /**
-     * Uses UUID or name for any {@link stroom.datasource.api.v2.DocRefField}s depending on useName
+     * Uses UUID or name for any {@link stroom.query.api.datasource.DocRefField}s depending on useName
      */
     public <T> ExpressionMapper map(final QueryField dataSourceField,
                                     final Field<T> field,
                                     final Converter<T> converter,
                                     final boolean useName) {
-        expressionMapper.addHandler(dataSourceField, termHandlerFactory.create(
+        addHandler(dataSourceField, termHandlerFactory.create(
                 dataSourceField,
                 field,
                 MultiConverter.wrapConverter(converter),
@@ -53,12 +58,12 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
     }
 
     /**
-     * Uses UUID for any {@link stroom.datasource.api.v2.DocRefField}s
+     * Uses UUID for any {@link stroom.query.api.datasource.DocRefField}s
      */
     public <T> ExpressionMapper multiMap(final QueryField dataSourceField,
                                          final Field<T> field,
                                          final MultiConverter<T> converter) {
-        expressionMapper.addHandler(dataSourceField, termHandlerFactory.create(
+        addHandler(dataSourceField, termHandlerFactory.create(
                 dataSourceField,
                 field,
                 converter));
@@ -66,13 +71,13 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
     }
 
     /**
-     * Uses UUID or name for any {@link stroom.datasource.api.v2.DocRefField}s depending on useName
+     * Uses UUID or name for any {@link stroom.query.api.datasource.DocRefField}s depending on useName
      */
     public <T> ExpressionMapper multiMap(final QueryField dataSourceField,
                                          final Field<T> field,
                                          final MultiConverter<T> converter,
                                          final boolean useName) {
-        expressionMapper.addHandler(dataSourceField, termHandlerFactory.create(
+        addHandler(dataSourceField, termHandlerFactory.create(
                 dataSourceField,
                 field,
                 converter,
@@ -124,7 +129,7 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
                     return values.stream()
                             .filter(val -> !NullSafe.isBlankString(val))
                             .flatMap(val -> converter.apply(val).stream())
-                            .collect(Collectors.toList());
+                            .toList();
                 }
             };
         }
@@ -141,7 +146,7 @@ public class ExpressionMapper implements Function<ExpressionItem, Condition> {
                             .filter(val -> !NullSafe.isBlankString(val))
                             .map(converter::apply)
                             .filter(Objects::nonNull) // Null items would NPE on Collectors.toList
-                            .collect(Collectors.toList());
+                            .toList();
                 }
             };
         }

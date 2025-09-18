@@ -23,7 +23,6 @@ import stroom.util.AuditUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class MockIndexVolumeGroupService implements IndexVolumeGroupService {
 
@@ -34,7 +33,7 @@ public class MockIndexVolumeGroupService implements IndexVolumeGroupService {
     public List<String> getNames() {
         return groups.stream()
                 .map(IndexVolumeGroup::getName)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -66,7 +65,7 @@ public class MockIndexVolumeGroupService implements IndexVolumeGroupService {
     }
 
     @Override
-    public IndexVolumeGroup get(String name) {
+    public IndexVolumeGroup get(final String name) {
         return null;
     }
 

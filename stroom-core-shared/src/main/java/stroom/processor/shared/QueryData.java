@@ -17,23 +17,19 @@
 package stroom.processor.shared;
 
 import stroom.docref.DocRef;
-import stroom.query.api.v2.ExpressionOperator;
-import stroom.query.api.v2.Param;
-import stroom.query.api.v2.TimeRange;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.Param;
+import stroom.query.api.TimeRange;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.xml.bind.annotation.XmlElement;
-import jakarta.xml.bind.annotation.XmlRootElement;
-import jakarta.xml.bind.annotation.XmlType;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 
-@XmlType(name = "query", propOrder = {"dataSource", "expression", "params", "timeRange", "limits"})
-@XmlRootElement(name = "query")
 @JsonInclude(Include.NON_NULL)
 public class QueryData implements Serializable {
 
@@ -64,7 +60,6 @@ public class QueryData implements Serializable {
         this.limits = limits;
     }
 
-    @XmlElement
     public DocRef getDataSource() {
         return dataSource;
     }
@@ -73,7 +68,6 @@ public class QueryData implements Serializable {
         this.dataSource = dataSource;
     }
 
-    @XmlElement
     public ExpressionOperator getExpression() {
         return expression;
     }
@@ -82,7 +76,6 @@ public class QueryData implements Serializable {
         this.expression = expression;
     }
 
-    @XmlElement
     public List<Param> getParams() {
         return params;
     }
@@ -99,7 +92,6 @@ public class QueryData implements Serializable {
         this.timeRange = timeRange;
     }
 
-    @XmlElement
     public Limits getLimits() {
         return limits;
     }
@@ -115,6 +107,29 @@ public class QueryData implements Serializable {
     public Builder copy() {
         return new Builder(this);
     }
+
+    @Override
+    public boolean equals(final Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (object == null || getClass() != object.getClass()) {
+            return false;
+        }
+        final QueryData queryData = (QueryData) object;
+        return Objects.equals(dataSource, queryData.dataSource) && Objects.equals(expression,
+                queryData.expression) && Objects.equals(params, queryData.params) && Objects.equals(
+                timeRange,
+                queryData.timeRange) && Objects.equals(limits, queryData.limits);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(dataSource, expression, params, timeRange, limits);
+    }
+
+    // --------------------------------------------------------------------------------
+
 
     public static final class Builder {
 

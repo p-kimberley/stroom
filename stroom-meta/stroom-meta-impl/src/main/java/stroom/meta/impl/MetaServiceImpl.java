@@ -44,6 +44,7 @@ import stroom.processor.shared.ProcessorTask;
 import stroom.query.api.DateTimeSettings;
 import stroom.query.api.ExpressionOperator;
 import stroom.query.api.ExpressionOperator.Builder;
+import stroom.query.api.ExpressionOperator.Op;
 import stroom.query.api.ExpressionTerm;
 import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.api.datasource.FindFieldCriteria;

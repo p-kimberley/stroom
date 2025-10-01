@@ -36,6 +36,9 @@ public class CIKeys {
     // Have to be concurrent maps as various classes in potentially multiple threads will call
     // commonKey(). Not much perf difference as compared to a HashMap in tests and ConcurrentHashMap
     // is non-blocking for reads which is what these will mostly see
+    // TODO consider borrowing the CopyOnWriteMap from the kafka-clients lib to improve the read perf
+    //  as we have hardly any writes and MANY reads. Needs to be a copy as this is shared with GWT.
+    //  CopyOnWriteMap would need a method for doing bulk puts to save the copy on each one.
     private static final Map<String, CIKey> KEY_TO_COMMON_CIKEY_MAP = new ConcurrentHashMap<>();
     private static final Map<String, CIKey> LOWER_KEY_TO_COMMON_CIKEY_MAP = new ConcurrentHashMap<>();
 
@@ -44,12 +47,16 @@ public class CIKeys {
     // Upper camel case keys
     public static final CIKey ACCOUNT_ID = internCommonKey("AccountId");
     public static final CIKey ACCOUNT_NAME = internCommonKey("AccountName");
+    public static final CIKey CLASSIFICATION = internCommonKey("Classification");
     public static final CIKey CONTEXT_FORMAT = internCommonKey("ContextFormat");
+    public static final CIKey CONTEXT_ENCODING = internCommonKey("ContextEncoding");
     public static final CIKey COMPONENT = internCommonKey("Component");
     public static final CIKey COMPRESSION = internCommonKey("Compression");
     public static final CIKey DURATION = internCommonKey("Duration");
     public static final CIKey EFFECTIVE_TIME = internCommonKey("EffectiveTime");
+    public static final CIKey ENCODING = internCommonKey("Encoding");
     public static final CIKey END = internCommonKey("End");
+    public static final CIKey ENVIRONMENT = internCommonKey("Environment");
     public static final CIKey EVENT_ID = internCommonKey("EventId");
     public static final CIKey EVENT_TIME = internCommonKey("EventTime");
     public static final CIKey FEED = internCommonKey("Feed");
@@ -83,6 +90,7 @@ public class CIKeys {
     public static final CIKey STREAM_ID = internCommonKey("StreamId");
     public static final CIKey STREAM_SIZE = internCommonKey("StreamSize");
     public static final CIKey SUBJECT = internCommonKey("Subject");
+    public static final CIKey SYSTEM = internCommonKey("System");
     public static final CIKey TERMINAL = internCommonKey("Terminal");
     public static final CIKey TIME = internCommonKey("Time");
     public static final CIKey TITLE = internCommonKey("Title");

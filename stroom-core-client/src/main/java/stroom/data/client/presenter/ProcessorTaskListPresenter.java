@@ -253,6 +253,7 @@ public class ProcessorTaskListPresenter
             }
 
             tb
+                    .row("Reprocessed Stream Id", String.valueOf(meta.getReprocessedStreamId()))
                     .row("Created", toDateString(meta.getCreateMs()))
                     .row("Effective", toDateString(meta.getEffectiveMs()))
                     .row("Stream Type", meta.getTypeName());

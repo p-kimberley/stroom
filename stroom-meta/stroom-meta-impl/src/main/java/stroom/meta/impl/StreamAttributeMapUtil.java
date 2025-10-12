@@ -36,6 +36,9 @@ class StreamAttributeMapUtil {
             if (meta.getParentMetaId() != null) {
                 map.put(MetaFields.PARENT_ID.getFldName(), meta.getParentMetaId());
             }
+            if (meta.getReprocessedStreamId() != null) {
+                map.put(MetaFields.META_REPROCESSED_STREAM_ID.getFldName(), meta.getReprocessedStreamId());
+            }
             if (meta.getTypeName() != null) {
                 map.put(MetaFields.TYPE.getFldName(), meta.getTypeName());
             }

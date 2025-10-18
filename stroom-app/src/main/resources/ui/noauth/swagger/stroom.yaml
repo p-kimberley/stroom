@@ -11013,11 +11013,14 @@ components:
           type: string
         caCertificate:
           type: string
+        connectionTimeoutMillis:
+          type: integer
+          format: int32
         connectionUrls:
           type: array
           items:
             type: string
-        socketTimeoutMillis:
+        responseTimeoutMillis:
           type: integer
           format: int32
         useAuthentication:
@@ -11063,6 +11066,12 @@ components:
           type: string
         uuid:
           type: string
+        vectorEmbeddingsAuthToken:
+          type: string
+        vectorEmbeddingsBaseUrl:
+          type: string
+        vectorEmbeddingsModelId:
+          type: string
         version:
           type: string
     ElasticIndexField:
@@ -11087,6 +11096,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         fldName:
           type: string
         fldType:
@@ -11104,6 +11114,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         indexed:
           type: boolean
         nativeType:
@@ -12929,6 +12940,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         indexed:
           type: boolean
         stored:
@@ -13471,6 +13483,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         indexed:
           type: boolean
         stored:
@@ -14866,6 +14879,7 @@ components:
           - "'=', '!='"
           - "'=', '!=', 'between', '>', '>=', '<', '<='"
           - "'=', '!=', 'in', 'in dictionary'"
+          - "'=', '!=', 'in', 'in dictionary'"
           - "'is', 'in folder'"
           - "'=', '!=', 'in', 'in dictionary'"
           - "'is', 'in folder', '=', '!=', 'in', 'in dictionary'"
@@ -14925,6 +14939,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         name:
           type: string
         queryable:
@@ -16821,6 +16836,7 @@ components:
           - IPV4_ADDRESS
           - DOC_REF
           - USER_REF
+          - DENSE_VECTOR
         indexed:
           type: boolean
         multiValued:

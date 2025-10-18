@@ -9,15 +9,16 @@ stroomTestData = "0.2.3"
 aws = "2.31.68"
 commons-io = "2.19.0"
 dropwizard = "4.0.14" # used to set the dropwizard-bom version, that controls lots of dependency versions
-elasticsearch = "9.1.4"
-flyway = "11.9.1"
+elasticsearch = "9.1.5"
+flyway = "11.14.0"
 guice = "7.0.0"
 gwt = "2.12.2"
 jackson-swagger = "2.11.1" # Specific version of jackson for use with the swagger plugin
 jmh = "1.37"
-jooq = "3.20.5"
+jooq = "3.20.8"
 junit-jupiter = "5.13.1"
 kafka = "3.9.0"
+openai = "4.3.0"
 poi = "5.4.1"
 scylladb = "4.19.0.1"
 simple-java-mail = "8.8.0"
@@ -155,7 +156,8 @@ logback-core = { module = "ch.qos.logback:logback-core" } # version controlled b
 mbknor-jackson-jsonSchema = { module = "com.kjetland:mbknor-jackson-jsonschema_2.12", version = "1.0.39" }
 mockito-core = { module = "org.mockito:mockito-core" } # version controlled by dropwizard-dependencies
 mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter" } # version controlled by dropwizard-dependencies
-mysql-connector-java = { module = "com.mysql:mysql-connector-j", version = "9.2.0" }
+mysql-connector-java = { module = "com.mysql:mysql-connector-j", version = "9.4.0" }
+openai = { module = "com.openai:openai-java", version.ref = "openai" }
 poi = { module = "org.apache.poi:poi", version.ref = "poi" }
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 quartz = { module = "org.quartz-scheduler:quartz", version = "2.5.0-rc1" }

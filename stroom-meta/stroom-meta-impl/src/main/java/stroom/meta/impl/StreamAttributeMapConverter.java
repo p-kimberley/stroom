@@ -61,6 +61,8 @@ class StreamAttributeMapConverter {
             map.put(MetaFields.STATUS.getFldName(), NullSafe.get(meta.getStatus(), Status::getDisplayValue));
             NullSafe.consume(meta.getParentMetaId(), parentMetaId ->
                     map.put(MetaFields.PARENT_ID.getFldName(), parentMetaId));
+            NullSafe.consume(meta.getReprocessedStreamId(), reprocessedStreamId ->
+                    map.put(MetaFields.META_REPROCESSED_STREAM_ID.getFldName(), reprocessedStreamId));
             NullSafe.consume(meta.getTypeName(), typeName ->
                     map.put(MetaFields.TYPE.getFldName(), typeName));
 

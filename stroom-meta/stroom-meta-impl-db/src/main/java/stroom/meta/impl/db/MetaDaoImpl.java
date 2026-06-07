@@ -89,13 +89,13 @@ import org.jooq.Cursor;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.InsertOnDuplicateStep;
-import org.jooq.InsertValuesStep10;
+import org.jooq.InsertValuesStep11;
 import org.jooq.Name;
 import org.jooq.OrderField;
 import org.jooq.Record;
 import org.jooq.Record1;
 import org.jooq.Record11;
-import org.jooq.Record12;
+import org.jooq.Record13;
 import org.jooq.Record2;
 import org.jooq.Record4;
 import org.jooq.Result;
@@ -283,7 +283,7 @@ public class MetaDaoImpl implements MetaDao {
         expressionMapper.multiMap(MetaFields.PARENT_FEED, parent.FEED_ID, this::getFeedIds);
 
         // Reprocessed stream ID.
-        expressionMapper.map(MetaFields.META_REPROCESSED_STREAM_ID, meta.REPROCESSED_STREAM_ID, Long::valueOf);
+        expressionMapper.map(MetaFields.META_REPROCESSED_STREAM_ID, META_M.REPROCESSED_STREAM_ID, Long::valueOf);
 
         valueMapper = new ValueMapper();
         valueMapper.map(MetaFields.ID, META_M.ID, ValLong::create);
@@ -455,7 +455,7 @@ public class MetaDaoImpl implements MetaDao {
                 .batch(
                         BatchingIterator.batchedStreamOf(metaPropertiesList, MAX_VALUES_PER_INSERT)
                                 .map(metaPropertiesBatch -> {
-                                    final InsertValuesStep10<
+                                    final InsertValuesStep11<
                                             MetaRecord,
                                             Long,
                                             Long,
@@ -466,6 +466,7 @@ public class MetaDaoImpl implements MetaDao {
                                             Integer,
                                             Integer,
                                             Integer,
+                                            Long,
                                             Long> insertStep = context
                                             .insertInto(META,
                                                     META.CREATE_TIME,
@@ -1050,7 +1051,7 @@ public class MetaDaoImpl implements MetaDao {
                             // add the join to meta_processor
                             final Table<?> tableClause = rulesUsePipelineField
                                     ? META_M.leftOuterJoin(META_PROCESSOR_P)
-                                      .on(META_M.PROCESSOR_ID.eq(META_PROCESSOR_P.ID))
+                                    .on(META_M.PROCESSOR_ID.eq(META_PROCESSOR_P.ID))
                                     : META_M;
 
                             // We might want to do this delete using a temp table like we do for
@@ -1128,7 +1129,7 @@ public class MetaDaoImpl implements MetaDao {
                                     // add the join to meta_processor
                                     final Table<?> fromClause = includesMetaProcessorTbl
                                             ? META_M.straightJoin(META_PROCESSOR_P)
-                                              .on(META_M.PROCESSOR_ID.eq(META_PROCESSOR_P.ID))
+                                            .on(META_M.PROCESSOR_ID.eq(META_PROCESSOR_P.ID))
                                             : META_M;
 
                                     final Table<?> orderedFullSet = context
@@ -1512,7 +1513,7 @@ public class MetaDaoImpl implements MetaDao {
         return JooqUtil.contextResult(
                         metaDbConnProvider,
                         context -> {
-                            final SelectWithTiesAfterOffsetStep<Record12<
+                            final SelectWithTiesAfterOffsetStep<Record13<
                                     Long,
                                     String,
                                     String,
@@ -1524,6 +1525,7 @@ public class MetaDaoImpl implements MetaDao {
                                     Long,
                                     Long,
                                     Integer,
+                                    Long,
                                     Long>> select = metaExpressionMapper.addJoins(
                                             context
                                                     .selectDistinct(

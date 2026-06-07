@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.hyperlink.client;
 
 import stroom.svg.shared.SvgImage;
@@ -64,7 +80,7 @@ public class Hyperlink {
                     }
                     final String target = nextToken(value, index, '<', '>');
                     hyperlink = new Builder()
-                            .text(text)
+                            .text(decode(text))
                             .href(decode(href))
                             .type(type)
                             .target(target)
@@ -109,20 +125,9 @@ public class Hyperlink {
         return null;
     }
 
-//    private static void throwException(final String value,
-//                                       final int pos,
-//                                       final char startChar,
-//                                       final char endChar) throws MalformedLinkException {
-//        throw new MalformedLinkException("Invalid required token in value '" + value
-//                                         + "', pos: " + pos
-//                                         + ", startChar: '" + startChar
-//                                         + "' endChar: '" + endChar + "'");
-//    }
-
     public String getText() {
         // Why are we decoding the plain text part?
         return text;
-//        return text;
     }
 
     public String getHref() {
@@ -197,7 +202,7 @@ public class Hyperlink {
         final StringBuilder sb = new StringBuilder();
         if (text != null) {
             sb.append("[");
-            sb.append(text);
+            sb.append(encode(text));
             sb.append("]");
         }
         if (href != null) {

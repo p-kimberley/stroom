@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2026 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.planb.impl.data;
 
 import stroom.bytebuffer.impl6.ByteBufferFactory;
@@ -8,9 +24,12 @@ import stroom.node.api.NodeInfo;
 import stroom.planb.impl.PlanBConfig;
 import stroom.planb.impl.PlanBDocCache;
 import stroom.planb.impl.PlanBDocStore;
+import stroom.planb.impl.data.SnapshotShard.DbFactory;
 import stroom.planb.impl.db.Db;
+import stroom.planb.impl.db.PlanBDb;
 import stroom.planb.impl.db.StatePaths;
 import stroom.planb.shared.PlanBDoc;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.util.io.FileUtil;
@@ -32,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 
 @Singleton
@@ -39,8 +59,10 @@ public class ShardManager {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ShardManager.class);
 
-    public static final String CLEANUP_TASK_NAME = "Plan B Cleanup";
     public static final String SNAPSHOT_CREATOR_TASK_NAME = "Plan B Snapshot Creator";
+    public static final String SNAPSHOT_CLEANUP_TASK_NAME = "Plan B Snapshot Cleanup";
+
+    private static final DbFactory DB_FACTORY = PlanBDb::open;
 
     private final ByteBuffers byteBuffers;
     private final ByteBufferFactory byteBufferFactory;
@@ -52,6 +74,7 @@ public class ShardManager {
     private final StatePaths statePaths;
     private final FileTransferClient fileTransferClient;
     private final TaskContextFactory taskContextFactory;
+    private final Executor executor;
 
     @Inject
     public ShardManager(final ByteBuffers byteBuffers,
@@ -62,7 +85,8 @@ public class ShardManager {
                         final Provider<PlanBConfig> configProvider,
                         final StatePaths statePaths,
                         final FileTransferClient fileTransferClient,
-                        final TaskContextFactory taskContextFactory) {
+                        final TaskContextFactory taskContextFactory,
+                        final ExecutorProvider executorProvider) {
         this.byteBuffers = byteBuffers;
         this.byteBufferFactory = byteBufferFactory;
         this.planBDocCache = planBDocCache;
@@ -72,6 +96,7 @@ public class ShardManager {
         this.statePaths = statePaths;
         this.fileTransferClient = fileTransferClient;
         this.taskContextFactory = taskContextFactory;
+        this.executor = executorProvider.get();
 
         // Delete any existing snapshots that might have been left behind from the last use of Stroom.
         FileUtil.deleteDir(statePaths.getSnapshotDir());
@@ -130,7 +155,7 @@ public class ShardManager {
                             }
                         });
 
-                futures.add(CompletableFuture.runAsync(runnable));
+                futures.add(CompletableFuture.runAsync(runnable, executor));
             });
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         } catch (final RuntimeException e) {
@@ -186,12 +211,47 @@ public class ShardManager {
     public void createSnapshots() {
         try {
             final List<CompletableFuture<Void>> futures = new ArrayList<>();
-            shardMap.values().forEach(shard -> futures.add(CompletableFuture.runAsync(shard::createSnapshot)));
+            shardMap.values().forEach(shard ->
+                    futures.add(CompletableFuture.runAsync(shard::createSnapshot, executor)));
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         } catch (final RuntimeException e) {
             LOGGER.error(e::getMessage, e);
             throw e;
         }
+    }
+
+    public void cleanup() {
+        shardMap.forEach((uuid, shard) -> {
+            try {
+                boolean docDeleted;
+
+                // Check if the doc has been deleted.
+                try {
+                    final PlanBDoc loaded = planBDocStore.readDocument(
+                            DocRef.builder().type(PlanBDoc.TYPE).uuid(uuid).build());
+                    docDeleted = loaded == null;
+                } catch (final DocumentNotFoundException e) {
+                    LOGGER.debug(e::getMessage, e);
+                    docDeleted = true;
+                }
+
+                if (docDeleted) {
+                    // Doc deleted — could be StoreShard whose delete() may fail if readers
+                    // are active. Keep in map for retry on next cycle if delete fails.
+                    if (shard.delete()) {
+                        shardMap.remove(uuid);
+                    }
+                } else if (shard.isIdle()) {
+                    // Idle eviction — only SnapshotShard reaches here (StoreShard.isIdle()
+                    // always returns false). Remove from map first to prevent a zombie shard
+                    // window where a concurrent reader gets a deleted shard from computeIfAbsent.
+                    shardMap.remove(uuid);
+                    shard.delete();
+                }
+            } catch (final Exception e) {
+                LOGGER.error(e::getMessage, e);
+            }
+        });
     }
 
     public void fetchSnapshot(final SnapshotRequest request, final OutputStream outputStream) {
@@ -219,17 +279,14 @@ public class ShardManager {
         try {
             final Shard shard = getShardForMapName(mapName);
             return shard.get(function);
+        } catch (final SnapshotShard.ShardClosedException e) {
+            // The shard was evicted by cleanup between our lookup and use.
+            // Retry once — computeIfAbsent will create a fresh shard.
+            LOGGER.debug(() -> "Shard was evicted, retrying with fresh shard for: " + mapName);
+            final Shard shard = getShardForMapName(mapName);
+            return shard.get(function);
         } catch (final RuntimeException e) {
             LOGGER.error(() -> LogUtil.message("Error getting shard for map: {} {}", mapName, e.getMessage()), e);
-            throw e;
-        }
-    }
-
-    public void cleanup() {
-        try {
-            shardMap.values().forEach(Shard::cleanup);
-        } catch (final RuntimeException e) {
-            LOGGER.error(e::getMessage, e);
             throw e;
         }
     }
@@ -262,7 +319,9 @@ public class ShardManager {
                     configProvider,
                     statePaths,
                     fileTransferClient,
-                    doc);
+                    doc,
+                    DB_FACTORY,
+                    executor);
         }
         return new StoreShard(
                 byteBuffers,

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.annotation.client;
 
 import stroom.annotation.client.LinkedEventPresenter.LinkedEventView;
@@ -100,6 +116,7 @@ public class LinkedEventPresenter
         if (success != null && success) {
             AnnotationChangeEvent.fire(this, annotationRef);
             parent.updateHistory();
+            refreshData();
         }
     }
 
@@ -137,13 +154,17 @@ public class LinkedEventPresenter
     protected void onRead(final DocRef docRef, final Annotation annotation, final boolean readOnly) {
         this.annotationRef = docRef;
         dirty = false;
-        annotationResourceClient.getLinkedEvents(docRef, this::setData, this);
+        refreshData();
         enableButtons();
     }
 
     @Override
     protected Annotation onWrite(final Annotation document) {
         return null;
+    }
+
+    private void refreshData() {
+        annotationResourceClient.getLinkedEvents(annotationRef, this::setData, this);
     }
 
     private void setData(final List<EventId> data) {

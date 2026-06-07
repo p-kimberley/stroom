@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ public class CIKey implements Comparable<CIKey> {
     }
 
     /**
-     * Create a {@link CIKey} for a key that is known NOT to be in {@link CIKey}s map
+     * Create a {@link CIKey} for a key that is believed to NOT be in {@link CIKey}s map
      * of common keys and is a key that will not be added to the map of common keys in future.
      * This is a minor optimisation that saves a map lookup if the key is known
      * to probably not be in the map.

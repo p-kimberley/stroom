@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.proxy.app.handler;
 
 import stroom.proxy.app.handler.DirUtil.Mode;
@@ -25,7 +41,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static stroom.proxy.app.handler.DirUtil.getMaxDirId;
 
 class TestDirUtil {
 
@@ -54,7 +69,7 @@ class TestDirUtil {
         DirUtil.ensureDirExists(rootDir.resolve("badDir"));
         FileUtil.touch(rootDir.resolve("badFile"));
 
-        assertThat(getMaxDirId(rootDir))
+        assertThat(DirUtil.getMaxDirId(rootDir))
                 .isEqualTo(999);
     }
 
@@ -101,7 +116,7 @@ class TestDirUtil {
                 .isEqualTo(0);
 
         // Incomplete path, so 1_001_001_999L is highest possible value
-        assertThat(getMaxDirId(rootDir))
+        assertThat(DirUtil.getMaxDirId(rootDir))
                 .isEqualTo(1_001_001_999L);
     }
 
@@ -112,7 +127,7 @@ class TestDirUtil {
                 .doesNotExist();
 
         Assertions.assertThatThrownBy(() ->
-                        getMaxDirId(path))
+                        DirUtil.getMaxDirId(path))
                 .isInstanceOf(UncheckedIOException.class);
     }
 
@@ -160,7 +175,7 @@ class TestDirUtil {
                         final Path path = DirUtil.createPath(dir, num);
                         DirUtil.ensureDirExists(path);
                     }
-                    return new MinMax(DirUtil.getMinDirId(dir), getMaxDirId(dir));
+                    return new MinMax(DirUtil.getMinDirId(dir), DirUtil.getMaxDirId(dir));
                 })
                 .withSimpleEqualityAssertion()
                 .addCase(List.of(), new MinMax(0, 0))
@@ -201,7 +216,7 @@ class TestDirUtil {
                     for (final String pathStr : pathStrings) {
                         DirUtil.ensureDirExists(dir.resolve(Path.of(pathStr)));
                     }
-                    return new MinMax(DirUtil.getMinDirId(dir), getMaxDirId(dir));
+                    return new MinMax(DirUtil.getMinDirId(dir), DirUtil.getMaxDirId(dir));
                 })
                 .withSimpleEqualityAssertion()
                 .withBeforeTestCaseAction(() -> {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,10 +60,12 @@ public class TabLayout extends Composite implements RequiresResize, ProvidesResi
             registerHandler(settings.addDomHandler(event -> {
                 if (MouseUtil.isPrimary(event)) {
                     final TabData selectedTab = tabBar.getSelectedTab();
-                    if (selectedTab instanceof Component) {
-                        final Component component = (Component) selectedTab;
-                        component.showSettings();
-//                    tabManager.showMenu(settings.getElement(), flexLayout, this, component.getTabConfig());
+                    if (selectedTab instanceof final Component component) {
+//                        component.showSettings();
+                        tabManager.showMenu(settings.getElement(),
+                                flexLayout,
+                                TabLayout.this,
+                                component.getTabConfig());
                     }
                 }
             }, ClickEvent.getType()));
@@ -75,9 +77,9 @@ public class TabLayout extends Composite implements RequiresResize, ProvidesResi
                      final TabManager tabManager,
                      final TabLayoutConfig tabLayoutConfig,
                      final FlexLayoutChangeHandler changeHandler) {
+        this.eventBus = eventBus;
         this.flexLayout = flexLayout;
         this.tabManager = tabManager;
-        this.eventBus = eventBus;
 
         this.tabLayoutConfig = tabLayoutConfig;
         this.changeHandler = changeHandler;

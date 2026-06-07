@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.widget.util.client;
 
 import stroom.svg.client.Preset;
@@ -35,6 +51,26 @@ public class SvgImageUtil {
         final SafeHtml svgHtml = SafeHtmlUtil.getSafeHtmlFromSafeConstant(svgImage.getSvg());
 
         //        GWT.log("safeHtml: " + safeHtml.asString());
+        return NullSafe.isBlankString(title)
+                ? Templates.div(allClassNames, svgHtml)
+                : Templates.div(allClassNames, title, svgHtml);
+    }
+
+    /**
+     * Utility method to render an SVG image from SVG characters.
+     * Assumes that the character sequence is safe.
+     * @param title The title of the image. Can be null or empty.
+     * @param svgData The character sequence holding the SVG data.
+     * @param classNames Any CSS classnames associated with the image.
+     * @return The character sequence to render.
+     */
+    public static SafeHtml toSafeHtml(final String title,
+                                      final String svgData,
+                                      final String... classNames) {
+        final String allClassNames = SvgImage.BASE_CLASS_NAME + " "
+                + NullSafe.join(" ", classNames);
+        final SafeHtml svgHtml = SafeHtmlUtil.getSafeHtmlFromSafeConstant(svgData);
+
         return NullSafe.isBlankString(title)
                 ? Templates.div(allClassNames, svgHtml)
                 : Templates.div(allClassNames, title, svgHtml);

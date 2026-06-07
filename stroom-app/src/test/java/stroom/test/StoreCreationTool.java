@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,11 @@ import stroom.index.impl.IndexFields;
 import stroom.index.impl.IndexStore;
 import stroom.index.shared.LuceneIndexDoc;
 import stroom.index.shared.LuceneIndexField;
+import stroom.langchain.api.OpenAIModelStore;
 import stroom.meta.api.MetaProperties;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.MetaFields;
+import stroom.openai.shared.OpenAIModelDoc;
 import stroom.pipeline.PipelineStore;
 import stroom.pipeline.PipelineTestUtil;
 import stroom.pipeline.parser.CombinedParser;
@@ -64,6 +66,9 @@ import stroom.processor.shared.QueryData;
 import stroom.query.api.ExpressionOperator;
 import stroom.query.api.ExpressionTerm;
 import stroom.query.api.datasource.AnalyzerType;
+import stroom.query.api.datasource.DenseVectorFieldConfig;
+import stroom.query.api.datasource.DenseVectorFieldConfig.VectorSimilarityFunctionType;
+import stroom.query.api.datasource.FieldType;
 import stroom.test.common.StroomCoreServerTestFileUtil;
 import stroom.util.io.FileUtil;
 import stroom.util.io.StreamUtil;
@@ -124,6 +129,7 @@ public final class StoreCreationTool {
     private final IndexStore indexStore;
     private final ExplorerService explorerService;
     private final ExplorerNodeService explorerNodeService;
+    private final OpenAIModelStore openAIModelStore;
 
     @Inject
     public StoreCreationTool(final Store store,
@@ -137,7 +143,8 @@ public final class StoreCreationTool {
                              final ProcessorFilterService processorFilterService,
                              final IndexStore indexStore,
                              final ExplorerService explorerService,
-                             final ExplorerNodeService explorerNodeService) {
+                             final ExplorerNodeService explorerNodeService,
+                             final OpenAIModelStore openAIModelStore) {
         this.store = store;
         this.feedStore = feedStore;
         this.textConverterStore = textConverterStore;
@@ -150,6 +157,7 @@ public final class StoreCreationTool {
         this.indexStore = indexStore;
         this.explorerService = explorerService;
         this.explorerNodeService = explorerNodeService;
+        this.openAIModelStore = openAIModelStore;
     }
 
     /**
@@ -867,9 +875,29 @@ public final class StoreCreationTool {
             return refs.getFirst();
         }
 
+        final DocRef embeddingModelRef = openAIModelStore.createDocument("stella-embed");
+        OpenAIModelDoc embeddingModelDoc = openAIModelStore.readDocument(embeddingModelRef);
+        embeddingModelDoc = embeddingModelDoc
+                .copy()
+                .baseUrl("http://localhost:9511/v1")
+                .modelId("stella-embed")
+                .maxContextWindowTokens(512)
+                .build();
+        openAIModelStore.writeDocument(embeddingModelDoc);
+
+        final DocRef rerankModelRef = openAIModelStore.createDocument("stella-embed");
+        OpenAIModelDoc rerankModelDoc = openAIModelStore.readDocument(rerankModelRef);
+        rerankModelDoc = rerankModelDoc
+                .copy()
+                .baseUrl("http://localhost:9511/v1")
+                .modelId("stella-embed")
+                .maxContextWindowTokens(512)
+                .build();
+        openAIModelStore.writeDocument(rerankModelDoc);
+
         final DocRef indexRef = commonTestScenarioCreator.createIndex(
                 name,
-                createIndexFields(),
+                createIndexFields(embeddingModelRef, rerankModelRef),
                 maxDocsPerShard.orElse(LuceneIndexDoc.DEFAULT_MAX_DOCS_PER_SHARD));
 
         // Create the indexing pipeline.
@@ -898,7 +926,8 @@ public final class StoreCreationTool {
         return indexRef;
     }
 
-    private List<LuceneIndexField> createIndexFields() {
+    private List<LuceneIndexField> createIndexFields(final DocRef embeddingModelRef,
+                                                     final DocRef rerankModelRef) {
         final List<LuceneIndexField> indexFields = IndexFields.createStreamIndexFields();
         indexFields.add(LuceneIndexField.createField("Feed"));
         indexFields.add(LuceneIndexField.createField("Feed (Keyword)", AnalyzerType.KEYWORD));
@@ -912,6 +941,22 @@ public final class StoreCreationTool {
         indexFields.add(LuceneIndexField.createField("Generator"));
         indexFields.add(LuceneIndexField.createField("Command"));
         indexFields.add(LuceneIndexField.createField("Command (Keyword)", AnalyzerType.KEYWORD, true));
+        indexFields.add(LuceneIndexField.createField("Dense")
+                .copy()
+                .fldType(FieldType.DENSE_VECTOR)
+                .analyzerType(AnalyzerType.KEYWORD)
+                .indexed(true)
+                .stored(false)
+                .denseVectorFieldConfig(DenseVectorFieldConfig
+                        .builder()
+                        .embeddingModelRef(embeddingModelRef)
+                        .vectorSimilarityFunction(VectorSimilarityFunctionType.DOT_PRODUCT)
+                        .segmentSize(2000)
+                        .overlapSize(200)
+                        .nearestNeighbourCount(1000)
+                        .rerankModelRef(rerankModelRef)
+                        .build())
+                .build());
         indexFields.add(LuceneIndexField.createField("Description"));
         indexFields.add(LuceneIndexField.createField(
                 "Description (Case Sensitive)",

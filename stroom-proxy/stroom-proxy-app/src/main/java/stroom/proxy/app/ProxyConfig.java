@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.proxy.app;
 
 import stroom.proxy.app.event.EventStoreConfig;
@@ -245,34 +261,6 @@ public class ProxyConfig extends AbstractConfig implements IsProxyConfig {
     public List<SqsConnectorConfig> getSqsConnectors() {
         return sqsConnectors;
     }
-
-    // TOKEN id Oauth or API key, so this validation is wrong
-//    @JsonIgnore
-//    @SuppressWarnings("unused")
-//    @ValidationMethod(message = "identityProviderType must be set to EXTERNAL_IDP if enabledAuthenticationTypes " +
-//                                "contains 'TOKEN'")
-//    public boolean isTokenAuthenticationEnabledValid() {
-//        LOGGER.info("enabledAuthenticationTypes: {}, idpType: {}",
-//                NullSafe.get(receiveDataConfig, ReceiveDataConfig::getEnabledAuthenticationTypes),
-//                NullSafe.get(proxySecurityConfig,
-//                        ProxySecurityConfig::getAuthenticationConfig,
-//                        ProxyAuthenticationConfig::getOpenIdConfig,
-//                        AbstractOpenIdConfig::getIdentityProviderType));
-//
-//        if (NullSafe.test(
-//                receiveDataConfig,
-//                config -> config.isAuthenticationTypeEnabled(AuthenticationType.TOKEN))) {
-//
-//            return NullSafe.test(
-//                    proxySecurityConfig,
-//                    ProxySecurityConfig::getAuthenticationConfig,
-//                    ProxyAuthenticationConfig::getOpenIdConfig,
-//                    AbstractOpenIdConfig::getIdentityProviderType,
-//                    idpType -> idpType == IdpType.EXTERNAL_IDP);
-//        } else {
-//            return true;
-//        }
-//    }
 
     @JsonIgnore
     @SuppressWarnings("unused")

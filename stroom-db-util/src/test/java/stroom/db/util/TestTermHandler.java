@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.db.util;
 
 import stroom.collection.api.CollectionService;
@@ -10,6 +26,7 @@ import stroom.query.api.ExpressionTerm;
 import stroom.query.api.datasource.QueryField;
 import stroom.test.common.TestUtil;
 
+import com.google.inject.Provider;
 import io.vavr.Tuple;
 import org.jooq.Condition;
 import org.jooq.Field;
@@ -254,9 +271,9 @@ class TestTermHandler {
                 DOC_REF_FIELD,
                 DSL.field(DOC_REF_FIELD.getFldName(), String.class),
                 values -> values,
-                wordListProviderMock,
-                collectionServiceMock,
-                docRefInfoServiceMock,
+                new MockProviderImpl<>(wordListProviderMock),
+                new MockProviderImpl<>(collectionServiceMock),
+                new MockProviderImpl<>(docRefInfoServiceMock),
                 useName,
                 false);
     }
@@ -266,10 +283,27 @@ class TestTermHandler {
                 ID_FIELD,
                 DSL.field(ID_FIELD.getFldName(), Long.class),
                 MultiConverter.wrapConverter(Long::parseLong),
-                wordListProviderMock,
-                collectionServiceMock,
-                docRefInfoServiceMock,
+                new MockProviderImpl<>(wordListProviderMock),
+                new MockProviderImpl<>(collectionServiceMock),
+                new MockProviderImpl<>(docRefInfoServiceMock),
                 useName,
                 false);
+    }
+
+    /**
+     * Mock Provider to wrap an object with a Provider so we can pass it into the StoreImpl.
+     * Not a true provider as it always returns the same object.
+     */
+    private static class MockProviderImpl<T> implements Provider<T> {
+        private final T provided;
+
+        public MockProviderImpl(final T provided) {
+            this.provided = provided;
+        }
+
+        @Override
+        public T get() {
+            return provided;
+        }
     }
 }

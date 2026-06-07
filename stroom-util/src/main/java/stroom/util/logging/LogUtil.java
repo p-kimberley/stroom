@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2026 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.util.logging;
 
 import stroom.util.NullSafeExtra;
@@ -333,6 +349,23 @@ public final class LogUtil {
     }
 
     /**
+     * Applies itemMapper to each item in collection then calls {@link NullSafe#toString(Object)}
+     * on each one, then joins all the resulting strings with ', '.
+     * If itemMapper is null or collection is null or empty, it returns an empty string.
+     */
+    public static <T> String toCsv(final Collection<T> collection,
+                                   final Function<T, Object> itemMapper) {
+        if (itemMapper == null) {
+            return "";
+        } else {
+            return NullSafe.stream(collection)
+                    .map(itemMapper)
+                    .map(NullSafe::toString)
+                    .collect(Collectors.joining(", "));
+        }
+    }
+
+    /**
      * @return The simple class name followed by value.toString().
      * If value is null, returns null.
      */
@@ -340,7 +373,7 @@ public final class LogUtil {
         if (value == null) {
             return null;
         } else {
-            return value.getClass().getSimpleName() + " " + value;
+            return "(" + value.getClass().getSimpleName() + ") " + value;
         }
     }
 
@@ -401,10 +434,16 @@ public final class LogUtil {
      * @return The path as an absolute and normalised path or null if path is null
      */
     public static String path(final Path path) {
-        return NullSafe.toString(
-                path,
-                Path::toAbsolutePath,
-                Path::normalize);
+        try {
+            return NullSafe.toString(
+                    path,
+                    Path::toAbsolutePath,
+                    Path::normalize);
+        } catch (final Exception e) {
+            LOGGER.error("Error converting '{}' to an absolute and normalised path - {}",
+                    path, LogUtil.exceptionMessage(e), e);
+            return NullSafe.toString(path);
+        }
     }
 
     /**
@@ -499,5 +538,55 @@ public final class LogUtil {
 
     public static String getClassName(final Object obj) {
         return NullSafe.get(obj, Object::getClass, Class::getName);
+    }
+
+    /**
+     * Returns a comma-delimited string of sampleSize items from the collection.
+     * Each item is converted to a string using {@link Objects#toString()}.
+     *
+     * @param sampleSize The number of items in the collection to output,
+     *                   taken in iteration order.
+     * @return null if collection is null, else something like '[X, Y, Z]'
+     */
+    public static <T> String getSample(final Collection<T> collection,
+                                       final int sampleSize) {
+        return getSample(collection, sampleSize, null);
+    }
+
+    /**
+     * Returns a comma-delimited string of sampleSize items from the collection.
+     * Each item is converted to a string using {@link Objects#toString()}.
+     *
+     * @param sampleSize       The number of items in the collection to output,
+     *                         taken in iteration order.
+     * @param toStringFunction The function to use to convert each item to a string.
+     * @return null if collection is null, else something like '[X, Y, Z]'
+     */
+    public static <T> String getSample(final Collection<T> collection,
+                                       final int sampleSize,
+                                       final Function<T, String> toStringFunction) {
+        try {
+            if (collection == null) {
+                return null;
+            } else if (sampleSize <= 0) {
+                return "";
+            } else {
+                final Function<T, String> func = Objects.requireNonNullElse(
+                        toStringFunction,
+                        Objects::toString);
+                final int size = collection.size();
+                final String str = NullSafe.stream(collection)
+                        .limit(sampleSize)
+                        .map(func)
+                        .collect(Collectors.joining(", "));
+                final String truncatedPart = sampleSize < size
+                        ? ", ..."
+                        : "";
+                return "[" + str + truncatedPart + "]";
+            }
+        } catch (final Exception e) {
+            LOGGER.error("Error in getSample - {}", LogUtil.exceptionMessage(e), e);
+            return "?";
+        }
     }
 }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.util.string;
 
 import stroom.util.logging.LambdaLogger;
@@ -113,15 +129,6 @@ public class TemplateUtil {
         return result;
     }
 
-    private static String normaliseStaticText(final String name,
-                                              final Function<String, String> formatter) {
-        String result = NullSafe.string(name);
-        if (formatter != null) {
-            result = formatter.apply(result);
-        }
-        return result;
-    }
-
 
     // --------------------------------------------------------------------------------
 
@@ -166,7 +173,7 @@ public class TemplateUtil {
                         .generate();
             }
 
-            LOGGER.debug("Generated output '{}' from varToReplacementProviderMap: {}",
+            LOGGER.debug("generateWith() - Generated output '{}' from varToReplacementProviderMap: {}",
                     output, varToReplacementMap);
             return output;
         }
@@ -184,7 +191,8 @@ public class TemplateUtil {
                         .collect(Collectors.joining());
             }
 
-            LOGGER.debug("Generated output '{}' from varToReplacementProviderMap: {}", output, varToReplacementMap);
+            LOGGER.debug("doGenerate() - Generated output '{}' from varToReplacementProviderMap: {}",
+                    output, varToReplacementMap);
             return output;
         }
 
@@ -261,10 +269,10 @@ public class TemplateUtil {
                 if (templator.isVarInTemplate(var)) {
                     if (NullSafe.isNonEmptyString(replacement)) {
                         // No point adding a func for an empty replacement
-                        varToReplacementProviderMap.put(var, aVar -> replacement);
+                        varToReplacementProviderMap.put(var, ignored -> replacement);
                     }
                 } else {
-                    LOGGER.debug("var '{}' is not in template '{}'", var, templator.template);
+                    LOGGER.debug("addReplacement() - var '{}' is not in template '{}'", var, templator.template);
                 }
             } else {
                 throw new IllegalArgumentException("Blank var");
@@ -284,7 +292,7 @@ public class TemplateUtil {
                         if (templator.isVarInTemplate(var)
                             && NullSafe.isNonEmptyString(replacement)) {
                             // No point adding a func for an empty replacement
-                            varToReplacementProviderMap.put(var, aVar -> replacement);
+                            varToReplacementProviderMap.put(var, ignored -> replacement);
                         }
                     });
             return this;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -675,7 +675,6 @@ class QueryServiceImpl implements QueryService, QueryFieldProvider {
                 }
 
                 builder.columns(modifiedColumns);
-                builder.applyValueFilters(queryTablePreferences.applyValueFilters());
 
                 // Combine row filters.
                 if (tableSettings.getAggregateFilter() == null) {
@@ -880,7 +879,6 @@ class QueryServiceImpl implements QueryService, QueryFieldProvider {
                 lastKeywordSequence.add(tokenType);
 
                 LOGGER.debug("""
-
                                 token: {}
                                 endIdx: {}
                                 lastKeyword: {}

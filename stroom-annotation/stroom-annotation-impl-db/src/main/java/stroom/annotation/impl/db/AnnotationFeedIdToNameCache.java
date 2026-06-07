@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.annotation.impl.db;
@@ -20,8 +19,6 @@ package stroom.annotation.impl.db;
 import stroom.annotation.impl.AnnotationConfig;
 import stroom.cache.api.CacheManager;
 import stroom.cache.api.StroomCache;
-import stroom.db.util.JooqUtil;
-import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.shared.Clearable;
 
 import jakarta.inject.Inject;
@@ -29,48 +26,44 @@ import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
-import static stroom.annotation.impl.db.jooq.tables.AnnotationFeed.ANNOTATION_FEED;
-
+/**
+ * Cache for mapping annotation feed IDs to feed names.
+ * <p>
+ * This cache uses async execution to avoid thread-local connection conflicts
+ * when accessed from within existing database transaction contexts.
+ */
 @Singleton
 class AnnotationFeedIdToNameCache implements Clearable {
 
     private static final String CACHE_NAME = "Annotation Feed Id To Name Cache";
 
     private final StroomCache<Integer, Optional<String>> cache;
-    private final AnnotationDbConnProvider connectionProvider;
+    private final AnnotationFeedDao annotationFeedDao;
 
     @Inject
-    AnnotationFeedIdToNameCache(final AnnotationDbConnProvider connectionProvider,
+    AnnotationFeedIdToNameCache(final AnnotationFeedDao annotationFeedDao,
                                 final CacheManager cacheManager,
                                 final Provider<AnnotationConfig> annotationConfigProvider) {
-        this.connectionProvider = connectionProvider;
+        this.annotationFeedDao = annotationFeedDao;
         cache = cacheManager.create(
                 CACHE_NAME,
                 () -> annotationConfigProvider.get().getAnnotationFeedCache());
     }
 
-    private Optional<String> load(final Integer id) {
-        try {
-            return CompletableFuture.supplyAsync(() -> JooqUtil.contextResult(connectionProvider, context -> context
-                    .select(ANNOTATION_FEED.NAME)
-                    .from(ANNOTATION_FEED)
-                    .where(ANNOTATION_FEED.ID.eq(id))
-                    .fetchOptional(ANNOTATION_FEED.NAME))).get();
-        } catch (final InterruptedException e) {
-            throw new UncheckedInterruptedException(e);
-        } catch (final ExecutionException e) {
-            throw new RuntimeException(e);
+    public Optional<String> getName(final Integer id) {
+        if (id == null) {
+            return Optional.empty();
         }
+        return cache.get(id, this::load);
     }
 
-    public Optional<String> getName(final Integer id) {
-        if (id != null) {
-            return cache.get(id, this::load);
-        }
-        return Optional.empty();
+    /**
+     * Load feed name from database asynchronously to avoid connection conflicts.
+     */
+    private Optional<String> load(final Integer id) {
+        return annotationFeedDao.async(() ->
+                annotationFeedDao.fetchById(id));
     }
 
     @Override

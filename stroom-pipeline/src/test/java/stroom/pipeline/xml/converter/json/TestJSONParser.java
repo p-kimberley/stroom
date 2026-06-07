@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.pipeline.xml.converter.json;
@@ -79,6 +78,11 @@ class TestJSONParser extends StroomUnitTest {
     @Test
     void testMulti() throws IOException {
         positiveTest("Multi");
+    }
+
+    @Test
+    void testEmbeddedXml() throws IOException {
+        positiveTest("EmbeddedXml");
     }
 
     private void negativeTest(final String stem, final String type) throws IOException {
@@ -300,6 +304,7 @@ class TestJSONParser extends StroomUnitTest {
 
         final XMLWriter xmlWriter = new XMLWriter(errorReceiverProxy, null, null, null, null, null, null, null);
         xmlWriter.setIndentOutput(true);
+        xmlWriter.setPreventEscapeSwitching(true);
         xmlWriter.setTarget(xmlAppender);
 
         final JSONWriter jsonWriter = new JSONWriter(errorReceiverProxy);

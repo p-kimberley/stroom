@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import stroom.dropwizard.common.PermissionExceptionMapper;
 import stroom.dropwizard.common.TokenExceptionMapper;
 import stroom.dropwizard.common.prometheus.AppInfoProvider;
 import stroom.dropwizard.common.prometheus.PrometheusModule;
+import stroom.dropwizard.common.sysinfo.SystemInfoAdminServletModule;
 import stroom.proxy.app.Config;
 import stroom.proxy.app.ProxyConfigHealthCheck;
 import stroom.proxy.app.ProxyConfigHolder;
@@ -38,7 +39,7 @@ import stroom.proxy.app.servlet.ProxyQueueMonitoringServlet;
 import stroom.proxy.app.servlet.ProxySecurityFilter;
 import stroom.proxy.app.servlet.ProxyStatusServlet;
 import stroom.proxy.app.servlet.ProxyWelcomeServlet;
-import stroom.receive.common.DataFeedKeyDirWatcher;
+import stroom.receive.common.DataFeedIdentitiesDirWatcher;
 import stroom.receive.common.DebugServlet;
 import stroom.receive.common.FeedStatusResourceImpl;
 import stroom.receive.common.FeedStatusResourceV2Impl;
@@ -97,9 +98,10 @@ public class ProxyModule extends AbstractModule {
         install(new DropwizardModule());
         install(new ForwarderModule());
         install(new PrometheusModule());
+        install(new SystemInfoAdminServletModule());
 
         HasHealthCheckBinder.create(binder())
-                .bind(DataFeedKeyDirWatcher.class)
+                .bind(DataFeedIdentitiesDirWatcher.class)
                 .bind(LogLevelInspector.class)
                 .bind(ProxyConfigHealthCheck.class)
                 .bind(ProxyApiKeyCheckClient.class)
@@ -113,11 +115,11 @@ public class ProxyModule extends AbstractModule {
         ServletBinder.create(binder())
                 .bind(DebugServlet.class)
                 .bind(ProxyStatusServlet.class)
-                .bind(ProxyQueueMonitoringServlet.class)
                 .bind(ProxyWelcomeServlet.class)
                 .bind(ReceiveDataServlet.class);
 
         AdminServletBinder.create(binder())
+                .bind(ProxyQueueMonitoringServlet.class)
                 .bind(FilteredHealthCheckServlet.class);
 
         RestResourcesBinder.create(binder())

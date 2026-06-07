@@ -1,16 +1,31 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.lmdb.stream;
 
 import java.nio.ByteBuffer;
 import java.util.Comparator;
-
-import static java.util.Objects.requireNonNull;
+import java.util.Objects;
 
 class OldUnsignedByteBufferComparator implements Comparator<ByteBuffer> {
 
     @Override
     public int compare(final ByteBuffer o1, final ByteBuffer o2) {
-        requireNonNull(o1);
-        requireNonNull(o2);
+        Objects.requireNonNull(o1);
+        Objects.requireNonNull(o2);
         if (o1.equals(o2)) {
             return 0;
         }

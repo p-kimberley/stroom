@@ -1,9 +1,26 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.search.extraction;
 
 import stroom.meta.api.MetaService;
 import stroom.pipeline.PipelineStore;
 import stroom.pipeline.factory.PipelineDataCache;
 import stroom.query.api.QueryKey;
+import stroom.query.common.v2.RerankScoringFilterFactory;
 import stroom.security.api.SecurityContext;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
@@ -26,6 +43,7 @@ public class ExtractionDecoratorFactory {
     private final Provider<ExtractionTaskHandler> handlerProvider;
     private final Provider<QueryInfoHolder> queryInfoHolderProvider;
     private final Provider<FieldListConsumerHolder> fieldListConsumerHolderProvider;
+    private final RerankScoringFilterFactory rerankScoringFilterFactory;
 
     @Inject
     ExtractionDecoratorFactory(final FieldValueExtractorFactory fieldValueExtractorFactory,
@@ -39,7 +57,8 @@ public class ExtractionDecoratorFactory {
                                final PipelineDataCache pipelineDataCache,
                                final Provider<ExtractionTaskHandler> handlerProvider,
                                final Provider<QueryInfoHolder> queryInfoHolderProvider,
-                               final Provider<FieldListConsumerHolder> fieldListConsumerHolderProvider) {
+                               final Provider<FieldListConsumerHolder> fieldListConsumerHolderProvider,
+                               final RerankScoringFilterFactory rerankScoringFilterFactory) {
         this.fieldValueExtractorFactory = fieldValueExtractorFactory;
         this.extractionConfig = extractionConfig;
         this.executorProvider = executorProvider;
@@ -52,6 +71,7 @@ public class ExtractionDecoratorFactory {
         this.handlerProvider = handlerProvider;
         this.queryInfoHolderProvider = queryInfoHolderProvider;
         this.fieldListConsumerHolderProvider = fieldListConsumerHolderProvider;
+        this.rerankScoringFilterFactory = rerankScoringFilterFactory;
     }
 
     public ExtractionDecorator create(final QueryKey queryKey) {
@@ -68,6 +88,7 @@ public class ExtractionDecoratorFactory {
                 handlerProvider,
                 queryInfoHolderProvider,
                 fieldListConsumerHolderProvider,
-                queryKey);
+                queryKey,
+                rerankScoringFilterFactory);
     }
 }

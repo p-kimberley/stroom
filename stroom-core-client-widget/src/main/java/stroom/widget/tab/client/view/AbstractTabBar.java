@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -284,14 +284,8 @@ public abstract class AbstractTabBar extends FlowPanel implements TabBar, Requir
                 displayableTabs = getDisplayableTabs(newStartIndex);
 
             } else {
-                // otherwise loop through from the start and find which tabs to show
-                // if the selected tab is over halfway through then show it on the rhs
-                final int indexOfSelectedTab = indexOf(selectedTab);
-                final int newStartIndex = indexOfSelectedTab < tabs.size() / 2
-                        ? indexOfSelectedTab
-                        : 0;
-
-                for (int i = newStartIndex; i < tabs.size(); i++) {
+                // loop through from the beginning of the tabs until we show the selected tab
+                for (int i = 0; i < tabs.size(); i++) {
                     displayableTabs = getDisplayableTabs(i);
                     if (selectedTab == null || displayableTabs.contains(selectedTab)) {
                         break;

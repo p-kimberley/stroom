@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,9 @@ public class AnnotationModule extends AbstractModule {
 
         GuiceUtil.buildMultiBinder(binder(), DataSourceProvider.class)
                 .addBinding(AnnotationService.class);
-        GuiceUtil.buildMultiBinder(binder(), Searchable.class)
+//        GuiceUtil.buildMultiBinder(binder(), Searchable.class)
+//                .addBinding(AnnotationService.class);
+        GuiceUtil.buildMapBinder(binder(), Searchable.class)
                 .addBinding(AnnotationService.class);
         GuiceUtil.buildMultiBinder(binder(), EntityEvent.Handler.class)
                 .addBinding(AnnotationState.class);
@@ -65,7 +67,13 @@ public class AnnotationModule extends AbstractModule {
                         .description("Delete annotations that exceed the retention period " +
                                      "specified by data retention policy")
                         .cronSchedule(CronExpressions.EVERY_DAY_AT_MIDNIGHT.getExpression()));
+
+
     }
+
+
+    // --------------------------------------------------------------------------------
+
 
     private static class DataRetention extends RunnableWrapper {
 

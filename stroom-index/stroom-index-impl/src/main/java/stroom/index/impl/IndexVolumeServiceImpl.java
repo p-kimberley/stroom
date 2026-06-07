@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -638,7 +638,8 @@ public class IndexVolumeServiceImpl implements IndexVolumeService, Clearable, En
 
     @Override
     public SystemInfoResult getSystemInfo() {
-        final VolumeMap volumeMap = getCurrentVolumeMap();
+        final VolumeMap volumeMap = securityContext.asProcessingUserResult(this::getCurrentVolumeMap);
+
         final Map<VolGroupNode, List<Map<String, Object>>> volInfoMap = volumeMap.getGroupNameToVolumesMap()
                 .entrySet()
                 .stream()

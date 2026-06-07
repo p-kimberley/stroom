@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
-import javax.print.Doc;
 
 /**
  * {@value #CLASS_DESC}
@@ -53,7 +52,7 @@ public final class DocRef implements Comparable<DocRef>, HasDisplayValue, HasTyp
     @Schema(description = "The name for the data source",
             example = "MyStatistic")
     @JsonProperty
-    private String name;
+    private final String name;
 
     public DocRef() {
         this("test", "test");
@@ -78,11 +77,12 @@ public final class DocRef implements Comparable<DocRef>, HasDisplayValue, HasTyp
     public DocRef(@JsonProperty("type") final String type,
                   @JsonProperty("uuid") final String uuid,
                   @JsonProperty("name") final String name) {
-        Objects.requireNonNull(type);
-        Objects.requireNonNull(uuid);
         this.type = type;
         this.uuid = uuid;
         this.name = name;
+
+        Objects.requireNonNull(type, () -> "Null DocRef type " + toShortString());
+        Objects.requireNonNull(uuid, () -> "Null DocRef UUID " + toShortString());
     }
 
     /**
@@ -128,6 +128,16 @@ public final class DocRef implements Comparable<DocRef>, HasDisplayValue, HasTyp
                 ? name
                 : uuid;
     }
+
+    /**
+     * Throw a {@link RuntimeException} if the type of this does not match expectedType
+     */
+    public void validateType(final String expectedType) {
+        if (!Objects.equals(type, expectedType)) {
+            throw new RuntimeException("Unexpected document type '" + type + "', expected '" + expectedType + "'");
+        }
+    }
+
 
     @Override
     public int compareTo(final DocRef o) {

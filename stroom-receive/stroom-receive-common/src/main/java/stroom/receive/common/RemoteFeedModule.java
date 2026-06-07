@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ public class RemoteFeedModule extends AbstractModule {
     protected void configure() {
         bind(RequestAuthenticator.class).to(RequestAuthenticatorImpl.class);
         bind(DataFeedKeyService.class).to(DataFeedKeyServiceImpl.class);
+        bind(DataFeedIdentityService.class).to(DataFeedIdentityServiceImpl.class);
+        bind(CertificateIdentityService.class).to(CertificateIdentityServiceImpl.class);
 
         RestResourcesBinder.create(binder())
                 .bind(FeedStatusResourceImpl.class)
@@ -39,10 +41,12 @@ public class RemoteFeedModule extends AbstractModule {
 //                .bind(RemoteFeedServiceRPC.class);
 
         GuiceUtil.buildMultiBinder(binder(), Managed.class)
-                .addBinding(DataFeedKeyDirWatcher.class)
+                .addBinding(DataFeedIdentitiesDirWatcher.class)
+                .addBinding(CertificateIdentityServiceImpl.class)
                 .addBinding(DataFeedKeyServiceImpl.class);
 
         HasSystemInfoBinder.create(binder())
+                .bind(CertificateIdentityServiceImpl.class)
                 .bind(DataFeedKeyServiceImpl.class);
 
         GuiceUtil.buildMultiBinder(binder(), DataFeedKeyHasher.class)

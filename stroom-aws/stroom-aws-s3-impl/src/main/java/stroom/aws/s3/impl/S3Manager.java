@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.aws.s3.impl;
 
 import stroom.aws.s3.shared.AwsAssumeRole;
@@ -416,20 +432,22 @@ public class S3Manager {
 
     public PutObjectResponse upload(final Meta meta,
                                     final AttributeMap attributeMap,
-                                    final Path source) {
-        return upload(getBucketNamePattern(), getKeyNamePattern(), meta, attributeMap, source);
+                                    final Path source,
+                                    final S3UploadProperties uploadProperties) {
+        return upload(getBucketNamePattern(), getKeyNamePattern(), meta, attributeMap, source, uploadProperties);
     }
 
     public PutObjectResponse upload(final String bucketNamePattern,
                                     final String keyNamePattern,
                                     final Meta meta,
                                     final AttributeMap attributeMap,
-                                    final Path source) {
+                                    final Path source,
+                                    final S3UploadProperties uploadProperties) {
         final String bucketName = createBucketName(bucketNamePattern, meta);
         final String key = createKey(keyNamePattern, meta);
 
         try {
-            return tryUpload(bucketName, key, meta, attributeMap, source);
+            return tryUpload(bucketName, key, meta, attributeMap, source, uploadProperties);
         } catch (final RuntimeException e) {
             if (s3ClientConfig.isCreateBuckets()) {
                 debug("Error uploading: ", bucketName, key, e);
@@ -437,7 +455,7 @@ public class S3Manager {
                 // If we are creating buckets then try to create the bucket and upload again.
                 try {
                     createBucket(bucketName);
-                    return tryUpload(bucketName, key, meta, attributeMap, source);
+                    return tryUpload(bucketName, key, meta, attributeMap, source, uploadProperties);
                 } catch (final RuntimeException e2) {
                     error("Error uploading: ", bucketName, key, e2);
                     throw e2;
@@ -453,8 +471,9 @@ public class S3Manager {
                                         final String key,
                                         final Meta meta,
                                         final AttributeMap attributeMap,
-                                        final Path source) {
-        final PutObjectRequest request = createPutObjectRequest(bucketName, key, meta, attributeMap);
+                                        final Path source,
+                                        final S3UploadProperties uploadProperties) {
+        final PutObjectRequest request = createPutObjectRequest(bucketName, key, meta, attributeMap, uploadProperties);
         logRequest("Uploading: ", bucketName, key, request);
 
         final PutObjectResponse response;
@@ -675,18 +694,35 @@ public class S3Manager {
     private PutObjectRequest createPutObjectRequest(final String bucketName,
                                                     final String key,
                                                     final Meta meta,
-                                                    final AttributeMap attributeMap) {
+                                                    final AttributeMap attributeMap,
+                                                    final S3UploadProperties uploadProperties) {
         final Map<String, String> metadata = attributeMap
                 .entrySet()
                 .stream()
                 .collect(Collectors.toMap(e -> createS3Name(e.getKey()), Entry::getValue));
 
-        return PutObjectRequest.builder()
+        PutObjectRequest.Builder builder = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(key)
                 .tagging(createTags(meta))
-                .metadata(metadata)
-                .build();
+                .metadata(metadata);
+
+        if (uploadProperties != null) {
+            if (NullSafe.isNonBlankString(uploadProperties.cacheControl())) {
+                builder = builder.cacheControl(uploadProperties.cacheControl());
+            }
+            if (NullSafe.isNonBlankString(uploadProperties.contentDisposition())) {
+                builder = builder.contentDisposition(uploadProperties.contentDisposition());
+            }
+            if (NullSafe.isNonBlankString(uploadProperties.contentEncoding())) {
+                builder = builder.contentEncoding(uploadProperties.contentEncoding());
+            }
+            if (NullSafe.isNonBlankString(uploadProperties.contentType())) {
+                builder = builder.contentType(uploadProperties.contentType());
+            }
+        }
+
+        return builder.build();
     }
 
     private void logRequest(final String message,

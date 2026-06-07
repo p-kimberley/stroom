@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.proxy.app.event;
 
 import stroom.cache.api.CacheManager;
@@ -15,6 +31,7 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.metrics.Metrics;
 
 import com.codahale.metrics.Timer;
+import io.dropwizard.lifecycle.Managed;
 import jakarta.annotation.Nullable;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -28,13 +45,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 @Singleton
-public class EventStore implements EventConsumer {
+public class EventStore implements EventConsumer, Managed {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(EventStore.class);
     private static final String CACHE_NAME = "Event Store Open Appenders";
@@ -48,6 +66,7 @@ public class EventStore implements EventConsumer {
     private final EventSerialiser eventSerialiser;
     private final LinkedBlockingQueue<Path> forwardQueue;
     private final Timer handleTimer;
+    private final AtomicBoolean shutdown = new AtomicBoolean(false);
 
     @Inject
     public EventStore(final ReceiverFactory receiverFactory,
@@ -86,6 +105,12 @@ public class EventStore implements EventConsumer {
                 .createAndRegister();
 
         forwardOldFiles();
+    }
+
+    private void checkState() {
+        if (shutdown.get()) {
+            throw new IllegalStateException("Event Store has been shut down");
+        }
     }
 
     private void ensureDirExists(final Path path) {
@@ -213,6 +238,7 @@ public class EventStore implements EventConsumer {
                         final UniqueId receiptId,
                         final String data) {
         try {
+            checkState();
             final FeedKey feedKey = FeedKey.from(attributeMap);
             final String string = eventSerialiser.serialise(
                     receiptId,
@@ -283,5 +309,21 @@ public class EventStore implements EventConsumer {
 
             return eventAppender;
         });
+    }
+
+    @Override
+    public void stop() throws Exception {
+        if (shutdown.compareAndSet(false, true)) {
+            stores.values()
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .forEach(eventAppender -> {
+                        try {
+                            eventAppender.close();
+                        } catch (final IOException e) {
+                            LOGGER.error("Error closing eventAppender {}", eventAppender, e);
+                        }
+                    });
+        }
     }
 }

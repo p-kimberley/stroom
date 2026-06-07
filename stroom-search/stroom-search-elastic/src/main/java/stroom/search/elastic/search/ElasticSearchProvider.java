@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -344,14 +344,14 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                 }
 
                 final FieldType type = ElasticNativeTypes.fromNativeType(fieldName, nativeType);
-                fieldsMap.put(fieldName, new ElasticIndexField(
-                        null,
-                        null,
-                        null,
-                        fieldName,
-                        type,
-                        nativeType,
-                        indexed));
+                final ElasticIndexField field = ElasticIndexField
+                        .builder()
+                        .fldName(fieldName)
+                        .fldType(type)
+                        .nativeType(nativeType)
+                        .indexed(indexed)
+                        .build();
+                fieldsMap.put(fieldName, field);
             } catch (final UnsupportedTypeException e) {
                 LOGGER.debug(e::getMessage, e);
             } catch (final Exception e) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import stroom.cluster.task.api.NodeNotFoundException;
 import stroom.cluster.task.api.NullClusterStateException;
 import stroom.cluster.task.api.TargetNodeSetFactory;
 import stroom.docref.DocRef;
-import stroom.docstore.shared.Doc;
+import stroom.docstore.api.DocumentNotFoundException;
+import stroom.docstore.shared.AbstractDoc;
 import stroom.entity.shared.ExpressionCriteria;
 import stroom.node.api.NodeCallUtil;
 import stroom.node.api.NodeInfo;
@@ -45,9 +46,11 @@ import stroom.query.language.functions.ValNull;
 import stroom.query.language.functions.ValString;
 import stroom.query.language.functions.Values;
 import stroom.query.language.functions.ValuesConsumer;
+import stroom.query.language.functions.ref.ErrorConsumer;
 import stroom.searchable.api.Searchable;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.DocumentPermission;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.util.io.FileUtil;
@@ -57,6 +60,7 @@ import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.ResultPage;
+import stroom.util.shared.Severity;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
@@ -80,6 +84,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -98,6 +103,7 @@ public class PlanBShardInfoServiceImpl implements Searchable {
     private final StatePaths statePaths;
     private final PlanBDocStore planBDocStore;
     private final ShardManager shardManager;
+    private final Executor executor;
 
     @Inject
     public PlanBShardInfoServiceImpl(final SecurityContext securityContext,
@@ -110,7 +116,8 @@ public class PlanBShardInfoServiceImpl implements Searchable {
                                      final ExpressionPredicateFactory expressionPredicateFactory,
                                      final StatePaths statePaths,
                                      final PlanBDocStore planBDocStore,
-                                     final ShardManager shardManager) {
+                                     final ShardManager shardManager,
+                                     final ExecutorProvider executorProvider) {
         this.securityContext = securityContext;
         this.taskContextFactory = taskContextFactory;
         this.nodeServiceProvider = nodeServiceProvider;
@@ -122,6 +129,7 @@ public class PlanBShardInfoServiceImpl implements Searchable {
         this.statePaths = statePaths;
         this.planBDocStore = planBDocStore;
         this.shardManager = shardManager;
+        this.executor = executorProvider.get();
     }
 
     @Override
@@ -155,10 +163,16 @@ public class PlanBShardInfoServiceImpl implements Searchable {
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
                        final DateTimeSettings dateTimeSettings,
-                       final ValuesConsumer consumer) {
+                       final ValuesConsumer valuesConsumer,
+                       final ErrorConsumer errorConsumer) {
         LOGGER.logDurationIfInfoEnabled(
                 () -> taskContextFactory.context("Querying Plan B Info", taskContext ->
-                                doSearch(criteria, fieldIndex, dateTimeSettings, consumer, taskContext))
+                                doSearch(criteria,
+                                        fieldIndex,
+                                        dateTimeSettings,
+                                        valuesConsumer,
+                                        errorConsumer,
+                                        taskContext))
                         .run(),
                 "Querying Plan B Info");
     }
@@ -179,7 +193,8 @@ public class PlanBShardInfoServiceImpl implements Searchable {
     private void doSearch(final ExpressionCriteria criteria,
                           final FieldIndex fieldIndex,
                           final DateTimeSettings dateTimeSettings,
-                          final ValuesConsumer consumer,
+                          final ValuesConsumer valuesConsumer,
+                          final ErrorConsumer errorConsumer,
                           final TaskContext taskContext) {
         final ValueFunctionFactories<Values> valueFunctionFactories = createValueFunctionFactories(fieldIndex);
         final Predicate<Values> predicate = expressionPredicateFactory.createOptional(
@@ -196,7 +211,7 @@ public class PlanBShardInfoServiceImpl implements Searchable {
                 // If this is the node that was contacted then just resolve it locally
                 if (NodeCallUtil.shouldExecuteLocally(nodeInfoProvider.get(), nodeName)) {
                     final List<String[]> list = getStoreInfo(fieldIndex.getFields());
-                    processResult(list, fields, predicate, consumer);
+                    processResult(list, fields, predicate, valuesConsumer);
                 } else {
                     final String url = NodeCallUtil.getBaseEndpointUrl(nodeInfoProvider.get(),
                             nodeServiceProvider.get(),
@@ -206,19 +221,24 @@ public class PlanBShardInfoServiceImpl implements Searchable {
                     final Runnable runnable = taskContextFactory.childContext(
                             taskContext,
                             "Calling node " + nodeName, childTaskContext -> {
-                                final Response response = webTarget
-                                        .request(MediaType.APPLICATION_JSON)
-                                        .post(Entity.json(new PlanBShardInfoRequest(fieldIndex.getFields())));
-                                if (response.getStatus() == Status.NOT_FOUND.getStatusCode()) {
-                                    throw new NotFoundException(response);
-                                } else if (response.getStatus() != Status.OK.getStatusCode()) {
-                                    throw new WebApplicationException(response);
-                                }
+                                try {
+                                    final Response response = webTarget
+                                            .request(MediaType.APPLICATION_JSON)
+                                            .post(Entity.json(new PlanBShardInfoRequest(fieldIndex.getFields())));
+                                    if (response.getStatus() == Status.NOT_FOUND.getStatusCode()) {
+                                        throw new NotFoundException(response);
+                                    } else if (response.getStatus() != Status.OK.getStatusCode()) {
+                                        throw new WebApplicationException(response);
+                                    }
 
-                                final PlanBShardInfoResponse info = response.readEntity(PlanBShardInfoResponse.class);
-                                processResult(info.getData(), fields, predicate, consumer);
+                                    final PlanBShardInfoResponse info = response
+                                            .readEntity(PlanBShardInfoResponse.class);
+                                    processResult(info.getData(), fields, predicate, valuesConsumer);
+                                } catch (final RuntimeException e) {
+                                    errorConsumer.add(Severity.ERROR, nodeName, e::getMessage);
+                                }
                             });
-                    final CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(runnable);
+                    final CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(runnable, executor);
                     completableFutures.add(completableFuture);
                 }
             }
@@ -262,28 +282,35 @@ public class PlanBShardInfoServiceImpl implements Searchable {
         if (Files.isDirectory(snapshotDir)) {
             try (final Stream<Path> stream = Files.list(snapshotDir)) {
                 stream.forEach(snapshotParent -> {
-                    final String uuid = snapshotParent.getFileName().toString();
-                    final DocRef docRef = DocRef.builder().type(PlanBDoc.TYPE).uuid(uuid).build();
-                    if (securityContext.isAdmin() ||
-                        securityContext.hasDocumentPermission(docRef, DocumentPermission.VIEW)) {
-                        final Optional<PlanBDoc> optionalPlanBDoc = map
-                                .computeIfAbsent(uuid, k ->
-                                        Optional.ofNullable(planBDocStore.readDocument(DocRef
-                                                .builder()
-                                                .type(PlanBDoc.TYPE)
-                                                .uuid(uuid)
-                                                .build())));
+                    try {
+                        final String uuid = snapshotParent.getFileName().toString();
+                        final DocRef docRef = DocRef.builder().type(PlanBDoc.TYPE).uuid(uuid).build();
+                        if (securityContext.isAdmin() ||
+                            securityContext.hasDocumentPermission(docRef, DocumentPermission.VIEW)) {
+                            final Optional<PlanBDoc> optionalPlanBDoc = map
+                                    .computeIfAbsent(uuid, k ->
+                                            Optional.ofNullable(planBDocStore.readDocument(DocRef
+                                                    .builder()
+                                                    .type(PlanBDoc.TYPE)
+                                                    .uuid(uuid)
+                                                    .build())));
 
-                        try (final Stream<Path> innerStream = Files.list(snapshotParent)) {
-                            innerStream.forEach(snapshot ->
-                                    addData(fields,
-                                            results,
-                                            snapshot,
-                                            optionalPlanBDoc,
-                                            "Snapshot"));
-                        } catch (final IOException e) {
-                            LOGGER.debug(e::getMessage, e);
+                            try (final Stream<Path> innerStream = Files.list(snapshotParent)) {
+                                innerStream.forEach(snapshot ->
+                                        addData(fields,
+                                                results,
+                                                snapshot,
+                                                optionalPlanBDoc,
+                                                "Snapshot"));
+                            } catch (final IOException e) {
+                                LOGGER.debug(e::getMessage, e);
+                            }
                         }
+                    } catch (final DocumentNotFoundException e) {
+                        // It is possible that a Plan B store is deleted before we try to query it.
+                        LOGGER.debug(e::getMessage, e);
+                    } catch (final RuntimeException e) {
+                        LOGGER.error(e::getMessage, e);
                     }
                 });
             } catch (final IOException e) {
@@ -325,7 +352,7 @@ public class PlanBShardInfoServiceImpl implements Searchable {
             final String field = fields[i];
             if (field.equals(PlanBShardInfoFields.NAME_FIELD.getFldName())) {
                 values[i] = optionalPlanBDoc
-                        .map(Doc::getName)
+                        .map(AbstractDoc::getName)
                         .orElse(null);
             } else if (field.equals(PlanBShardInfoFields.SCHEMA_TYPE_FIELD.getFldName())) {
                 values[i] = optionalPlanBDoc

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +91,7 @@ public class SimplePathCreator implements PathCreator {
         path = replace(path, "hour", dateTime::getHour, 2);
         path = replace(path, "minute", dateTime::getMinute, 2);
         path = replace(path, "second", dateTime::getSecond, 2);
-        path = replace(path, "millis", () -> dateTime.toInstant().toEpochMilli(), 3);
+        path = replace(path, "millis", () -> dateTime.getLong(ChronoField.MILLI_OF_SECOND), 3);
         path = replace(path, "ms", () -> dateTime.toInstant().toEpochMilli(), 0);
 
         return path;

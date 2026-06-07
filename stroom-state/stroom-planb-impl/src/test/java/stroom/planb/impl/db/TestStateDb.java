@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.planb.impl.db;
@@ -55,13 +54,17 @@ import stroom.query.language.functions.ValLong;
 import stroom.query.language.functions.ValShort;
 import stroom.query.language.functions.ValString;
 import stroom.security.mock.MockSecurityContext;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.SimpleTaskContext;
 import stroom.task.api.SimpleTaskContextFactory;
+import stroom.task.shared.ThreadPool;
 import stroom.util.io.ByteSize;
 import stroom.util.io.FileUtil;
 import stroom.util.shared.time.SimpleDuration;
 import stroom.util.zip.ZipUtil;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -78,12 +81,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static stroom.planb.impl.db.StateValueTestUtil.makeString;
 
 class TestStateDb {
 
@@ -101,6 +107,8 @@ class TestStateDb {
     private static final Val MAX_FLOAT = ValFloat.create(Float.MAX_VALUE);
     private static final Val MIN_DOUBLE = ValDouble.create(Double.MIN_VALUE);
     private static final Val MAX_DOUBLE = ValDouble.create(Double.MAX_VALUE);
+    private static ExecutorService executorService;
+    private static ExecutorProvider executorProvider;
 
     private final List<KeyFunction> keyFunctions = List.of(
             new KeyFunction(KeyType.BOOLEAN.name(), KeyType.BOOLEAN,
@@ -126,9 +134,31 @@ class TestStateDb {
             new KeyFunction(KeyType.VARIABLE.name(), KeyType.VARIABLE,
                     i -> KeyPrefix.create(ValString.create("test-" + i))),
             new KeyFunction("Variable mid", KeyType.VARIABLE,
-                    i -> KeyPrefix.create(ValString.create(makeString(400)))),
+                    i -> KeyPrefix.create(ValString.create(StateValueTestUtil.makeString(400)))),
             new KeyFunction("Variable long", KeyType.VARIABLE,
-                    i -> KeyPrefix.create(ValString.create(makeString(1000)))));
+                    i -> KeyPrefix.create(ValString.create(StateValueTestUtil.makeString(1000)))));
+
+    @BeforeAll
+    static void beforeAll() {
+        executorService = Executors.newCachedThreadPool();
+        executorProvider = new ExecutorProvider() {
+
+            @Override
+            public Executor get() {
+                return executorService;
+            }
+
+            @Override
+            public Executor get(final ThreadPool threadPool) {
+                return executorService;
+            }
+        };
+    }
+
+    @AfterAll
+    static void afterAll() {
+        executorService.shutdown();
+    }
 
     @Test
     void testReadWrite(@TempDir final Path tempDir) {
@@ -192,7 +222,6 @@ class TestStateDb {
         final PlanBDocStore planBDocStore = Mockito.mock(PlanBDocStore.class);
         final PlanBDoc doc = PlanBDoc
                 .builder()
-                .type(PlanBDoc.TYPE)
                 .uuid(MAP_UUID)
                 .name(MAP_NAME)
                 .stateType(StateType.STATE)
@@ -218,12 +247,14 @@ class TestStateDb {
                 () -> planBConfig,
                 statePaths,
                 null,
-                new SimpleTaskContextFactory());
+                new SimpleTaskContextFactory(),
+                executorProvider);
         final MergeProcessor mergeProcessor = new MergeProcessor(
                 statePaths,
                 new MockSecurityContext(),
                 new SimpleTaskContextFactory(),
-                shardManager);
+                shardManager,
+                executorProvider);
 
         final int threads = 10;
 
@@ -396,7 +427,10 @@ class TestStateDb {
             ZipUtil.zip(zipFile, partPath);
             FileUtil.deleteDir(partPath);
             final String fileHash = FileHashUtil.hash(zipFile);
-            mergeProcessor.add(new FileDescriptor(System.currentTimeMillis(), 1, fileHash), zipFile, false);
+            mergeProcessor.add(new FileDescriptor(
+                    System.currentTimeMillis(),
+                    1,
+                    fileHash), zipFile, false);
         } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -626,7 +660,7 @@ class TestStateDb {
         tests.add(createStaticKeyTest(
                 "Hash lookup key (long)",
                 KeyType.HASH_LOOKUP,
-                KeyPrefix.create(ValString.create(makeString(800))),
+                KeyPrefix.create(ValString.create(StateValueTestUtil.makeString(800))),
                 iterations,
                 read));
 
@@ -639,13 +673,13 @@ class TestStateDb {
         tests.add(createStaticKeyTest(
                 "Variable string uid lookup key",
                 KeyType.VARIABLE,
-                KeyPrefix.create(ValString.create(makeString(200))),
+                KeyPrefix.create(ValString.create(StateValueTestUtil.makeString(200))),
                 iterations,
                 read));
         tests.add(createStaticKeyTest(
                 "Variable string hash lookup key",
                 KeyType.VARIABLE,
-                KeyPrefix.create(ValString.create(makeString(800))),
+                KeyPrefix.create(ValString.create(StateValueTestUtil.makeString(800))),
                 iterations,
                 read));
         return tests;
@@ -782,7 +816,7 @@ class TestStateDb {
     }
 
     private static PlanBDoc getDoc(final StateSettings settings) {
-        return PlanBDoc.builder().name("test").settings(settings).build();
+        return PlanBDoc.builder().uuid(UUID.randomUUID().toString()).name("test").settings(settings).build();
     }
 
     private record KeyFunction(String description,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.query.client.presenter;
@@ -27,10 +26,8 @@ import stroom.analytics.shared.NotificationStreamDestination;
 import stroom.analytics.shared.QueryLanguageVersion;
 import stroom.analytics.shared.ReportDoc;
 import stroom.analytics.shared.ReportResource;
-import stroom.analytics.shared.ReportSettings;
 import stroom.analytics.shared.TableBuilderAnalyticProcessConfig;
 import stroom.dashboard.client.main.UniqueUtil;
-import stroom.dashboard.shared.DownloadSearchResultFileType;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
 import stroom.document.client.event.OpenDocumentEvent;
@@ -423,7 +420,6 @@ public class QueryDocEditPresenter
                 .query(query)
                 .timeRange(timeRange)
                 .analyticProcessType(AnalyticProcessType.STREAMING)
-                .reportSettings(ReportSettings.builder().fileType(DownloadSearchResultFileType.EXCEL).build())
                 .notifications(createDefaultNotificationConfig(analyticUiDefaultConfig))
                 .errorFeed(analyticUiDefaultConfig.getDefaultErrorFeed())
                 .build();
@@ -450,7 +446,6 @@ public class QueryDocEditPresenter
                 .query(query)
                 .timeRange(timeRange)
                 .analyticProcessType(AnalyticProcessType.SCHEDULED_QUERY)
-                .reportSettings(ReportSettings.builder().fileType(DownloadSearchResultFileType.EXCEL).build())
 //                .analyticProcessConfig(analyticProcessConfig)
                 .notifications(createDefaultNotificationConfig(analyticUiDefaultConfig))
                 .errorFeed(analyticUiDefaultConfig.getDefaultErrorFeed())
@@ -477,7 +472,6 @@ public class QueryDocEditPresenter
                 .query(query)
                 .timeRange(timeRange)
                 .analyticProcessType(AnalyticProcessType.TABLE_BUILDER)
-                .reportSettings(ReportSettings.builder().fileType(DownloadSearchResultFileType.EXCEL).build())
                 .analyticProcessConfig(analyticProcessConfig)
                 .notifications(createDefaultNotificationConfig(analyticUiDefaultConfig))
                 .errorFeed(analyticUiDefaultConfig.getDefaultErrorFeed())

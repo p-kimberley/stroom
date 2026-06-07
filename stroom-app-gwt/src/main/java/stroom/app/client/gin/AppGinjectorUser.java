@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.app.client.gin;
@@ -20,6 +19,8 @@ package stroom.app.client.gin;
 import stroom.about.client.gin.AboutGinjector;
 import stroom.about.client.gin.AboutModule;
 import stroom.activity.client.ActivityModule;
+import stroom.ai.client.gin.AskStroomAIGinjector;
+import stroom.ai.client.gin.AskStroomAIModule;
 import stroom.alert.client.gin.AlertGinjector;
 import stroom.alert.client.gin.AlertModule;
 import stroom.analytics.client.gin.AnalyticsGinjector;
@@ -33,8 +34,10 @@ import stroom.aws.s3.client.gin.S3ConfigModule;
 import stroom.cache.client.gin.CacheGinjector;
 import stroom.cache.client.gin.CacheModule;
 import stroom.content.client.presenter.ContentTabPanePresenter;
+import stroom.contentstore.client.gin.ContentStoreModule;
 import stroom.core.client.presenter.CorePresenter;
 import stroom.core.client.presenter.FullScreenPresenter;
+import stroom.credentials.client.gin.CredentialsModule;
 import stroom.dashboard.client.embeddedquery.gin.EmbeddedQueryGinjector;
 import stroom.dashboard.client.embeddedquery.gin.EmbeddedQueryModule;
 import stroom.dashboard.client.gin.DashboardGinjector;
@@ -65,6 +68,8 @@ import stroom.folder.client.gin.FolderGinjector;
 import stroom.folder.client.gin.FolderModule;
 import stroom.gitrepo.client.gin.GitRepoGinjector;
 import stroom.gitrepo.client.gin.GitRepoModule;
+import stroom.http.client.gin.HttpGinjector;
+import stroom.http.client.gin.HttpModule;
 import stroom.importexport.client.gin.ImportExportConfigGinjector;
 import stroom.importexport.client.gin.ImportExportConfigModule;
 import stroom.index.client.gin.IndexGinjector;
@@ -134,8 +139,11 @@ import com.gwtplatform.mvp.client.proxy.PlaceManager;
         AlertModule.class,
         AnnotationModule.class,
         AppModule.class,
+        AskStroomAIModule.class,
+        ContentStoreModule.class,
         CacheModule.class,
         ContentTemplateModule.class,
+        CredentialsModule.class,
         RestModule.class,
         DashboardModule.class,
         DictionaryModule.class,
@@ -144,6 +152,7 @@ import com.gwtplatform.mvp.client.proxy.PlaceManager;
         FsVolumeModule.class,
         FeedModule.class,
         FolderModule.class,
+        HttpModule.class,
         ImportExportConfigModule.class,
         IndexModule.class,
         KafkaConfigModule.class,
@@ -184,6 +193,7 @@ public interface AppGinjectorUser extends
         AboutGinjector,
         AlertGinjector,
         AnnotationGinjector,
+        AskStroomAIGinjector,
         CacheGinjector,
         ContentTemplateGinjector,
         DashboardGinjector,
@@ -194,6 +204,7 @@ public interface AppGinjectorUser extends
         FeedGinjector,
         FolderGinjector,
         Ginjector,
+        HttpGinjector,
         ImportExportConfigGinjector,
         IndexGinjector,
         KafkaConfigGinjector,
@@ -227,7 +238,8 @@ public interface AppGinjectorUser extends
         ScyllaDbGinjector,
         StateStoreGinjector,
         PlanBGinjector,
-        GitRepoGinjector {
+        GitRepoGinjector /*,
+        CredentialsGinjector*/ {
 
     // Default implementation of standard resources
     EventBus getEventBus();

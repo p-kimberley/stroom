@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.security.impl.db;
 
 import stroom.db.util.JooqUtil;
@@ -28,6 +44,7 @@ import org.jooq.OrderField;
 import org.jooq.Record;
 import org.jooq.Record8;
 import org.jooq.Select;
+import org.jooq.SelectLimitPercentAfterOffsetStep;
 import org.jooq.Table;
 import org.jooq.exception.DataAccessException;
 import org.jooq.exception.DataTypeException;
@@ -229,7 +246,15 @@ public class AppPermissionDaoImpl implements AppPermissionDao {
 
             // Join recursive select to user.
             try {
-                final var sql = context
+                final SelectLimitPercentAfterOffsetStep<Record8<
+                        String,
+                        String,
+                        String,
+                        String,
+                        Boolean,
+                        Boolean,
+                        String,
+                        String>> sql = context
                         .select(STROOM_USER.UUID,
                                 STROOM_USER.NAME,
                                 STROOM_USER.DISPLAY_NAME,

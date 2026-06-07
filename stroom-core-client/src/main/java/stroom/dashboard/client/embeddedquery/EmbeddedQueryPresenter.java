@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,8 +382,7 @@ public class EmbeddedQueryPresenter
     private QueryDoc getQueryDoc() {
         QueryDoc doc = getQuerySettings().getEmbeddedQueryDoc();
         if (doc == null) {
-            doc = new QueryDoc();
-            doc.setUuid("Embedded Query");
+            doc = QueryDoc.builder().uuid("Embedded Query").build();
         }
         doc.setName(getDashboardContext().getDashboardDocRef().getName() + " - " + getComponentConfig().getName());
         return doc;

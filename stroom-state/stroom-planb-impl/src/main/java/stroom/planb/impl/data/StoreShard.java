@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.planb.impl.data;
 
 
@@ -9,14 +25,10 @@ import stroom.planb.impl.db.PlanBDb;
 import stroom.planb.impl.db.StatePaths;
 import stroom.planb.shared.AbstractPlanBSettings;
 import stroom.planb.shared.DurationSetting;
+import stroom.planb.shared.HasCondenseSettings;
 import stroom.planb.shared.PlanBDoc;
-import stroom.planb.shared.RangeStateSettings;
 import stroom.planb.shared.RetentionSettings;
-import stroom.planb.shared.SessionSettings;
 import stroom.planb.shared.SnapshotSettings;
-import stroom.planb.shared.StateSettings;
-import stroom.planb.shared.TemporalRangeStateSettings;
-import stroom.planb.shared.TemporalStateSettings;
 import stroom.util.concurrent.UncheckedInterruptedException;
 import stroom.util.io.FileUtil;
 import stroom.util.logging.LambdaLogger;
@@ -30,7 +42,6 @@ import stroom.util.zip.ZipUtil;
 import jakarta.inject.Provider;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.lmdbjava.LmdbException;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -68,7 +79,6 @@ class StoreShard implements Shard {
 
     private final PlanBDoc doc;
     private volatile Db<?, ?> db;
-    private volatile boolean open;
     private volatile Instant lastWriteTime;
     private volatile Instant lastSnapshotTime;
 
@@ -92,6 +102,12 @@ class StoreShard implements Shard {
             throw new UncheckedIOException(e);
         }
         open();
+    }
+
+    @Override
+    public boolean isIdle() {
+        // Store shards are long-lived and don't need idle cleanup.
+        return false;
     }
 
     @Override
@@ -174,19 +190,7 @@ class StoreShard implements Shard {
     }
 
     private RetentionSettings getRetentionSettings(final PlanBDoc doc) {
-        RetentionSettings retention = null;
-        if (doc.getSettings() instanceof final StateSettings stateSettings) {
-            retention = stateSettings.getRetention();
-        } else if (doc.getSettings() instanceof final TemporalStateSettings temporalStateSettings) {
-            retention = temporalStateSettings.getRetention();
-        } else if (doc.getSettings() instanceof final RangeStateSettings rangeStateSettings) {
-            retention = rangeStateSettings.getRetention();
-        } else if (doc.getSettings() instanceof final TemporalRangeStateSettings temporalRangeStateSettings) {
-            retention = temporalRangeStateSettings.getRetention();
-        } else if (doc.getSettings() instanceof final SessionSettings sessionSettings) {
-            retention = sessionSettings.getRetention();
-        }
-        return retention;
+        return NullSafe.get(doc, PlanBDoc::getSettings, AbstractPlanBSettings::getRetention);
     }
 
     @Override
@@ -226,15 +230,10 @@ class StoreShard implements Shard {
     }
 
     private static DurationSetting getCondenseDuration(final PlanBDoc doc) {
-        DurationSetting condense = null;
-        if (doc.getSettings() instanceof final TemporalStateSettings temporalStateSettings) {
-            condense = temporalStateSettings.getCondense();
-        } else if (doc.getSettings() instanceof final TemporalRangeStateSettings temporalRangeStateSettings) {
-            condense = temporalRangeStateSettings.getCondense();
-        } else if (doc.getSettings() instanceof final SessionSettings sessionSettings) {
-            condense = sessionSettings.getCondense();
+        if (doc.getSettings() instanceof final HasCondenseSettings hasCondenseSettings) {
+            return hasCondenseSettings.getCondense();
         }
-        return condense;
+        return null;
     }
 
     @Override
@@ -276,6 +275,7 @@ class StoreShard implements Shard {
                                 StandardCopyOption.REPLACE_EXISTING,
                                 StandardCopyOption.ATOMIC_MOVE);
                     } catch (final IOException e) {
+                        // Log any error that happens on move, we will end up reopening the old database.
                         LOGGER.error(e::getMessage, e);
                     }
 
@@ -283,6 +283,8 @@ class StoreShard implements Shard {
                     FileUtil.deleteDir(compactedDir);
 
                     // Open the new DB.
+                    // Note that if the move above fails we will end up reopening the old database.
+                    // This is expected recovery behaviour.
                     open();
 
                     lastWriteTime = Instant.now();
@@ -327,21 +329,25 @@ class StoreShard implements Shard {
 
     @Override
     public void createSnapshot() {
+        // Check if a new snapshot is required and create one if it is.
         if (isNewSnapshotRequired()) {
             try {
                 writeLock.lockInterruptibly();
                 try {
-                    // TODO : Possibly create windowed snapshots.
-                    final Instant lastWriteTime = this.lastWriteTime;
-                    try {
-                        // Get the snapshot file.
-                        Files.createDirectories(snapshotDir);
-                        final Path tmpFile = getSnapshotTmp();
-                        final Path zipFile = getSnapshotZip();
-                        createZip(tmpFile, lastWriteTime);
-                        Files.move(tmpFile, zipFile, StandardCopyOption.ATOMIC_MOVE);
-                    } finally {
-                        this.lastSnapshotTime = lastWriteTime;
+                    // Check again that a new snapshot is required new we are under lock.
+                    if (isNewSnapshotRequired()) {
+                        // TODO : Possibly create windowed snapshots.
+                        final Instant lastWriteTime = this.lastWriteTime;
+                        try {
+                            // Get the snapshot file.
+                            Files.createDirectories(snapshotDir);
+                            final Path tmpFile = getSnapshotTmp();
+                            final Path zipFile = getSnapshotZip();
+                            createZip(tmpFile, lastWriteTime);
+                            Files.move(tmpFile, zipFile, StandardCopyOption.ATOMIC_MOVE);
+                        } finally {
+                            this.lastSnapshotTime = lastWriteTime;
+                        }
                     }
                 } catch (final Exception e) {
                     LOGGER.error(e::getMessage, e);
@@ -411,19 +417,9 @@ class StoreShard implements Shard {
     @Override
     public <R> R get(final Function<Db<?, ?>, R> function) {
         try {
-            final Db<?, ?> db = this.db;
-            if (db != null) {
-                return function.apply(db);
-            }
-        } catch (final LmdbException e) {
-            LOGGER.debug(e::getMessage, e);
-        }
-
-        // Try again under lock.
-        try {
             readLock.lockInterruptibly();
             try {
-                if (!open) {
+                if (db == null) {
                     throw new RuntimeException("Database is closed");
                 }
                 return function.apply(db);
@@ -435,17 +431,15 @@ class StoreShard implements Shard {
         }
     }
 
-    @Override
-    public void cleanup() {
-
-    }
-
+    /**
+     * Must only be called during construction (before the object is published) or while holding
+     * {@code exclusiveReadLock}.
+     */
     private void open() {
-        if (!open) {
+        if (db == null) {
             if (Files.exists(shardDir)) {
                 LOGGER.info(() -> "Found local shard for '" + doc.asDocRef() + "'");
                 db = PlanBDb.open(doc, shardDir, byteBuffers, byteBufferFactory, false);
-                open = true;
 
             } else {
                 // If this node is supposed to be a node that stores shards, but it doesn't have it, then error.
@@ -456,11 +450,16 @@ class StoreShard implements Shard {
         }
     }
 
+    /**
+     * Must only be called while holding {@code exclusiveReadLock}.
+     */
     private void close() {
-        if (open) {
-            db.close();
-            db = null;
-            open = false;
+        if (db != null) {
+            try {
+                db.close();
+            } finally {
+                db = null;
+            }
         }
     }
 
@@ -472,19 +471,9 @@ class StoreShard implements Shard {
     @Override
     public String getInfo() {
         try {
-            final Db<?, ?> db = this.db;
-            if (db != null) {
-                return db.getInfoString();
-            }
-        } catch (final LmdbException e) {
-            LOGGER.debug(e::getMessage, e);
-        }
-
-        // Try again under lock.
-        try {
             readLock.lockInterruptibly();
             try {
-                if (!open) {
+                if (db == null) {
                     throw new RuntimeException("Database is closed");
                 }
                 return db.getInfoString();

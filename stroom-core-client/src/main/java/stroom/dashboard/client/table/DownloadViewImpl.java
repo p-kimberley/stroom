@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package stroom.dashboard.client.table;
 
+import stroom.analytics.shared.ReportSettings;
 import stroom.dashboard.client.table.DownloadPresenter.DownloadView;
 import stroom.dashboard.shared.DownloadSearchResultFileType;
 import stroom.item.client.SelectionBox;
@@ -55,11 +56,8 @@ public class DownloadViewImpl extends ViewImpl implements DownloadView {
         percent.setValue(100);
         percent.setEnabled(false);
 
-        fileType.addItem(DownloadSearchResultFileType.EXCEL);
-        fileType.addItem(DownloadSearchResultFileType.CSV);
-        fileType.addItem(DownloadSearchResultFileType.TSV);
-
-        fileType.setValue(DownloadSearchResultFileType.EXCEL);
+        fileType.addItems(DownloadSearchResultFileType.asSortedList());
+        fileType.setValue(ReportSettings.DEFAULT_FILE_TYPE);
 
         downloadAllTables.setEnabled(isExcelFileTypeSelected());
         fileType.addValueChangeHandler(event -> {

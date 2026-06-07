@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import stroom.query.api.DateTimeSettings;
 import stroom.query.api.ExpressionOperator;
 import stroom.query.api.ExpressionOperator.Op;
@@ -12,7 +28,6 @@ import stroom.search.elastic.shared.ElasticIndexField;
 
 import co.elastic.clients.elasticsearch._types.mapping.Property.Kind;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
 import org.junit.jupiter.api.Assertions;
@@ -20,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.ZonedDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 public class TestSearchExpressionQueryBuilder {
 
@@ -29,7 +45,7 @@ public class TestSearchExpressionQueryBuilder {
         final ExpressionOperator.Builder expressionBuilder = ExpressionOperator.builder().op(Op.AND);
         final SearchExpressionQueryBuilder builder = new SearchExpressionQueryBuilder(
                 null,
-                new ElasticIndexDoc(),
+                ElasticIndexDoc.builder().uuid(UUID.randomUUID().toString()).build(),
                 indexFieldCache,
                 null,
                 DateTimeSettings.builder().build()

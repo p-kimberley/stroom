@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import dev.langchain4j.service.memory.ChatMemoryAccess;
 
 public interface SummaryReducer extends ChatMemoryAccess {
 
-    public static final String USER_MESSAGE = """
+    String USER_MESSAGE = """
                 Merge the following TWO summaries into a single improved summary.
                 Preserve important details and remove duplicates.
 

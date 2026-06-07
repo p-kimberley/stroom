@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package stroom.search.elastic.shared;
 
 import stroom.docref.DocRef;
 import stroom.docs.shared.Description;
-import stroom.docstore.shared.Doc;
+import stroom.docstore.shared.AbstractDoc;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
 
@@ -45,7 +45,7 @@ import java.util.Objects;
         "description",
         "connection"})
 @JsonInclude(Include.NON_NULL)
-public class ElasticClusterDoc extends Doc {
+public class ElasticClusterDoc extends AbstractDoc {
 
     public static final String TYPE = "ElasticCluster";
     public static final DocumentType DOCUMENT_TYPE = DocumentTypeRegistry.ELASTIC_CLUSTER_DOCUMENT_TYPE;
@@ -55,10 +55,6 @@ public class ElasticClusterDoc extends Doc {
 
     @JsonProperty
     private ElasticConnectionConfig connection;
-
-    public ElasticClusterDoc() {
-        this.connection = new ElasticConnectionConfig();
-    }
 
     @JsonCreator
     public ElasticClusterDoc(
@@ -126,5 +122,57 @@ public class ElasticClusterDoc extends Doc {
                "description='" + description + '\'' +
                ", connectionConfig=" + connection +
                '}';
+    }
+
+    public Builder copy() {
+        return new Builder(this);
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder
+            extends AbstractDoc.AbstractBuilder<ElasticClusterDoc, ElasticClusterDoc.Builder> {
+
+        private String description;
+        private ElasticConnectionConfig connection = new ElasticConnectionConfig();
+
+        private Builder() {
+        }
+
+        private Builder(final ElasticClusterDoc elasticClusterDoc) {
+            super(elasticClusterDoc);
+            this.description = elasticClusterDoc.description;
+            this.connection = elasticClusterDoc.connection;
+        }
+
+        public Builder description(final String description) {
+            this.description = description;
+            return self();
+        }
+
+        public Builder connection(final ElasticConnectionConfig connection) {
+            this.connection = connection;
+            return self();
+        }
+
+        @Override
+        protected Builder self() {
+            return this;
+        }
+
+        public ElasticClusterDoc build() {
+            return new ElasticClusterDoc(
+                    uuid,
+                    name,
+                    version,
+                    createTimeMs,
+                    updateTimeMs,
+                    createUser,
+                    updateUser,
+                    description,
+                    connection);
+        }
     }
 }

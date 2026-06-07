@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.proxy;
 
 
@@ -87,7 +103,7 @@ public enum StroomStatusCode {
             HttpServletResponse.SC_UNAUTHORIZED,
             310,
             "Client Certificate failed authentication",
-            "The feed you have provided does not allow your client certificate to send data"),
+            "The provided client certificate could not be authenticated"),
 
     CLIENT_TOKEN_NOT_AUTHENTICATED(
             HttpServletResponse.SC_UNAUTHORIZED,
@@ -112,6 +128,12 @@ public enum StroomStatusCode {
             314,
             "Data feed key has expired",
             "The provided data feed key has passed its expiry date"),
+
+    CLIENT_CERTIFICATE_DN_NOT_AUTHENTICATED(
+            HttpServletResponse.SC_UNAUTHORIZED,
+            315,
+            "Client Certificate DN failed authentication",
+            "The provided client certificate DN could not be authenticated"),
 
     COMPRESSED_STREAM_INVALID(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
             400,

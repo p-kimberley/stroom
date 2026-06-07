@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.planb.impl.db;
@@ -56,13 +55,17 @@ import stroom.query.language.functions.ValLong;
 import stroom.query.language.functions.ValShort;
 import stroom.query.language.functions.ValString;
 import stroom.security.mock.MockSecurityContext;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.SimpleTaskContext;
 import stroom.task.api.SimpleTaskContextFactory;
+import stroom.task.shared.ThreadPool;
 import stroom.util.io.ByteSize;
 import stroom.util.io.FileUtil;
 import stroom.util.zip.ZipUtil;
 
 import org.apache.commons.lang3.StringUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -79,6 +82,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,6 +100,8 @@ class TestTemporalStateDb {
     private static final PlanBDoc DOC = getDoc(BASIC_SETTINGS);
     private static final String MAP_UUID = "map-uuid";
     private static final String MAP_NAME = "map-name";
+    private static ExecutorService executorService;
+    private static ExecutorProvider executorProvider;
 
     private final Instant refTime = Instant.parse("2000-01-01T00:00:00.000Z");
     private final List<KeyFunction> keyFunctions = List.of(
@@ -125,6 +133,28 @@ class TestTemporalStateDb {
             new KeyFunction("Variable long", KeyType.VARIABLE,
                     i -> new TemporalKey(KeyPrefix.create(
                             ValString.create(StateValueTestUtil.makeString(1000))), refTime)));
+
+    @BeforeAll
+    static void beforeAll() {
+        executorService = Executors.newCachedThreadPool();
+        executorProvider = new ExecutorProvider() {
+
+            @Override
+            public Executor get() {
+                return executorService;
+            }
+
+            @Override
+            public Executor get(final ThreadPool threadPool) {
+                return executorService;
+            }
+        };
+    }
+
+    @AfterAll
+    static void afterAll() {
+        executorService.shutdown();
+    }
 
     @Test
     void test(@TempDir final Path tempDir) {
@@ -201,12 +231,14 @@ class TestTemporalStateDb {
                 () -> planBConfig,
                 statePaths,
                 null,
-                new SimpleTaskContextFactory());
+                new SimpleTaskContextFactory(),
+                executorProvider);
         final MergeProcessor mergeProcessor = new MergeProcessor(
                 statePaths,
                 new MockSecurityContext(),
                 new SimpleTaskContextFactory(),
-                shardManager);
+                shardManager,
+                executorProvider);
 
         final int threads = 10;
 
@@ -517,8 +549,9 @@ class TestTemporalStateDb {
 //                    total += db.deleteOldData(refTime2, true);
 //                    if (total > 0) {
 //                        // If we removed data then compact the shard.
-////                        taskContext.info(() -> "Compacting shard");
-////                        db.compact();
+
+    /// /                        taskContext.info(() -> "Compacting shard");
+    /// /                        db.compact();
 //                    }
 //                }
 //
@@ -526,7 +559,6 @@ class TestTemporalStateDb {
 //            }
 //        }
 //    }
-
     private void testWrite(final Path dbDir) {
         final Instant refTime = Instant.parse("2000-01-01T00:00:00.000Z");
         try (final TemporalStateDb db = TemporalStateDb.create(dbDir, BYTE_BUFFERS, DOC, false)) {
@@ -606,7 +638,6 @@ class TestTemporalStateDb {
     private static PlanBDoc getDoc(final TemporalStateSettings settings) {
         return PlanBDoc
                 .builder()
-                .type(PlanBDoc.TYPE)
                 .uuid(MAP_UUID)
                 .name(MAP_NAME)
                 .stateType(StateType.TEMPORAL_STATE)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package stroom.search.elastic.shared;
 
 import stroom.docref.DocRef;
 import stroom.docs.shared.Description;
-import stroom.docstore.shared.Doc;
+import stroom.docstore.shared.AbstractDoc;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
 
@@ -41,7 +41,6 @@ import java.util.Objects;
         "[Elasticsearch]({{< relref \"docs/user-guide/indexing/elasticsearch\" >}})" +
         "{{% /see-also %}}")
 @JsonPropertyOrder({
-        "type",
         "uuid",
         "name",
         "version",
@@ -64,7 +63,7 @@ import java.util.Objects;
         "retentionExpression"
 })
 @JsonInclude(Include.NON_NULL)
-public class ElasticIndexDoc extends Doc {
+public class ElasticIndexDoc extends AbstractDoc {
 
     public static final int DEFAULT_SEARCH_SLICES = 1;
     public static final int DEFAULT_SEARCH_SCROLL_SIZE = 1000;
@@ -138,15 +137,6 @@ public class ElasticIndexDoc extends Doc {
     @JsonProperty
     private DocRef defaultExtractionPipeline;
 
-    public ElasticIndexDoc() {
-        searchSlices = DEFAULT_SEARCH_SLICES;
-        searchScrollSize = DEFAULT_SEARCH_SCROLL_SIZE;
-        fields = new ArrayList<>();
-        timeField = DEFAULT_TIME_FIELD;
-        rerankTextFieldSuffix = DEFAULT_TEXT_FIELD_SUFFIX;
-        rerankScoreMinimum = DEFAULT_RERANK_SCORE_MINIMUM;
-    }
-
     @JsonCreator
     public ElasticIndexDoc(
             @JsonProperty("uuid") final String uuid,
@@ -191,7 +181,7 @@ public class ElasticIndexDoc extends Doc {
         if (this.timeField == null || this.timeField.isEmpty()) {
             this.timeField = DEFAULT_TIME_FIELD;
         }
-        if (this.rerankTextFieldSuffix == null ||  this.rerankTextFieldSuffix.isEmpty()) {
+        if (this.rerankTextFieldSuffix == null || this.rerankTextFieldSuffix.isEmpty()) {
             this.rerankTextFieldSuffix = DEFAULT_TEXT_FIELD_SUFFIX;
         }
         if (this.rerankScoreMinimum == null) {
@@ -357,5 +347,136 @@ public class ElasticIndexDoc extends Doc {
                ", clusterRef='" + clusterRef + '\'' +
                ", indexName='" + indexName + '\'' +
                '}';
+    }
+
+    public Builder copy() {
+        return new Builder(this);
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder extends AbstractDoc.AbstractBuilder<ElasticIndexDoc, ElasticIndexDoc.Builder> {
+
+        private DocRef clusterRef;
+        private String description;
+        private String indexName;
+        private Integer searchSlices = ElasticIndexDoc.DEFAULT_SEARCH_SLICES;
+        private Integer searchScrollSize = ElasticIndexDoc.DEFAULT_SEARCH_SCROLL_SIZE;
+        private List<ElasticIndexField> fields = new ArrayList<>();
+        private String timeField = ElasticIndexDoc.DEFAULT_TIME_FIELD;
+        private DocRef defaultExtractionPipeline;
+        private DocRef vectorGenerationModelRef;
+        private DocRef rerankModelRef;
+        private String rerankTextFieldSuffix = DEFAULT_TEXT_FIELD_SUFFIX;
+        private Float rerankScoreMinimum = DEFAULT_RERANK_SCORE_MINIMUM;
+
+        private Builder() {
+        }
+
+        private Builder(final ElasticIndexDoc elasticIndexDoc) {
+            super(elasticIndexDoc);
+            this.clusterRef = elasticIndexDoc.clusterRef;
+            this.description = elasticIndexDoc.description;
+            this.indexName = elasticIndexDoc.indexName;
+            this.searchSlices = elasticIndexDoc.searchSlices;
+            this.searchScrollSize = elasticIndexDoc.searchScrollSize;
+            this.fields = elasticIndexDoc.fields;
+            this.timeField = elasticIndexDoc.timeField;
+            this.defaultExtractionPipeline = elasticIndexDoc.defaultExtractionPipeline;
+            this.vectorGenerationModelRef = elasticIndexDoc.vectorGenerationModelRef;
+            this.rerankModelRef = elasticIndexDoc.rerankModelRef;
+            this.rerankTextFieldSuffix = elasticIndexDoc.rerankTextFieldSuffix;
+            this.rerankScoreMinimum = elasticIndexDoc.rerankScoreMinimum;
+        }
+
+        public Builder clusterRef(final DocRef clusterRef) {
+            this.clusterRef = clusterRef;
+            return self();
+        }
+
+        public Builder description(final String description) {
+            this.description = description;
+            return self();
+        }
+
+        public Builder indexName(final String indexName) {
+            this.indexName = indexName;
+            return self();
+        }
+
+        public Builder searchSlices(final Integer searchSlices) {
+            this.searchSlices = searchSlices;
+            return self();
+        }
+
+        public Builder searchScrollSize(final Integer searchScrollSize) {
+            this.searchScrollSize = searchScrollSize;
+            return self();
+        }
+
+        public Builder fields(final List<ElasticIndexField> fields) {
+            this.fields = fields;
+            return self();
+        }
+
+        public Builder timeField(final String timeField) {
+            this.timeField = timeField;
+            return self();
+        }
+
+        public Builder defaultExtractionPipeline(final DocRef defaultExtractionPipeline) {
+            this.defaultExtractionPipeline = defaultExtractionPipeline;
+            return self();
+        }
+
+        public Builder vectorGenerationModelRef(final DocRef vectorGenerationModelRef) {
+            this.vectorGenerationModelRef = vectorGenerationModelRef;
+            return self();
+        }
+
+        public Builder rerankModelRef(final DocRef rerankModelRef) {
+            this.rerankModelRef = rerankModelRef;
+            return self();
+        }
+
+        public Builder rerankTextFieldSuffix(final String rerankTextFieldSuffix) {
+            this.rerankTextFieldSuffix = rerankTextFieldSuffix;
+            return self();
+        }
+
+        public Builder rerankScoreMinimum(final Float rerankScoreMinimum) {
+            this.rerankScoreMinimum = rerankScoreMinimum;
+            return self();
+        }
+
+        @Override
+        protected Builder self() {
+            return this;
+        }
+
+        public ElasticIndexDoc build() {
+            return new ElasticIndexDoc(
+                    uuid,
+                    name,
+                    version,
+                    createTimeMs,
+                    updateTimeMs,
+                    createUser,
+                    updateUser,
+                    description,
+                    clusterRef,
+                    indexName,
+                    searchSlices,
+                    searchScrollSize,
+                    fields,
+                    timeField,
+                    vectorGenerationModelRef,
+                    rerankModelRef,
+                    rerankTextFieldSuffix,
+                    rerankScoreMinimum,
+                    defaultExtractionPipeline);
+        }
     }
 }

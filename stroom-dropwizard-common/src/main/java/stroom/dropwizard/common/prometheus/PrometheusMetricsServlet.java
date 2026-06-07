@@ -1,13 +1,5 @@
 /*
- * This file was copied from https://github.com/dhatim/dropwizard-prometheus
- * at commit a674a1696a67186823a464383484809738665282 (v4.0.1-2)
- * and modified to work within the Stroom code base. All subsequent
- * modifications from the original are also made under the Apache 2.0 licence
- * and are subject to Crown Copyright.
- */
-
-/*
- * Copyright 2025 github.com/dhatim
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +15,15 @@
  */
 
 /*
- * Copyright 2025 Crown Copyright
+ * This file was copied from https://github.com/dhatim/dropwizard-prometheus
+ * at commit a674a1696a67186823a464383484809738665282 (v4.0.1-2)
+ * and modified to work within the Stroom code base. All subsequent
+ * modifications from the original are also made under the Apache 2.0 licence
+ * and are subject to Crown Copyright.
+ */
+
+/*
+ * Copyright 2025 github.com/dhatim
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@ class PrometheusMetricsServlet extends HttpServlet implements IsAdminServlet {
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(PrometheusMetricsServlet.class);
     private static final String BASE_PATH_SPEC = "/prometheusMetrics";
     private static final Set<String> PATH_SPECS = Set.of(BASE_PATH_SPEC);
+    private static final String DISPLAY_NAME = "Prometheus Metrics";
 
     public static final String METRICS_REGISTRY = MetricsServlet.class.getCanonicalName() + ".registry";
     public static final String METRIC_FILTER = MetricsServlet.class.getCanonicalName() + ".metricFilter";
@@ -95,6 +96,11 @@ class PrometheusMetricsServlet extends HttpServlet implements IsAdminServlet {
     @Override
     public Set<String> getPathSpecs() {
         return PATH_SPECS;
+    }
+
+    @Override
+    public String getDisplayName() {
+        return DISPLAY_NAME;
     }
 
     @Override

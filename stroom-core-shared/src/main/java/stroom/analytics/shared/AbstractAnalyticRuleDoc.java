@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@
 package stroom.analytics.shared;
 
 import stroom.docref.DocRef;
-import stroom.docstore.shared.Doc;
+import stroom.docstore.shared.AbstractDoc;
 import stroom.query.api.Param;
 import stroom.query.api.TimeRange;
+import stroom.util.shared.NullSafe;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -34,7 +35,7 @@ import java.util.Objects;
 
 @JsonPropertyOrder(alphabetic = true)
 @JsonInclude(Include.NON_NULL)
-public abstract class AbstractAnalyticRuleDoc extends Doc {
+public abstract class AbstractAnalyticRuleDoc extends AbstractDoc {
 
     @JsonProperty
     private final String description;
@@ -66,28 +67,8 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
     @JsonProperty
     private final DuplicateNotificationConfig duplicateNotificationConfig;
 
-    public AbstractAnalyticRuleDoc() {
-        description = null;
-        languageVersion = null;
-        parameters = null;
-        timeRange = null;
-        query = null;
-        analyticProcessType = null;
-        analyticProcessConfig = null;
-        analyticNotificationConfig = null;
-        notifications = new ArrayList<>();
-        errorFeed = null;
-        rememberNotifications = false;
-        suppressDuplicateNotifications = false;
-        duplicateNotificationConfig = new DuplicateNotificationConfig(
-                false,
-                false,
-                false,
-                Collections.emptyList());
-    }
-
-    @SuppressWarnings("checkstyle:linelength")
     @JsonCreator
+    @SuppressWarnings("checkstyle:linelength")
     public AbstractAnalyticRuleDoc(@JsonProperty("type") final String type,
                                    @JsonProperty("uuid") final String uuid,
                                    @JsonProperty("name") final String name,
@@ -128,16 +109,12 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
         this.errorFeed = errorFeed;
         this.rememberNotifications = rememberNotifications;
         this.suppressDuplicateNotifications = suppressDuplicateNotifications;
-
-        if (duplicateNotificationConfig == null) {
-            this.duplicateNotificationConfig = new DuplicateNotificationConfig(
-                    rememberNotifications,
-                    suppressDuplicateNotifications,
-                    false,
-                    Collections.emptyList());
-        } else {
-            this.duplicateNotificationConfig = duplicateNotificationConfig;
-        }
+        this.duplicateNotificationConfig = NullSafe.requireNonNullElseGet(duplicateNotificationConfig,
+                () -> new DuplicateNotificationConfig(
+                        rememberNotifications,
+                        suppressDuplicateNotifications,
+                        false,
+                        Collections.emptyList()));
     }
 
     public String getDescription() {
@@ -202,9 +179,6 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) {
-            return true;
-        }
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
@@ -223,7 +197,8 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
                Objects.equals(analyticProcessConfig, that.analyticProcessConfig) &&
                Objects.equals(analyticNotificationConfig, that.analyticNotificationConfig) &&
                Objects.equals(notifications, that.notifications) &&
-               Objects.equals(errorFeed, that.errorFeed);
+               Objects.equals(errorFeed, that.errorFeed) &&
+               Objects.equals(duplicateNotificationConfig, that.duplicateNotificationConfig);
     }
 
     @Override
@@ -240,12 +215,13 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
                 notifications,
                 errorFeed,
                 rememberNotifications,
-                suppressDuplicateNotifications);
+                suppressDuplicateNotifications,
+                duplicateNotificationConfig);
     }
 
     @Override
     public String toString() {
-        return "AnalyticRuleDoc{" +
+        return "AbstractAnalyticRuleDoc{" +
                "description='" + description + '\'' +
                ", languageVersion=" + languageVersion +
                ", parameters=" + parameters +
@@ -258,12 +234,13 @@ public abstract class AbstractAnalyticRuleDoc extends Doc {
                ", errorFeed=" + errorFeed +
                ", rememberNotifications=" + rememberNotifications +
                ", suppressDuplicateNotifications=" + suppressDuplicateNotifications +
+               ", duplicateNotificationConfig=" + duplicateNotificationConfig +
                '}';
     }
 
     public abstract static class AbstractAnalyticRuleDocBuilder
             <T extends AbstractAnalyticRuleDoc, B extends AbstractAnalyticRuleDocBuilder<T, ?>>
-            extends AbstractBuilder<AbstractAnalyticRuleDoc, B> {
+            extends AbstractBuilder<T, B> {
 
         String description;
         QueryLanguageVersion languageVersion;

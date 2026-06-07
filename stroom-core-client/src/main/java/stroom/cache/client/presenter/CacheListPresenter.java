@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
 import stroom.util.client.DelayedUpdate;
 import stroom.util.shared.PageResponse;
+import stroom.util.shared.PropertyPath;
 import stroom.util.shared.cache.CacheIdentity;
 import stroom.widget.util.client.MultiSelectionModel;
 import stroom.widget.util.client.MultiSelectionModelImpl;
@@ -110,7 +111,12 @@ public class CacheListPresenter extends MyPresenterWidget<PagerView> {
         dataGrid.addResizableColumn(new Column<CacheIdentity, String>(new TextCell()) {
             @Override
             public String getValue(final CacheIdentity cacheIdentity) {
-                return cacheIdentity.getBasePropertyPath().toString();
+                final PropertyPath basePropertyPath = cacheIdentity.getBasePropertyPath();
+                if (basePropertyPath == null || basePropertyPath.isBlank()) {
+                    return "Cache not configurable";
+                } else {
+                    return basePropertyPath.toString();
+                }
             }
         }, "Property Path Base", 500);
 

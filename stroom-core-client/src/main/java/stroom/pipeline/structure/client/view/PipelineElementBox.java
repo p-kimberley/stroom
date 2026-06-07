@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ public class PipelineElementBox extends Box<PipelineElement> {
     private static final String BASE_CLASS = "pipelineElementBox";
     private static final String SELECTED_CLASS = BASE_CLASS + "-backgroundSelected";
     private static final String HOTSPOT_CLASS = BASE_CLASS + "-hotspot";
+    private static final String DISABLED_CLASS = BASE_CLASS + "-disabled";
     private static final String SEVERITY_INFO_CLASS = BASE_CLASS + "-severityInfo";
     private static final String SEVERITY_WARN_CLASS = BASE_CLASS + "-severityWarn";
     private static final String SEVERITY_ERROR_CLASS = BASE_CLASS + "-severityError";
@@ -112,6 +113,10 @@ public class PipelineElementBox extends Box<PipelineElement> {
     @Override
     public void showHotspot(final boolean show) {
         toggleClass(HOTSPOT_CLASS, show);
+    }
+
+    public void setDisabled(final boolean disabled) {
+        toggleClass(DISABLED_CLASS, disabled);
     }
 
     private void updateFilterState() {

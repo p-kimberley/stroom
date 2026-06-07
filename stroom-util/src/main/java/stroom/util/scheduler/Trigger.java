@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 package stroom.util.scheduler;
 
+import org.jspecify.annotations.Nullable;
+
 import java.time.Instant;
 
 public interface Trigger {
 
-    Instant getNextExecutionTimeAfter(Instant afterTime);
+    @Nullable Instant getNextExecutionTimeAfter(Instant afterTime);
 }

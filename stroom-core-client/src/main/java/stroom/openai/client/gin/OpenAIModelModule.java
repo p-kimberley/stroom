@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import stroom.openai.client.presenter.OpenAIModelSettingsPresenter.OpenAIModelSe
 import stroom.openai.client.view.OpenAIModelSettingsViewImpl;
 
 public class OpenAIModelModule extends PluginModule {
+
     @Override
     protected void configure() {
         bindPlugin(OpenAIModelPlugin.class);

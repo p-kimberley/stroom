@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.pathways.impl;
 
 import stroom.bytebuffer.impl6.ByteBuffers;
@@ -49,7 +65,7 @@ public class TraceProcessor {
             byteBuffers.useBytes(traceId, keyByteBuffer -> {
                 final SimpleDb processingStatus = pathwaysDb.getProcessingStatus();
                 final boolean processed = processingStatus
-                        .get(keyByteBuffer.duplicate(), Objects::nonNull);
+                        .get(writer.getWriteTxn(), keyByteBuffer.duplicate(), Objects::nonNull);
                 if (!processed) {
                     // Get the full trace.
                     final Trace trace = traceFunction.apply(traceId);
@@ -87,7 +103,7 @@ public class TraceProcessor {
         final SimpleDb pathways = pathwaysDb.getPathways();
         final byte[] keyBytes = pathKey.toString().getBytes(StandardCharsets.UTF_8);
         byteBuffers.useBytes(keyBytes, keyByteBuffer -> {
-            Pathway pathway = pathways.get(keyByteBuffer, valueByteBuffer -> {
+            Pathway pathway = pathways.get(writer.getWriteTxn(), keyByteBuffer, valueByteBuffer -> {
                 if (valueByteBuffer == null) {
                     messageReceiver.log(Severity.INFO, () -> "Adding new root path: " + root.getName());
                     final PathNode pathNode = new PathNode(root.getName());

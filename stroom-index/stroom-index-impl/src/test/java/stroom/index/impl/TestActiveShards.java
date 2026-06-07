@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.index.impl;
 
 import stroom.index.mock.MockIndexShardCreator;
@@ -8,6 +24,7 @@ import stroom.index.shared.IndexShard.IndexShardStatus;
 import stroom.index.shared.IndexShardKey;
 import stroom.index.shared.IndexVolume;
 import stroom.index.shared.IndexVolume.VolumeUseState;
+import stroom.index.shared.LuceneVersionUtil;
 import stroom.node.mock.MockNodeInfo;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -97,15 +114,21 @@ class TestActiveShards {
     }
 
     void runTest(
-            final IndexShardStatus status, final IndexVolume.Builder indexVolumeBuilder,
-            final VolumeUseState volumeUseState, final int documentCount, final int maxDocsPerShard,
+            final IndexShardStatus status,
+            final IndexVolume.Builder indexVolumeBuilder,
+            final VolumeUseState volumeUseState,
+            final int documentCount,
+            final int maxDocsPerShard,
             final VerificationMode isDocumentAdded) {
         // given we have an existing shard
         final IndexVolume indexVolume = indexVolumeBuilder.state(volumeUseState).build();
         final IndexShard myIndexShard = indexShardDao.create(
-                indexShardKey, indexVolume, nodeInfo.getThisNodeName(), "1.0");
-        myIndexShard.setStatus(status);
-        myIndexShard.setDocumentCount(documentCount);
+                indexShardKey,
+                indexVolume,
+                nodeInfo.getThisNodeName(),
+                LuceneVersionUtil.CURRENT_LUCENE_VERSION.getDisplayValue());
+        indexShardDao.setStatus(myIndexShard.getId(), status);
+        indexShardDao.update(myIndexShard.getId(), documentCount, 0L, 0L, 0L);
 
         Mockito.lenient().when(indexShardWriterCache.getOrOpenWriter(anyLong())).thenReturn(anotherIndexShardWriter);
         Mockito.lenient().when(indexShardWriterCache.getOrOpenWriter(myIndexShard.getId()))

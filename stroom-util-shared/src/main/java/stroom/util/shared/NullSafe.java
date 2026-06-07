@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -227,7 +228,7 @@ public class NullSafe {
         if (list == null || list.isEmpty()) {
             return null;
         } else {
-            // GWT can't do getFirst()
+            //noinspection SequencedCollectionMethodCanBeUsed   // GWT can't do getFirst()
             return list.get(0);
         }
     }
@@ -239,7 +240,7 @@ public class NullSafe {
         if (list == null || list.isEmpty()) {
             return null;
         } else {
-            // GWT can't do getLast()
+            //noinspection SequencedCollectionMethodCanBeUsed   // GWT can't do getLast()
             return list.get(list.size() - 1);
         }
     }
@@ -530,6 +531,13 @@ public class NullSafe {
     }
 
     /**
+     * @return True if the collection is null or empty
+     */
+    public static <T> boolean isEmptyResultPage(final ResultPage<T> resultPage) {
+        return resultPage == null || resultPage.isEmpty();
+    }
+
+    /**
      * @return True if value is null or the collection is null or empty
      */
     public static <T1, T2 extends Collection<E>, E> boolean isEmptyCollection(final T1 value,
@@ -597,6 +605,13 @@ public class NullSafe {
     /**
      * @return True if the collection is non-null and not empty
      */
+    public static <T> boolean hasItems(final ResultPage<T> resultPage) {
+        return resultPage != null && !resultPage.isEmpty();
+    }
+
+    /**
+     * @return True if the collection is non-null and not empty
+     */
     public static <T> boolean hasItems(final T[] items) {
         return items != null && items.length > 0;
     }
@@ -614,6 +629,15 @@ public class NullSafe {
     public static <T> int size(final Collection<T> collection) {
         return collection != null
                 ? collection.size()
+                : 0;
+    }
+
+    /**
+     * @return The size of the collection or zero if null.
+     */
+    public static <T> int size(final ResultPage<T> resultPage) {
+        return resultPage != null
+                ? resultPage.size()
                 : 0;
     }
 
@@ -698,8 +722,8 @@ public class NullSafe {
     }
 
     /**
-     * Returns a {@link Stream<Entry<K,V>>} of entries is non-null
-     * else returns an empty {@link Stream<Entry<K,V>>}
+     * Returns a {@link Stream<Entry>} of entries is non-null
+     * else returns an empty {@link Stream<Entry>}
      */
     public static <K, V> Stream<Entry<K, V>> streamEntries(final Map<K, V> map) {
         if (map == null || map.isEmpty()) {
@@ -800,6 +824,37 @@ public class NullSafe {
     }
 
     /**
+     * Returns a list containing only the non-null items from list.
+     * If list is null, an empty list will be returned.
+     *
+     * @return An immutable list containing no null values.
+     */
+    public static <L extends List<T>, T> List<T> removeNulls(final L list) {
+        if (list == null || list.stream().allMatch(Objects::isNull)) {
+            return Collections.emptyList();
+        } else if (list.stream().allMatch(Objects::nonNull)) {
+            return Collections.unmodifiableList(list);
+        } else {
+            //noinspection SimplifyStreamApiCallChains // cos GWT
+            return list.stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableList());
+        }
+    }
+
+    /**
+     * Returns an unmodifiable view of a new {@link ArrayList} instance that has been populated with the
+     * contents of list in a null-safe way.
+     * Allows null list elements.
+     */
+    public static <L extends List<T>, T> List<T> copyOf(final L list) {
+        //noinspection Java9CollectionFactory // List.copyOf will NPE for null elements
+        return NullSafe.hasItems(list)
+                ? Collections.unmodifiableList(new ArrayList<>(list))
+                : Collections.emptyList();
+    }
+
+    /**
      * Returns a new {@link ArrayList} instance. If list is not null, the new {@link ArrayList} will
      * contain the contents of list, else it will be empty.
      */
@@ -844,6 +899,24 @@ public class NullSafe {
         return set != null
                 ? Collections.unmodifiableSet(set)
                 : Collections.emptySet();
+    }
+
+    /**
+     * Returns a set containing only the non-null items from set.
+     * If set is null, an empty set will be returned.
+     *
+     * @return An immutable set containing no null values.
+     */
+    public static <S extends Set<T>, T> Set<T> removeNulls(final S set) {
+        if (set == null || set.stream().allMatch(Objects::isNull)) {
+            return Collections.emptySet();
+        } else if (set.stream().allMatch(Objects::nonNull)) {
+            return Collections.unmodifiableSet(set);
+        } else {
+            return set.stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableSet());
+        }
     }
 
     /**
@@ -1693,6 +1766,36 @@ public class NullSafe {
                 return Objects.requireNonNull(getter2).apply(value2) != null;
             }
         }
+    }
+
+    /**
+     * If value is null, empty or blank an {@link IllegalArgumentException} will be thrown with a message
+     * supplied by messageSupplier.
+     *
+     * @param value           THe string to test.
+     * @param messageSupplier The supplier of the exception message.
+     * @return The supplied string if not blank.
+     */
+    public static String requireNonBlankString(final String value, final Supplier<String> messageSupplier) {
+        if (isBlankString(value)) {
+            throw new IllegalArgumentException(Objects.requireNonNull(messageSupplier).get());
+        }
+        return value;
+    }
+
+    /**
+     * If value is null or empty an {@link IllegalArgumentException} will be thrown with a message
+     * supplied by messageSupplier.
+     *
+     * @param value           THe string to test.
+     * @param messageSupplier The supplier of the exception message.
+     * @return The supplied string if not empty.
+     */
+    public static String requireNonEmtpyString(final String value, final Supplier<String> messageSupplier) {
+        if (isEmptyString(value)) {
+            throw new IllegalArgumentException(Objects.requireNonNull(messageSupplier).get());
+        }
+        return value;
     }
 
     /**

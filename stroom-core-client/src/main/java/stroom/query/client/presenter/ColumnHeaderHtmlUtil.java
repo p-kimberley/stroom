@@ -1,8 +1,23 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.query.client.presenter;
 
 import stroom.docref.DocRef;
 import stroom.query.api.Column;
-import stroom.query.api.IncludeExcludeFilter;
 import stroom.query.api.Sort;
 import stroom.svg.shared.SvgImage;
 import stroom.util.shared.NullSafe;
@@ -56,14 +71,8 @@ public class ColumnHeaderHtmlUtil {
         }
 
         // Add filter icon.
-        final IncludeExcludeFilter filter = column.getFilter();
-        if (filter != null) {
-            if ((filter.getIncludes() != null && !filter.getIncludes().trim().isEmpty()) ||
-                (filter.getExcludes() != null && !filter.getExcludes().trim().isEmpty()) ||
-                !filter.getIncludeDictionaries().isEmpty() || !filter.getExcludeDictionaries().isEmpty()
-            ) {
-                hb.append(getSafeHtml(SvgImage.FIELDS_FILTER));
-            }
+        if (column.hasActiveFilter()) {
+            hb.append(getSafeHtml(SvgImage.FIELDS_FILTER));
         }
     }
 
@@ -121,7 +130,8 @@ public class ColumnHeaderHtmlUtil {
         }
 
         if (column.getColumnFilter() != null && column.getColumnFilter().getFilter() != null &&
-            !column.getColumnFilter().getFilter().isBlank()) {
+            !column.getColumnFilter().getFilter().isBlank() &&
+            column.getColumnFilter().isEnabled()) {
             hb.append("Column Filter: ").append(column.getColumnFilter().getFilter()).append('\n');
         }
 

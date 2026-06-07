@@ -82,6 +82,18 @@ appConfig:
       maximumSize: 1000
       refreshAfterWrite: null
       statisticsMode: "INTERNAL"
+    annotationValCache:
+      expireAfterAccess: "PT10M"
+      expireAfterWrite: null
+      maximumSize: 1000
+      refreshAfterWrite: null
+      statisticsMode: "INTERNAL"
+    annotationValStringCache:
+      expireAfterAccess: "P5D"
+      expireAfterWrite: null
+      maximumSize: 1000
+      refreshAfterWrite: null
+      statisticsMode: "INTERNAL"
     createText: "Create Annotation"
     db:
       connection:
@@ -100,14 +112,27 @@ appConfig:
         prepStmtCacheSize: 25
         prepStmtCacheSqlLimit: 256
     defaultRetentionPeriod: "5y"
+    eventLinkCacheSizeLimit: 1000000
     physicalDeleteAge: "P7D"
     standardComments: []
+  askStroomAi:
+    chatMemory:
+      timeToLive:
+        time: 1
+        timeUnit: "HOURS"
+      tokenLimit: 30000
+    tableSummary:
+      maximumBatchSize: 16384
+      maximumTableInputRows: 100
   autoContentCreation:
-    additionalGroupTemplate: "grp-${accountid}-sandbox"
+    additionalGroupParentGroupName: "Data Feed Developer"
+    additionalGroupTemplate: "grp-${accountid}-dev"
     createAsSubjectId: "Administrators"
     createAsType: "GROUP"
     destinationExplorerPathTemplate: "/Feeds/${accountid}"
+    destinationExplorerSubPathTemplate: "dev"
     enabled: false
+    groupParentGroupName: "Data Feed Reader"
     groupTemplate: "grp-${accountid}"
     templateMatchFields:
     - "accountid"
@@ -172,6 +197,27 @@ appConfig:
     importAsSubjectId: "Administrators"
     importAsType: "GROUP"
     importDirectory: "content_pack_import"
+  contentStore:
+    urls:
+    - "https://raw.githubusercontent.com/gchq/stroom-content/refs/heads/master/source/content-store.yml"
+  credentials:
+    db:
+      connection:
+        jdbcDriverClassName: null
+        jdbcDriverPassword: null
+        jdbcDriverUrl: null
+        jdbcDriverUsername: null
+      connectionPool:
+        cachePrepStmts: false
+        connectionTimeout: "PT30S"
+        idleTimeout: "PT10M"
+        leakDetectionThreshold: "PT0S"
+        maxLifetime: "PT30M"
+        maxPoolSize: 30
+        minimumIdle: 10
+        prepStmtCacheSize: 25
+        prepStmtCacheSqlLimit: 256
+    keyStoreCachePath: "${stroom.home}/keystores"
   crossModule:
     db:
       connection:
@@ -236,22 +282,23 @@ appConfig:
       volumeSelector: "RoundRobin"
     meta:
       dataFormats:
+      - "CSV"
+      - "CSV_NO_HEADER"
+      - "FIXED_WIDTH"
       - "FIXED_WIDTH_NO_HEADER"
       - "INI"
-      - "CSV"
       - "JSON"
+      - "JSON_LINES"
+      - "PSV"
+      - "PSV_NO_HEADER"
+      - "SYSLOG"
       - "TEXT"
+      - "TOML"
+      - "TSV"
+      - "TSV_NO_HEADER"
+      - "XML"
       - "XML_FRAGMENT"
       - "YAML"
-      - "PSV_NO_HEADER"
-      - "PSV"
-      - "CSV_NO_HEADER"
-      - "XML"
-      - "TSV"
-      - "SYSLOG"
-      - "TSV_NO_HEADER"
-      - "FIXED_WIDTH"
-      - "TOML"
       db:
         connection:
           jdbcDriverClassName: null
@@ -289,24 +336,24 @@ appConfig:
         statisticsMode: "INTERNAL"
       metaTypes:
       - "Context"
-      - "Raw Reference"
-      - "Events"
-      - "Raw Events"
-      - "Reference"
+      - "Detections"
       - "Error"
+      - "Events"
+      - "Meta Data"
+      - "Raw Events"
+      - "Raw Reference"
+      - "Records"
+      - "Reference"
       - "Test Events"
       - "Test Reference"
-      - "Detections"
-      - "Meta Data"
-      - "Records"
       metaValue:
         addAsync: true
         deleteAge: "P30D"
         deleteBatchSize: 500
         flushBatchSize: 500
       rawMetaTypes:
-      - "Raw Reference"
       - "Raw Events"
+      - "Raw Reference"
     retention:
       deleteBatchSize: 1000
       useQueryOptimisation: true
@@ -370,8 +417,6 @@ appConfig:
       initialRetryBackoffPeriodMs: 1000
       maxNestedElementDepth: 10
       retryCount: 5
-    retention:
-      scrollSize: 10000
     search:
       highlight: true
       scrollDuration: "PT1M"
@@ -418,6 +463,22 @@ appConfig:
     feedNamePattern: "^[A-Z0-9_-]{3,}$"
     unknownClassification: "UNKNOWN CLASSIFICATION"
   gitRepo:
+    db:
+      connection:
+        jdbcDriverClassName: null
+        jdbcDriverPassword: null
+        jdbcDriverUrl: null
+        jdbcDriverUsername: null
+      connectionPool:
+        cachePrepStmts: false
+        connectionTimeout: "PT30S"
+        idleTimeout: "PT10M"
+        leakDetectionThreshold: "PT0S"
+        maxLifetime: "PT30M"
+        maxPoolSize: 30
+        minimumIdle: 10
+        prepStmtCacheSize: 25
+        prepStmtCacheSqlLimit: 256
     localDir: "git_repo"
   haltBootOnConfigValidationFailure: true
   index:
@@ -528,6 +589,7 @@ appConfig:
   lifecycle:
     enabled: true
   lmdbLibrary:
+    providedJffiLibraryPath: null
     providedSystemLibraryPath: null
     systemLibraryExtractDir: "lmdb_library"
   logging:
@@ -646,10 +708,10 @@ appConfig:
         statisticsMode: "INTERNAL"
       maxElements: 1000000
   planb:
-    minTimeToKeepEnvOpen: "PT1M"
+    minTimeToKeepSnapshotEnv: "PT20M"
     minTimeToKeepSnapshots: "PT10M"
     nodeList: []
-    path: "${stroom.home}/planb"
+    path: "planb"
     snapshotRetryFetchInterval: "PT1M"
     stateDocCache:
       expireAfterAccess: null
@@ -819,9 +881,10 @@ appConfig:
       refreshAfterWrite: null
       statisticsMode: "DROPWIZARD_METRICS"
     authenticationRequired: true
-    dataFeedKeyOwnerMetaKey: "AccountId"
-    dataFeedKeysDir: "data_feed_keys"
+    dataFeedIdentitiesDir: "data_feed_identities"
+    dataFeedOwnerMetaKey: "AccountId"
     enabledAuthenticationTypes:
+    - "TOKEN"
     - "CERTIFICATE"
     fallbackReceiveAction: "RECEIVE"
     feedNameGenerationEnabled: false
@@ -884,12 +947,6 @@ appConfig:
       offHeapResults: true
       valueQueueSize: 10000
     shard:
-      indexShardSearcherCache:
-        expireAfterAccess: "PT1M"
-        expireAfterWrite: null
-        maximumSize: 2
-        refreshAfterWrite: null
-        statisticsMode: "INTERNAL"
       maxDocIdQueueSize: 1000000
       maxThreadsPerTask: 5
       remoteSearchResultCache:
@@ -1008,6 +1065,7 @@ appConfig:
       secretEncryptionKey: ""
     identity:
       allowCertificateAuthentication: false
+      autoCreateAdminAccountOnBoot: false
       certificateCnCaptureGroupIndex: 1
       certificateCnPattern: ".*\\((.*)\\)"
       db:

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.proxy.app.handler;
 
 import stroom.proxy.app.DataDirProvider;
@@ -268,13 +284,16 @@ public class RetryingForwardDestination implements ForwardDestination {
         final Path failureDir = forwardingDir.resolve("03_failure");
         final PathTemplateConfig errorSubPathTemplate = forwardQueueConfig.getErrorSubPathTemplate();
         DirUtil.ensureDirExists(failureDir);
+        // Use atomic move here as the failure dir is within the proxy data dirs, rather
+        // than on the forward dest
         failureDestination = new ForwardFileDestinationImpl(
                 failureDir,
                 destinationName + " (failures)",
                 errorSubPathTemplate,
                 null,
                 null,
-                simplePathCreator);
+                simplePathCreator,
+                true);
         fileStores.add(FORWARD_ORDER, "forward - " + destinationName + " - failure", failureDir);
         return failureDestination;
     }

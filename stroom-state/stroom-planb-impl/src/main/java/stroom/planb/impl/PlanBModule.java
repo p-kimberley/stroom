@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ public class PlanBModule extends AbstractModule {
 
         GuiceUtil.buildMultiBinder(binder(), DataSourceProvider.class)
                 .addBinding(PlanBShardInfoServiceImpl.class);
-        GuiceUtil.buildMultiBinder(binder(), Searchable.class)
+        GuiceUtil.buildMapBinder(binder(), Searchable.class)
                 .addBinding(PlanBShardInfoServiceImpl.class);
 
         // State
@@ -125,8 +125,8 @@ public class PlanBModule extends AbstractModule {
                         .advanced(true));
         ScheduledJobsBinder.create(binder())
                 .bindJobTo(ShardManagerCleanupRunnable.class, builder -> builder
-                        .name(ShardManager.CLEANUP_TASK_NAME)
-                        .description("Plan B shard cleanup")
+                        .name(ShardManager.SNAPSHOT_CLEANUP_TASK_NAME)
+                        .description("Plan B snapshot cleanup")
                         .cronSchedule(CronExpressions.EVERY_10_MINUTES.getExpression())
                         .advanced(true));
     }

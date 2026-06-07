@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
 import com.gwtplatform.mvp.client.HasUiHandlers;
 import com.gwtplatform.mvp.client.View;
+
+import java.util.UUID;
 
 public class ElasticIndexSettingsPresenter extends DocumentEditPresenter<ElasticIndexSettingsView, ElasticIndexDoc>
         implements ElasticIndexSettingsUiHandlers {
@@ -101,7 +103,11 @@ public class ElasticIndexSettingsPresenter extends DocumentEditPresenter<Elastic
 
     @Override
     public void onTestIndex() {
-        final ElasticIndexDoc index = onWrite(new ElasticIndexDoc());
+        final ElasticIndexDoc indexDoc = ElasticIndexDoc
+                .builder()
+                .uuid(UUID.randomUUID().toString())
+                .build();
+        final ElasticIndexDoc index = onWrite(indexDoc);
         restFactory
                 .create(ELASTIC_INDEX_RESOURCE)
                 .method(res -> res.testIndex(index))

@@ -1,7 +1,23 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.annotation.shared;
 
 import stroom.docref.DocRef;
-import stroom.docstore.shared.Doc;
+import stroom.docstore.shared.AbstractDoc;
 import stroom.docstore.shared.DocumentType;
 import stroom.docstore.shared.DocumentTypeRegistry;
 import stroom.util.shared.UserRef;
@@ -16,13 +32,13 @@ import java.util.List;
 import java.util.Objects;
 
 @JsonInclude(Include.NON_NULL)
-public class Annotation extends Doc {
+public class Annotation extends AbstractDoc {
 
     public static final String TYPE = "Annotation";
     public static final DocumentType DOCUMENT_TYPE = DocumentTypeRegistry.ANNOTATION_DOCUMENT_TYPE;
 
     @JsonProperty
-    private final Long id;
+    private final long id;
     @JsonProperty
     private final String subject;
     @JsonProperty
@@ -45,15 +61,14 @@ public class Annotation extends Doc {
     private final Long retainUntilTimeMs;
 
     @JsonCreator
-    public Annotation(@JsonProperty("type") final String type,
-                      @JsonProperty("uuid") final String uuid,
+    public Annotation(@JsonProperty("uuid") final String uuid,
                       @JsonProperty("name") final String name,
                       @JsonProperty("version") final String version,
                       @JsonProperty("createTimeMs") final Long createTimeMs,
                       @JsonProperty("updateTimeMs") final Long updateTimeMs,
                       @JsonProperty("createUser") final String createUser,
                       @JsonProperty("updateUser") final String updateUser,
-                      @JsonProperty("id") final Long id,
+                      @JsonProperty("id") final long id,
                       @JsonProperty("subject") final String subject,
                       @JsonProperty("status") final AnnotationTag status,
                       @JsonProperty("assignedTo") final UserRef assignedTo,
@@ -64,7 +79,7 @@ public class Annotation extends Doc {
                       @JsonProperty("description") final String description,
                       @JsonProperty("retentionPeriod") final SimpleDuration retentionPeriod,
                       @JsonProperty("retainUntilTimeMs") final Long retainUntilTimeMs) {
-        super(type, uuid, name, version, createTimeMs, updateTimeMs, createUser, updateUser);
+        super(TYPE, uuid, name, version, createTimeMs, updateTimeMs, createUser, updateUser);
         this.id = id;
         this.subject = subject;
         this.status = status;
@@ -78,7 +93,7 @@ public class Annotation extends Doc {
         this.retainUntilTimeMs = retainUntilTimeMs;
     }
 
-    public Long getId() {
+    public long getId() {
         return id;
     }
 
@@ -123,18 +138,17 @@ public class Annotation extends Doc {
     }
 
     /**
+     * @return This {@link Annotation} represented by a {@link AnnotationIdentity}.
+     */
+    public AnnotationIdentity asAnnotationIdentity() {
+        return new AnnotationIdentity(getUuid(), id);
+    }
+
+    /**
      * @return A new builder for creating a {@link DocRef} for this document's type.
      */
     public static DocRef.TypedBuilder buildDocRef() {
         return DocRef.builder(TYPE);
-    }
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public Builder copy() {
-        return new Builder(this);
     }
 
     @Override
@@ -155,6 +169,14 @@ public class Annotation extends Doc {
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), id);
+    }
+
+    public Builder copy() {
+        return new Builder(this);
+    }
+
+    public static Builder builder() {
+        return new Builder();
     }
 
 
@@ -193,7 +215,7 @@ public class Annotation extends Doc {
             this.retainUntilTimeMs = doc.retainUntilTimeMs;
         }
 
-        public Builder id(final Long id) {
+        public Builder id(final long id) {
             this.id = id;
             return self();
         }
@@ -256,7 +278,6 @@ public class Annotation extends Doc {
         @Override
         public Annotation build() {
             return new Annotation(
-                    type,
                     uuid,
                     name,
                     version,

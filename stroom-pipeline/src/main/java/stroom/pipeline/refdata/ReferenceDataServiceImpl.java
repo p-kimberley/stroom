@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +53,10 @@ import stroom.query.language.functions.ValLong;
 import stroom.query.language.functions.ValNull;
 import stroom.query.language.functions.ValString;
 import stroom.query.language.functions.ValuesConsumer;
+import stroom.query.language.functions.ref.ErrorConsumer;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContext;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskTerminatedException;
@@ -89,6 +91,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
@@ -145,6 +148,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
     private final WordListProvider wordListProvider;
     private final DocRefInfoService docRefInfoService;
     private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
+    private final Executor executor;
 
     @Inject
     public ReferenceDataServiceImpl(final RefDataStoreFactory refDataStoreFactory,
@@ -159,7 +163,8 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                     final NodeService nodeService,
                                     final WordListProvider wordListProvider,
                                     final DocRefInfoService docRefInfoService,
-                                    final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
+                                    final FieldInfoResultPageFactory fieldInfoResultPageFactory,
+                                    final ExecutorProvider executorProvider) {
         this.refDataStore = refDataStoreFactory.getOffHeapStore();
         this.refDataStoreFactory = refDataStoreFactory;
         this.securityContext = securityContext;
@@ -174,6 +179,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
         this.wordListProvider = wordListProvider;
         this.docRefInfoService = docRefInfoService;
         this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
+        this.executor = executorProvider.get();
     }
 
     @Override
@@ -307,7 +313,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                                             nodeName2)));
 
                                     return CompletableFuture
-                                            .runAsync(runnable)
+                                            .runAsync(runnable, executor)
                                             .exceptionally(throwable -> {
                                                 failedNodes.add(nodeName2);
                                                 exception.set(throwable);
@@ -376,7 +382,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                                             nodeName2)));
 
                                     return CompletableFuture
-                                            .runAsync(runnable)
+                                            .runAsync(runnable, executor)
                                             .exceptionally(throwable -> {
                                                 failedNodes.add(nodeName2);
                                                 exception.set(throwable);
@@ -465,7 +471,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                             });
 
                                     return CompletableFuture
-                                            .runAsync(runnable)
+                                            .runAsync(runnable, executor)
                                             .exceptionally(throwable -> {
                                                 failedNodes.add(nodeName2);
                                                 exception.set(throwable);
@@ -538,7 +544,7 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
                                             });
 
                                     return CompletableFuture
-                                            .runAsync(runnable)
+                                            .runAsync(runnable, executor)
                                             .exceptionally(throwable -> {
                                                 failedNodes.add(nodeName2);
                                                 exception.set(throwable);
@@ -724,10 +730,11 @@ public class ReferenceDataServiceImpl implements ReferenceDataService {
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
                        final DateTimeSettings dateTimeSettings,
-                       final ValuesConsumer consumer) {
+                       final ValuesConsumer valuesConsumer,
+                       final ErrorConsumer errorConsumer) {
         withPermissionCheck(() -> LOGGER.logDurationIfInfoEnabled(
                 () -> taskContextFactory.context("Querying reference data store", taskContext ->
-                                doSearch(criteria, fieldIndex, consumer, taskContext))
+                                doSearch(criteria, fieldIndex, valuesConsumer, taskContext))
                         .run(),
                 "Querying ref store"));
     }

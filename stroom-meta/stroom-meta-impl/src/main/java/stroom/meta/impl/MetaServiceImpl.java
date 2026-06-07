@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ import stroom.meta.shared.SelectionSummary;
 import stroom.meta.shared.SimpleMeta;
 import stroom.meta.shared.Status;
 import stroom.pipeline.shared.PipelineDoc;
+import stroom.processor.shared.FeedDependency;
 import stroom.processor.shared.ProcessorTask;
 import stroom.query.api.DateTimeSettings;
 import stroom.query.api.ExpressionOperator;
@@ -52,6 +53,7 @@ import stroom.query.api.datasource.QueryField;
 import stroom.query.common.v2.FieldInfoResultPageFactory;
 import stroom.query.language.functions.FieldIndex;
 import stroom.query.language.functions.ValuesConsumer;
+import stroom.query.language.functions.ref.ErrorConsumer;
 import stroom.searchable.api.Searchable;
 import stroom.security.api.SecurityContext;
 import stroom.security.shared.AppPermission;
@@ -60,6 +62,7 @@ import stroom.task.api.TaskContextFactory;
 import stroom.task.api.TaskManager;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.shared.CriteriaFieldSort;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.PageRequest;
 import stroom.util.shared.ResultPage;
@@ -84,6 +87,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -107,6 +111,7 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
     private final UserQueryRegistry userQueryRegistry;
     private final TaskManager taskManager;
     private final FieldInfoResultPageFactory fieldInfoResultPageFactory;
+    private final Provider<Executor> executorProvider;
 
     @Inject
     MetaServiceImpl(final MetaDao metaDao,
@@ -121,7 +126,8 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
                     final TaskContextFactory taskContextFactory,
                     final UserQueryRegistry userQueryRegistry,
                     final TaskManager taskManager,
-                    final FieldInfoResultPageFactory fieldInfoResultPageFactory) {
+                    final FieldInfoResultPageFactory fieldInfoResultPageFactory,
+                    final Provider<Executor> executorProvider) {
         this.metaDao = metaDao;
         this.metaFeedDao = metaFeedDao;
         this.metaValueDao = metaValueDao;
@@ -135,11 +141,17 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
         this.userQueryRegistry = userQueryRegistry;
         this.taskManager = taskManager;
         this.fieldInfoResultPageFactory = fieldInfoResultPageFactory;
+        this.executorProvider = executorProvider;
     }
 
     @Override
     public Long getMaxId() {
         return metaDao.getMaxId();
+    }
+
+    @Override
+    public Long getMaxId(final long maxCreateTimeMs) {
+        return metaDao.getMaxId(maxCreateTimeMs);
     }
 
     @Override
@@ -342,13 +354,14 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
     public void search(final ExpressionCriteria criteria,
                        final FieldIndex fieldIndex,
                        final DateTimeSettings dateTimeSettings,
-                       final ValuesConsumer consumer) {
+                       final ValuesConsumer valuesConsumer,
+                       final ErrorConsumer errorConsumer) {
         LOGGER.logDurationIfTraceEnabled(() -> {
             final ExpressionOperator expression = addPermissionConstraints(criteria.getExpression(),
                     DocumentPermission.VIEW,
                     FEED_FIELDS);
             criteria.setExpression(expression);
-            metaDao.search(criteria, fieldIndex, consumer);
+            metaDao.search(criteria, fieldIndex, valuesConsumer);
         }, "Searching meta");
     }
 
@@ -545,15 +558,15 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
     public ResultPage<MetaRow> findDecoratedRows(final FindMetaCriteria criteria) {
         try {
             final ResultPage<MetaRow> list = findRows(criteria);
-
-            LOGGER.logDurationIfTraceEnabled(
-                    () -> {
-                        final StreamAttributeMapRetentionRuleDecorator decorator = decoratorProvider.get();
-                        list.getValues().forEach(metaRow ->
-                                decorator.addMatchingRetentionRuleInfo(metaRow.getMeta(), metaRow.getAttributes()));
-                    },
-                    "Adding data retention rules");
-
+            if (NullSafe.hasItems(list)) {
+                LOGGER.logDurationIfTraceEnabled(
+                        () -> {
+                            final StreamAttributeMapRetentionRuleDecorator decorator = decoratorProvider.get();
+                            list.getValues().forEach(metaRow ->
+                                    decorator.addMatchingRetentionRuleInfo(metaRow.getMeta(), metaRow.getAttributes()));
+                        },
+                        "Adding data retention rules");
+            }
             return list;
         } catch (final RuntimeException e) {
             LOGGER.debug(e.getMessage(), e);
@@ -778,7 +791,7 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
 //                            }
 
                                     return metaDao.getRetentionDeletionSummary(rules, criteria);
-                                }));
+                                }), executorProvider.get());
 
                 try {
                     // Wait for completion
@@ -838,5 +851,53 @@ public class MetaServiceImpl implements MetaService, StreamFeedProvider, Searcha
     @Override
     public Set<Long> findLockedMeta(final Collection<Long> metaIdCollection) {
         return metaDao.findLockedMeta(metaIdCollection);
+    }
+
+    @Override
+    public Instant getFeedDependencyEffectiveTime(final List<FeedDependency> feedDependencies) {
+        Instant maxEffectiveTime = null;
+        if (!NullSafe.isEmptyCollection(feedDependencies)) {
+            for (final FeedDependency feedDependency : feedDependencies) {
+                final List<CriteriaFieldSort> criteriaFieldSort = Collections.singletonList(new CriteriaFieldSort(
+                        MetaFields.EFFECTIVE_TIME.getFldName(),
+                        true,
+                        false));
+                final ExpressionOperator expressionOperator = ExpressionOperator.builder()
+                        .addTextTerm(MetaFields.FEED, Condition.EQUALS, feedDependency.getFeedName())
+                        .addTextTerm(MetaFields.TYPE, Condition.EQUALS, feedDependency.getStreamType())
+                        .addTextTerm(MetaFields.STATUS, Condition.EQUALS, Status.UNLOCKED.getDisplayValue())
+                        .build();
+                final FindMetaCriteria findMetaCriteria = new FindMetaCriteria(
+                        PageRequest.oneRow(),
+                        criteriaFieldSort,
+                        expressionOperator,
+                        false);
+                final ResultPage<Meta> resultPage = find(findMetaCriteria);
+                if (resultPage != null) {
+                    final List<Meta> list = resultPage.getValues();
+                    if (!NullSafe.isEmptyCollection(list)) {
+                        if (list.size() > 1) {
+                            throw new RuntimeException("Unexpected number of results");
+                        }
+
+                        final Meta meta = list.getFirst();
+                        final Instant effectiveTime = NullSafe.get(meta, Meta::getEffectiveMs, Instant::ofEpochMilli);
+                        if (effectiveTime != null) {
+                            if (maxEffectiveTime == null) {
+                                maxEffectiveTime = effectiveTime;
+                            } else if (maxEffectiveTime.isAfter(effectiveTime)) {
+                                maxEffectiveTime = effectiveTime;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (maxEffectiveTime == null) {
+                maxEffectiveTime = Instant.ofEpochMilli(0L);
+            }
+        }
+
+        return maxEffectiveTime;
     }
 }

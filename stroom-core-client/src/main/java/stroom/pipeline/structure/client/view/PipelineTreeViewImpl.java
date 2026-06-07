@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ public class PipelineTreeViewImpl extends ViewWithUiHandlers<PipelineTreeUiHandl
         treePanel = new PipelineTreePanel();
         subTreePanel = new PipelineTreePanel();
 
-        layoutPanel = new DraggableTreePanel<PipelineElement>(treePanel, subTreePanel) {
+        layoutPanel = new DraggableTreePanel<>(treePanel, subTreePanel) {
             @Override
             protected boolean isValidTarget(final PipelineElement parent, final PipelineElement child) {
                 final PipelineElementType parentType = pipelineModel.getElementType(parent);
@@ -138,6 +138,11 @@ public class PipelineTreeViewImpl extends ViewWithUiHandlers<PipelineTreeUiHandl
     @Override
     public int getTreeHeight() {
         return treePanel.getTreeHeight();
+    }
+
+    @Override
+    public void setDisabledElements(final List<PipelineElement> disabledElements) {
+        treePanel.setDisabledElements(disabledElements);
     }
 
     @Override

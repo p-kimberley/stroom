@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package stroom.openai.shared;
 import stroom.util.shared.FetchWithUuid;
 import stroom.util.shared.ResourcePaths;
 import stroom.util.shared.RestResource;
+import stroom.util.shared.http.HttpClientConfig;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,4 +63,11 @@ public interface OpenAIModelResource extends RestResource, DirectRestService, Fe
             operationId = "validateOpenAIModel")
     OpenAIModelTestResponse validateModel(
             @Parameter(description = "openAIModelDoc", required = true) OpenAIModelDoc openAIModelDoc);
+
+    @POST
+    @Path("/getDefaultHttpClientConfig")
+    @Operation(
+            summary = "Get default HTTP client configuration",
+            operationId = "getDefaultHttpClientConfig")
+    HttpClientConfig getDefaultHttpClientConfig();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -709,7 +709,7 @@ public class FsVolumeService implements EntityEvent.Handler, Clearable, Flushabl
     @Override
     public SystemInfoResult getSystemInfo() {
 
-        final Volumes volumes = getCurrentVolumes();
+        final Volumes volumes = securityContext.asProcessingUserResult(this::getCurrentVolumes);
         final List<Map<String, Object>> volInfoList = volumes
                 .getMap()
                 .values()

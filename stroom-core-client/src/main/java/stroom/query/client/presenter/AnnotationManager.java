@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,11 +221,6 @@ public class AnnotationManager implements HasHandlers {
                 if (annotationId != null && !annotationIdList.contains(annotationId)) {
                     annotationIdList.add(annotationId);
                 }
-
-                // Add annotation id from row data.
-                if (row.getAnnotationId() != null && !annotationIdList.contains(row.getAnnotationId())) {
-                    annotationIdList.add(row.getAnnotationId());
-                }
             }
 
             return new AnnotationTable(columnNames, values);
@@ -385,7 +380,9 @@ public class AnnotationManager implements HasHandlers {
         if (NullSafe.isEmptyCollection(eventIdList)) {
             runnable.run();
         } else {
-            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(annotation.asDocRef(),
+            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(
+                    annotation.asDocRef(),
+                    annotation.getId(),
                     new LinkEvents(eventIdList));
             annotationResourceClient.change(request, r -> runnable.run(), taskMonitorFactory);
         }
@@ -397,7 +394,9 @@ public class AnnotationManager implements HasHandlers {
         if (NullSafe.isEmptyCollection(annotationIdList)) {
             runnable.run();
         } else {
-            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(annotation.asDocRef(),
+            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(
+                    annotation.asDocRef(),
+                    annotation.getId(),
                     new LinkAnnotations(annotationIdList));
             annotationResourceClient.change(request, r -> runnable.run(), taskMonitorFactory);
         }
@@ -409,7 +408,9 @@ public class AnnotationManager implements HasHandlers {
         if (table == null) {
             runnable.run();
         } else {
-            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(annotation.asDocRef(),
+            final SingleAnnotationChangeRequest request = new SingleAnnotationChangeRequest(
+                    annotation.asDocRef(),
+                    annotation.getId(),
                     new AddAnnotationTable(table));
             annotationResourceClient.change(request, r -> runnable.run(), taskMonitorFactory);
         }

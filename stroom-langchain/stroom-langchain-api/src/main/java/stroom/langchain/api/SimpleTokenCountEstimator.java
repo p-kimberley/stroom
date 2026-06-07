@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,11 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.internal.Exceptions;
+import dev.langchain4j.internal.Utils;
 import dev.langchain4j.model.TokenCountEstimator;
 
 import java.util.Map;
-
-import static dev.langchain4j.internal.Exceptions.illegalArgument;
-import static dev.langchain4j.internal.Utils.isNullOrBlank;
 
 public class SimpleTokenCountEstimator implements TokenCountEstimator {
 
@@ -73,7 +72,7 @@ public class SimpleTokenCountEstimator implements TokenCountEstimator {
             if (content instanceof TextContent) {
                 tokenCount += estimateTokenCountInText(((TextContent) content).text());
             } else {
-                throw illegalArgument("Unknown content type: " + content);
+                throw Exceptions.illegalArgument("Unknown content type: " + content);
             }
         }
 
@@ -105,7 +104,7 @@ public class SimpleTokenCountEstimator implements TokenCountEstimator {
                     tokenCount += 7;
                     tokenCount += estimateTokenCountInText(toolExecutionRequest.name());
 
-                    if (isNullOrBlank(toolExecutionRequest.arguments())) {
+                    if (Utils.isNullOrBlank(toolExecutionRequest.arguments())) {
                         continue;
                     }
 

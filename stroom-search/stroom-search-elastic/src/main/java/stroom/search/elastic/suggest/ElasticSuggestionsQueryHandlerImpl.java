@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2026 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.search.elastic.suggest;
 
 import stroom.query.api.datasource.FieldType;
@@ -9,7 +25,10 @@ import stroom.search.elastic.ElasticClusterStore;
 import stroom.search.elastic.ElasticIndexStore;
 import stroom.search.elastic.shared.ElasticClusterDoc;
 import stroom.search.elastic.shared.ElasticIndexDoc;
+import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
+import stroom.task.api.ThreadPoolImpl;
+import stroom.task.shared.ThreadPool;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 
@@ -29,29 +48,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 
 @Singleton
 public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQueryHandler {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ElasticSuggestionsQueryHandlerImpl.class);
+    private static final ThreadPool THREAD_POOL = new ThreadPoolImpl("Elastic Suggestions Query Handler");
 
     private final Provider<ElasticClientCache> elasticClientCacheProvider;
     private final Provider<ElasticClusterStore> elasticClusterStoreProvider;
     private final Provider<ElasticIndexStore> elasticIndexStoreProvider;
     private final Provider<ElasticSuggestConfig> elasticSuggestConfigProvider;
     private final Provider<TaskContextFactory> taskContextFactoryProvider;
+    private final Executor executor;
 
     @Inject
     public ElasticSuggestionsQueryHandlerImpl(final Provider<ElasticClientCache> elasticClientCacheProvider,
                                               final Provider<ElasticClusterStore> elasticClusterStoreProvider,
                                               final Provider<ElasticIndexStore> elasticIndexStoreProvider,
                                               final Provider<ElasticSuggestConfig> elasticSuggestConfigProvider,
-                                              final Provider<TaskContextFactory> taskContextFactoryProvider) {
+                                              final Provider<TaskContextFactory> taskContextFactoryProvider,
+                                              final ExecutorProvider executorProvider) {
         this.elasticClientCacheProvider = elasticClientCacheProvider;
         this.elasticClusterStoreProvider = elasticClusterStoreProvider;
         this.elasticIndexStoreProvider = elasticIndexStoreProvider;
         this.elasticSuggestConfigProvider = elasticSuggestConfigProvider;
         this.taskContextFactoryProvider = taskContextFactoryProvider;
+        this.executor = executorProvider.get(THREAD_POOL);
     }
 
     @Override
@@ -60,13 +84,15 @@ public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQue
         final ElasticClusterDoc elasticCluster = elasticClusterStoreProvider.get()
                 .readDocument(elasticIndex.getClusterRef());
 
-        final CompletableFuture<Suggestions> future = CompletableFuture.supplyAsync(taskContextFactoryProvider.get()
-                .contextResult("Query suggestions for Elasticsearch index '" + elasticIndex.getName() + "'",
-                        taskContext -> elasticClientCacheProvider.get().contextResult(elasticCluster.getConnection(),
-                                elasticClient -> querySuggestions(request, elasticIndex, elasticClient)
-                        )
-                )
-        );
+        final CompletableFuture<Suggestions> future = CompletableFuture.supplyAsync(
+                taskContextFactoryProvider.get().contextResult(
+                        "Query suggestions for Elasticsearch index '" + elasticIndex.getName() + "'",
+                        taskContext ->
+                                elasticClientCacheProvider.get().contextResult(elasticCluster.getConnection(),
+                                        elasticClient ->
+                                                querySuggestions(request, elasticIndex, elasticClient)
+                                )
+                ), executor);
 
         try {
             return future.get();

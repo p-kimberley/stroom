@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ public class PathwaysStoreImpl implements PathwaysStore {
     @Inject
     PathwaysStoreImpl(final StoreFactory storeFactory,
                       final PathwaysSerialiser serialiser) {
-        this.store = storeFactory.createStore(serialiser, PathwaysDoc.TYPE, PathwaysDoc.class);
+        this.store = storeFactory.createStore(serialiser, PathwaysDoc.TYPE, PathwaysDoc::builder);
         this.serialiser = serialiser;
     }
 

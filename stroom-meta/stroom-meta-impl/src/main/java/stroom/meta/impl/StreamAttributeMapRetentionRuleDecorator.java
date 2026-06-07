@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,11 +12,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package stroom.meta.impl;
 
+import stroom.data.retention.api.DataRetentionRulesProvider;
 import stroom.data.retention.shared.DataRetentionRule;
 import stroom.data.retention.shared.DataRetentionRules;
 import stroom.expression.matcher.ExpressionMatcher;
@@ -24,10 +24,11 @@ import stroom.expression.matcher.ExpressionMatcherFactory;
 import stroom.meta.shared.DataRetentionFields;
 import stroom.meta.shared.Meta;
 import stroom.meta.shared.MetaFields;
+import stroom.query.api.ExpressionOperator;
 import stroom.util.date.DateUtil;
+import stroom.util.shared.NullSafe;
 
 import jakarta.inject.Inject;
-import jakarta.inject.Provider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,7 @@ import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 class StreamAttributeMapRetentionRuleDecorator {
@@ -45,14 +47,17 @@ class StreamAttributeMapRetentionRuleDecorator {
 
     private final List<DataRetentionRule> rules;
     private final ExpressionMatcher expressionMatcher;
+    private final StreamAttributeMapConverter streamAttributeMapConverter;
 
     @Inject
     public StreamAttributeMapRetentionRuleDecorator(final ExpressionMatcherFactory expressionMatcherFactory,
-                                                    final Provider<DataRetentionRules> dataRetentionRulesProvider) {
-        expressionMatcher = expressionMatcherFactory.create(MetaFields.getFieldMap());
+                                                    final DataRetentionRulesProvider dataRetentionRulesProvider,
+                                                    final StreamAttributeMapConverter streamAttributeMapConverter) {
+        this.streamAttributeMapConverter = streamAttributeMapConverter;
+        this.expressionMatcher = expressionMatcherFactory.create(MetaFields.getFieldMap());
 
-        rules = Optional.ofNullable(dataRetentionRulesProvider)
-                .map(Provider::get)
+        this.rules = Optional.ofNullable(dataRetentionRulesProvider)
+                .map(DataRetentionRulesProvider::getOrCreate)
                 .map(DataRetentionRules::getRules)
                 .orElse(Collections.emptyList());
     }
@@ -62,13 +67,13 @@ class StreamAttributeMapRetentionRuleDecorator {
             int index = -1;
 
             // If there are no active rules then we aren't going to process anything.
-            if (rules != null && rules.size() > 0) {
+            if (NullSafe.hasItems(rules)) {
                 // Create an attribute map we can match on.
-                final Map<String, Object> map = StreamAttributeMapUtil.createAttributeMap(meta, attributeMap);
+                final Map<String, Object> map = streamAttributeMapConverter.createAttributeMap(meta, attributeMap);
                 index = findMatchingRuleIndex(map);
             }
 
-            if (index != -1) {
+            if (index > -1) {
                 final DataRetentionRule rule = rules.get(index);
                 attributeMap.put(DataRetentionFields.RETENTION_AGE, rule.getAgeString());
 
@@ -92,9 +97,10 @@ class StreamAttributeMapRetentionRuleDecorator {
                 attributeMap.put(DataRetentionFields.RETENTION_RULE, "None");
             }
         } catch (final RuntimeException e) {
+            final String msg = Objects.requireNonNullElseGet(e.getMessage(), () -> e.getClass().getSimpleName());
             attributeMap.put(DataRetentionFields.RETENTION_AGE, DataRetentionRule.FOREVER);
             attributeMap.put(DataRetentionFields.RETENTION_UNTIL, DataRetentionRule.FOREVER);
-            attributeMap.put(DataRetentionFields.RETENTION_RULE, "Error - " + e.getMessage());
+            attributeMap.put(DataRetentionFields.RETENTION_RULE, "Error - " + msg);
         }
     }
 
@@ -105,9 +111,12 @@ class StreamAttributeMapRetentionRuleDecorator {
             try {
                 final DataRetentionRule rule = rules.get(i);
                 // We will ignore rules that are not enabled or have no enabled expression.
-                if (rule.isEnabled() && rule.getExpression() != null && rule.getExpression().enabled()) {
-                    if (expressionMatcher.match(attributeMap, rule.getExpression())) {
-                        return i;
+                if (rule.isEnabled()) {
+                    final ExpressionOperator expression = rule.getExpression();
+                    if (NullSafe.test(expression, ExpressionOperator::enabled)) {
+                        if (expressionMatcher.match(attributeMap, expression)) {
+                            return i;
+                        }
                     }
                 }
             } catch (final RuntimeException e) {

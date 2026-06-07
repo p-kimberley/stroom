@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,8 @@ public class ProcessorModule extends AbstractModule {
 
         GuiceUtil.buildMultiBinder(binder(), DataSourceProvider.class)
                 .addBinding(ProcessorTaskServiceImpl.class);
-        GuiceUtil.buildMultiBinder(binder(), Searchable.class)
+
+        GuiceUtil.buildMapBinder(binder(), Searchable.class)
                 .addBinding(ProcessorTaskServiceImpl.class);
 
         GuiceUtil.buildMultiBinder(binder(), ImportExportActionHandler.class)
@@ -106,6 +107,7 @@ public class ProcessorModule extends AbstractModule {
                         .name("Processor Task Creator")
                         .description("Create Processor Tasks from Processor Filters")
                         .frequencySchedule("10s")
+                        .enabledOnBootstrap(true) // We want processing to start in a test env
                         .enabled(false)
                         .advanced(false));
 

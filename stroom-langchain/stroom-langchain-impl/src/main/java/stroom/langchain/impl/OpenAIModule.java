@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,6 @@ public class OpenAIModule extends AbstractModule {
         bind(ChatMemoryService.class).to(ChatMemoryServiceImpl.class);
 
         // Jobs
-
         ScheduledJobsBinder.create(binder())
                 .bindJobTo(ChatMemoryPrune.class, builder -> builder
                         .name("Chat Memory Prune")
@@ -51,7 +50,6 @@ public class OpenAIModule extends AbstractModule {
                         .cronSchedule(CronExpressions.EVERY_HOUR.getExpression()));
 
         // OpenAI Model
-
         bind(OpenAIModelStore.class).to(OpenAIModelStoreImpl.class);
 
         GuiceUtil.buildMultiBinder(binder(), ExplorerActionHandler.class)

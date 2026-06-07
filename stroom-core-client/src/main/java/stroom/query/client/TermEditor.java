@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,10 +29,13 @@ import stroom.query.client.presenter.FieldInfoSelectionItem;
 import stroom.query.client.presenter.FieldSelectionListModel;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.security.shared.DocumentPermission;
+import stroom.ui.config.client.UiConfigCache;
+import stroom.ui.config.shared.ExtendedUiConfig;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.StringUtil;
 import stroom.util.shared.UserRef;
 import stroom.widget.customdatebox.client.MyDateBox;
+import stroom.widget.dropdowntree.client.view.QuickFilterTooltipUtil;
 
 import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.dom.client.Style.Unit;
@@ -85,7 +88,8 @@ public class TermEditor extends Composite {
     private FieldSelectionListModel fieldSelectionListModel;
 
     public TermEditor(final Provider<DocSelectionBoxPresenter> docRefProvider,
-                      final Provider<UserRefSelectionBoxPresenter> userRefProvider) {
+                      final Provider<UserRefSelectionBoxPresenter> userRefProvider,
+                      final UiConfigCache uiConfigCache) {
         final DocSelectionBoxPresenter docRefPresenter = docRefProvider.get();
         docRefPresenter.setRequiredPermissions(DocumentPermission.USE);
         docRefPresenter.getWidget().getElement().getStyle().setMargin(0, Unit.PX);
@@ -108,7 +112,7 @@ public class TermEditor extends Composite {
         userRefWidget.addStyleName("docRef");
         userRefWidget.setVisible(false);
 
-        fieldListBox = createFieldBox();
+        fieldListBox = createFieldBox(uiConfigCache);
         conditionListBox = createConditionBox();
 
         andLabel = createLabel(" and ");
@@ -169,13 +173,6 @@ public class TermEditor extends Composite {
         fieldListBox.setModel(fieldSelectionListModel);
     }
 
-    public void update(final Term term) {
-        final String value = term.getValue();
-        write(term);
-        term.setValue(value);
-        read(term);
-    }
-
     public void startEdit(final Term term) {
         if (!editing) {
             this.term = term;
@@ -200,13 +197,24 @@ public class TermEditor extends Composite {
     private void read(final Term term) {
         reading = true;
 
-        // Select the current value.
-        conditionListBox.setValue(null);
-        changeField(null, null, false);
-        fieldSelectionListModel.findFieldByName(term.getField(), fieldInfo -> {
-            fieldListBox.setValue(fieldInfo);
-            changeField(fieldInfo, term.getCondition(), false);
-        });
+        // See if the field is the same, if so then do not bother fetching field info from the server.
+        if (term.getField() != null && Objects.equals(
+                NullSafe.get(fieldListBox, BaseSelectionBox::getValue, QueryField::getFldName),
+                term.getField())) {
+            changeField(fieldListBox.getValue(), term.getCondition(), false);
+        } else if (term.getField() == null) {
+            // If the field is null then set the field box to null and update the other controls.
+            fieldListBox.setValue(null);
+            changeField(null, term.getCondition(), false);
+        } else {
+            // If the field is not null then go and fetch the field info and do a full update.
+            fieldListBox.setValue(null);
+            changeField(null, term.getCondition(), false);
+            fieldSelectionListModel.findFieldByName(term.getField(), fieldInfo -> {
+                fieldListBox.setValue(fieldInfo);
+                changeField(fieldInfo, term.getCondition(), false);
+            });
+        }
 
         reading = false;
     }
@@ -299,6 +307,8 @@ public class TermEditor extends Composite {
             fieldTypeLabel.setTitle(field.getFldType().getDescription());
             fieldTypeLabel.setVisible(true);
         } else {
+            fieldTypeLabel.setText("");
+            fieldTypeLabel.setTitle("");
             fieldTypeLabel.setVisible(false);
         }
     }
@@ -541,13 +551,17 @@ public class TermEditor extends Composite {
         registrations.add(handlerRegistration);
     }
 
-    private BaseSelectionBox<QueryField, FieldInfoSelectionItem> createFieldBox() {
+    private BaseSelectionBox<QueryField, FieldInfoSelectionItem> createFieldBox(final UiConfigCache uiConfigCache) {
         final BaseSelectionBox<QueryField, FieldInfoSelectionItem> fieldListBox =
                 new BaseSelectionBox<QueryField, FieldInfoSelectionItem>();
         fieldListBox.addStyleName(ITEM_CLASS_NAME);
         fieldListBox.addStyleName(DROPDOWN_CLASS_NAME);
         fieldListBox.addStyleName("field");
         fieldListBox.addStyleName("termEditor-item");
+        uiConfigCache.get(uiConfig ->
+                NullSafe.consume(uiConfig, ExtendedUiConfig::getHelpUrl, helpUrl ->
+                        fieldListBox.registerPopupTextProvider(() ->
+                                QuickFilterTooltipUtil.createTooltip("Field Filter", helpUrl))));
         return fieldListBox;
     }
 

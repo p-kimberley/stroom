@@ -1,11 +1,11 @@
 /*
- * Copyright 2017 Crown Copyright
+ * Copyright 2016-2025 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -230,6 +230,20 @@ public final class Column implements HasDisplayValue {
                 special,
                 columnFilter,
                 columnValueSelection);
+    }
+
+    public boolean hasActiveFilter() {
+        return ((filter != null &&
+                 (
+                         (filter.getIncludes() != null && !filter.getIncludes().trim().isEmpty()) ||
+                         (filter.getExcludes() != null && !filter.getExcludes().trim().isEmpty()) ||
+                         !filter.getIncludeDictionaries().isEmpty() ||
+                         !filter.getExcludeDictionaries().isEmpty()
+                 )) ||
+                (columnFilter != null &&
+                 columnFilter.isEnabled() &&
+                 columnFilter.getFilter() != null &&
+                 !columnFilter.getFilter().isBlank()));
     }
 
     public static Builder builder() {

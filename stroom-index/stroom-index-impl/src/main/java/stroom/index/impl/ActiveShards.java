@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016-2025 Crown Copyright
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package stroom.index.impl;
 
 import stroom.index.shared.FindIndexShardCriteria;
@@ -6,6 +22,8 @@ import stroom.index.shared.IndexShard;
 import stroom.index.shared.IndexShard.IndexShardStatus;
 import stroom.index.shared.IndexShardKey;
 import stroom.index.shared.IndexVolume.VolumeUseState;
+import stroom.index.shared.LuceneVersion;
+import stroom.index.shared.LuceneVersionUtil;
 import stroom.node.api.NodeInfo;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
@@ -33,7 +51,7 @@ public class ActiveShards {
             IndexShardStatus.CLOSED,
             IndexShardStatus.CLOSING);
 
-    private static final int MAX_ATTEMPTS = 10_000;
+    private static final int MAX_ATTEMPTS = 10;
 
     private final NodeInfo nodeInfo;
     private final IndexShardWriterCache indexShardWriterCache;
@@ -221,11 +239,22 @@ public class ActiveShards {
             final IndexShardStatus status = indexShard.getStatus();
             final boolean isVolumeFull = indexShard.getVolume().getCapacityInfo().isFull();
             final VolumeUseState volumeUseState = indexShard.getVolume().getState();
+
+            // Get the lucene version for the shard.
+            LuceneVersion luceneVersion = null;
+            try {
+                luceneVersion = LuceneVersionUtil.getLuceneVersion(indexShard.getIndexVersion());
+            } catch (final RuntimeException e) {
+                // Ignore not supported version exception.
+                LOGGER.debug(e::getMessage, e);
+            }
+
             if (status != null
                 && REQUIRED_SHARD_STATES.contains(status)
                 && indexShard.getDocumentCount() < maxDocsPerShard
                 && !isVolumeFull
-                && VolumeUseState.ACTIVE.equals(volumeUseState)) {
+                && VolumeUseState.ACTIVE.equals(volumeUseState)
+                && LuceneVersionUtil.CURRENT_LUCENE_VERSION.equals(luceneVersion)) {
                 indexShards.add(indexShard);
             } else {
                 LOGGER.debug(() -> LogUtil.message(

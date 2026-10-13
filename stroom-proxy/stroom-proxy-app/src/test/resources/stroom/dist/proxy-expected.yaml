@@ -47,6 +47,7 @@ proxyConfig:
   forwardFileDestinations:
   - atomicMoveEnabled: true
     enabled: true
+    fsyncMode: "ENABLED"
     instant: false
     livenessCheckMode: "READ"
     livenessCheckPath: null
@@ -106,12 +107,19 @@ proxyConfig:
       queueAndRetryEnabled: true
       retryDelay: "PT10M"
       retryDelayGrowthFactor: 1.0
+  fsync:
+    aggregateInputQueueMode: "ENABLED"
+    forwardingInputQueueMode: "ENABLED"
+    preAggregateInputQueueMode: "ENABLED"
+    receivingMode: "ENABLED"
+    zipSplittingInputQueueMode: "ENABLED"
   haltBootOnConfigValidationFailure: true
   logStream:
     metaKeys:
     - "GUID"
     - "ReceiptId"
     - "Feed"
+    - "Type"
     - "System"
     - "Environment"
     - "RemoteHost"
@@ -119,6 +127,7 @@ proxyConfig:
     - "RemoteDN"
     - "RemoteCertExpiry"
     - "DataReceiptRule"
+    useMappedDiagnosticContext: false
   path:
     data: "data"
     home: null

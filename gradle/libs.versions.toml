@@ -23,6 +23,10 @@ poi = "5.4.1"
 simple-java-mail = "8.8.0"
 swagger = "2.2.42"
 
+
+# --------------------------------------------------------------------------------
+
+
 [libraries]
 #------Stroom-libs---------------
 eventLogging = { module = "uk.gov.gchq.eventlogging:event-logging", version.ref = "eventLogging" }
@@ -56,6 +60,7 @@ dropwizard-core = { module = "io.dropwizard:dropwizard-core" }#files("libs/dropw
 dropwizard-jackson = { module = "io.dropwizard:dropwizard-jackson" } # version controlled by dropwizard-dependencies
 dropwizard-jersey = { module = "io.dropwizard:dropwizard-jersey" } # version controlled by dropwizard-dependencies
 dropwizard-jetty = { module = "io.dropwizard:dropwizard-jetty" } #was 1.0.6 now 1.1.0
+dropwizard-json-logging = { module = "io.dropwizard:dropwizard-json-logging" } # version controlled by dropwizard-dependencies
 dropwizard-lifecycle = { module = "io.dropwizard:dropwizard-lifecycle" } # version controlled by dropwizard-dependencies
 dropwizard-metrics-annotation = { module = "io.dropwizard.metrics:metrics-annotation" } # version controlled by dropwizard-dependencies
 dropwizard-metrics-caffeine3 = { module = "io.dropwizard.metrics:metrics-caffeine3" } # version controlled by dropwizard-dependencies
@@ -186,6 +191,10 @@ xerces = { module = "xerces:xercesImpl", version = "2.12.2" }
 zero-allocation-hashing = { module = "net.openhft:zero-allocation-hashing", version = "2026.0" }
 zxcvbn = { module = "com.nulab-inc:zxcvbn", version = "1.9.0" }
 
+
+# --------------------------------------------------------------------------------
+
+
 [plugins]
 
 java-library = { id = "java-library" }
@@ -217,7 +226,12 @@ jdeps = { id = "org.kordamp.gradle.jdeps", version = "0.20.0" }
 
 swagger-gradle-plugin = { id = "io.swagger.core.v3.swagger-gradle-plugin", version = "2.2.19" }
 
+
+# --------------------------------------------------------------------------------
+
+
 [bundles]
+
 common-test-implementation = [
     "assertj-core",
     "mockito-core",

@@ -190,6 +190,7 @@ dependencies {
     implementation libs.eventLogging
     implementation libs.flyway.mysql
     implementation libs.guice
+    implementation libs.jackson.annotations
     implementation libs.jackson.dataformat.yaml
     implementation libs.jakarta.servlet.api
     implementation libs.jakarta.validation.api
@@ -208,6 +209,9 @@ dependencies {
     implementation libs.ws.rs.api
 
     runtimeOnly libs.jakarta.el
+    // This allows the use of JSON format app/request logs
+    // See https://www.dropwizard.io/en/stable/manual/configuration.html#json-layout
+    runtimeOnly libs.dropwizard.json.logging
 
     // Use default DB config.
     testImplementation project(':stroom-activity:stroom-activity-api')
@@ -294,13 +298,13 @@ compileJava {
             vendor = javaVendor
         }
         def compilerMeta = compiler.get().metadata
-        println """
+        logger.info("""
             |=============================================================
             |Compiling with:
             |  Vendor:  ${compilerMeta.vendor} (${javaVendor})
             |  Version: ${compilerMeta.javaRuntimeVersion}
             |  Path:    ${compilerMeta.installationPath}
-            |=============================================================""".stripMargin()
+            |=============================================================""".stripMargin())
     }
 }
 
@@ -360,7 +364,7 @@ tasks.register('generateConfigFiles', JavaExec) {
 }
 
 tasks.register('downloadStroomContentForDocker', JavaExec) {
-    println "Downloading/copying content packs to ${stroomDockerContentPacksDir}"
+    logger.info("Downloading/copying content packs to ${stroomDockerContentPacksDir}")
 
     dependsOn this: compileJava
     dependsOn this: compileTestJava
@@ -373,7 +377,7 @@ tasks.register('downloadStroomContentForDocker', JavaExec) {
 }
 
 tasks.register('downloadStroomContentForZipDist', JavaExec) {
-    println "Downloading/copying content packs to ${stroomZipDistContentPacksDir}"
+    logger.info("Downloading/copying content packs to ${stroomZipDistContentPacksDir}")
 
     dependsOn this: compileJava
     dependsOn this: compileTestJava
@@ -593,7 +597,7 @@ tasks.register('downloadSend', Download) {
     def token = System.getenv('GITHUB_TOKEN')
     if (token != null && !token.isEmpty()) {
         // Don't log the actual token obvs
-        println "Adding auth token for ${src}"
+        logger.info("Adding auth token for ${src}")
         header 'Authorization', "Bearer $token"
     }
 }
@@ -608,7 +612,7 @@ tasks.register('downloadSendArgs', Download) {
     def token = System.getenv('GITHUB_TOKEN')
     if (token != null && !token.isEmpty()) {
         // Don't log the actual token obvs
-        println "Adding auth token for ${src}"
+        logger.info("Adding auth token for ${src}")
         header 'Authorization', "Bearer $token"
     }
 }

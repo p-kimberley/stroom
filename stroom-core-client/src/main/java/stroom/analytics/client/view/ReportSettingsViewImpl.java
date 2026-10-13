@@ -17,21 +17,25 @@
 package stroom.analytics.client.view;
 
 import stroom.analytics.client.presenter.ReportSettingsPresenter.ReportSettingsView;
+import stroom.analytics.client.presenter.SettingsUiHandlers;
 import stroom.analytics.shared.ReportSettings;
 import stroom.dashboard.shared.DownloadSearchResultFileType;
-import stroom.document.client.event.ChangeUiHandlers;
 import stroom.item.client.SelectionBox;
+import stroom.widget.button.client.Button;
 import stroom.widget.tickbox.client.view.CustomCheckBox;
 
+import com.google.gwt.event.dom.client.ClickEvent;
 import com.google.gwt.event.logical.shared.ValueChangeEvent;
 import com.google.gwt.uibinder.client.UiBinder;
 import com.google.gwt.uibinder.client.UiField;
 import com.google.gwt.uibinder.client.UiHandler;
+import com.google.gwt.user.client.ui.SimplePanel;
 import com.google.gwt.user.client.ui.Widget;
 import com.google.inject.Inject;
+import com.gwtplatform.mvp.client.View;
 import com.gwtplatform.mvp.client.ViewWithUiHandlers;
 
-public class ReportSettingsViewImpl extends ViewWithUiHandlers<ChangeUiHandlers> implements ReportSettingsView {
+public class ReportSettingsViewImpl extends ViewWithUiHandlers<SettingsUiHandlers> implements ReportSettingsView {
 
     private final Widget widget;
 
@@ -39,6 +43,10 @@ public class ReportSettingsViewImpl extends ViewWithUiHandlers<ChangeUiHandlers>
     SelectionBox<DownloadSearchResultFileType> fileType;
     @UiField
     CustomCheckBox sendEmptyReports;
+    @UiField
+    SimplePanel errorFeed;
+    @UiField
+    Button setDefaultErrorFeed;
 
     @Inject
     public ReportSettingsViewImpl(final Binder binder) {
@@ -46,6 +54,8 @@ public class ReportSettingsViewImpl extends ViewWithUiHandlers<ChangeUiHandlers>
 
         fileType.addItems(DownloadSearchResultFileType.asSortedList());
         fileType.setValue(ReportSettings.DEFAULT_FILE_TYPE);
+
+        setDefaultErrorFeed.setTitle("Set as the default error feed for all users");
     }
 
     @Override
@@ -76,6 +86,21 @@ public class ReportSettingsViewImpl extends ViewWithUiHandlers<ChangeUiHandlers>
     @Override
     public void setSendEmptyReports(final boolean sendEmptyReports) {
         this.sendEmptyReports.setValue(sendEmptyReports);
+    }
+
+    @Override
+    public void setErrorFeedView(final View view) {
+        this.errorFeed.setWidget(view.asWidget());
+    }
+
+    @Override
+    public void setSetDefaultVisible(final boolean visible) {
+        this.setDefaultErrorFeed.setVisible(visible);
+    }
+
+    @UiHandler("setDefaultErrorFeed")
+    public void onSetDefaultErrorFeed(final ClickEvent event) {
+        getUiHandlers().onSetDefaultErrorFeed();
     }
 
     @UiHandler("fileType")

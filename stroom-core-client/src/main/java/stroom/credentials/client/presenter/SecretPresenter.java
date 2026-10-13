@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016-2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,25 @@
  * limitations under the License.
  */
 
-package stroom.analytics.client.presenter;
+package stroom.credentials.client.presenter;
 
-import stroom.document.client.event.ChangeUiHandlers;
 
-public interface AnalyticNotificationUiHandlers extends ChangeUiHandlers {
+import stroom.credentials.shared.Secret;
 
-    void onSetDefaultErrorFeed();
+import com.gwtplatform.mvp.client.View;
+
+import java.util.function.Consumer;
+
+public sealed interface SecretPresenter<V extends View>
+        permits AccessTokenSecretPresenter,
+        KeyStoreSecretPresenter,
+        SshKeySecretPresenter,
+        UsernamePasswordSecretPresenter {
+
+
+    V getView();
+
+    Secret getSecret();
+
+    void onOk(final Consumer<Boolean> consumer);
 }

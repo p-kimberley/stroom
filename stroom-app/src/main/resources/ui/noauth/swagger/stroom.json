@@ -16114,6 +16114,10 @@
             "type" : "integer",
             "format" : "int32"
           },
+          "lastOpenedMs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "needsYou" : {
             "type" : "boolean"
           },

@@ -16438,6 +16438,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "browserNotifications" : {
+            "type" : "boolean"
+          },
           "chatSystemPrompt" : {
             "type" : "string"
           },

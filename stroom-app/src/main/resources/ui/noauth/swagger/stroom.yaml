@@ -3862,6 +3862,50 @@ paths:
       summary: Send Plan B part
       tags:
       - File Transfer
+  /floorMapEventStore/v1/{uuid}:
+    get:
+      operationId: fetchFloorMapEventStore
+      parameters:
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      responses:
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorMapEventStoreDoc"
+          description: default response
+      summary: Fetch a floor map event store by its UUID
+      tags:
+      - FloorMap Event Store
+    put:
+      operationId: updateFloorMapEventStore
+      parameters:
+      - in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorMapEventStoreDoc"
+        description: doc
+        required: true
+      responses:
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorMapEventStoreDoc"
+          description: default response
+      summary: Update a floor map event store
+      tags:
+      - FloorMap Event Store
   /floormap/v1/{uuid}:
     get:
       operationId: fetchFloorMap
@@ -8309,9 +8353,9 @@ paths:
       - SqlTemporalStore
   /sqltemporalstore/v1/fetchAll:
     post:
-      description: Returns the most recent version of every key in the map with no
-        upper-time bound, including entries whose effective time is in the future. Use
-        for the 'Show all' Fact List toggle.
+      description: "Returns the most recent version of every key in the map with no\
+        \ upper-time bound, including entries whose effective time is in the future.\
+        \ Use for the 'Show all' Fact List toggle."
       operationId: fetchAllSqlTemporalStoreEntries
       requestBody:
         content:
@@ -10661,6 +10705,13 @@ components:
           - ATTACHMENT
           - DEBUG_DETAIL
           - THINKING
+          - WARNING
+        tokenCount:
+          type: integer
+          format: int32
+        turnId:
+          type: integer
+          format: int32
     AiChatPollRequest:
       type: object
       properties:
@@ -13292,6 +13343,7 @@ components:
           - DOCUMENT_FAVOURITES
           - DOCUMENT_FEED
           - DOCUMENT_FLOOR_MAP
+          - DOCUMENT_FLOOR_MAP_EVENT_STORE
           - DOCUMENT_FOLDER
           - DOCUMENT_GIT_REPO
           - DOCUMENT_GIT_REPO_FOLDER
@@ -13937,10 +13989,15 @@ components:
     Entry:
       type: object
       properties:
-        key:
+        column:
           type: string
-        value:
+        role:
           type: string
+          enum:
+          - ENTITY_ID
+          - LOCATION
+          - LOCATION_REF
+          - TYPE
     EntryCounts:
       type: object
       properties:
@@ -15319,8 +15376,8 @@ components:
           type: string
         description:
           type: string
-        entityIdColumn:
-          type: string
+        eventColumns:
+          $ref: "#/components/schemas/FloorMapEventColumns"
         eventsQuery:
           type: string
         eventsQueryTablePreferences:
@@ -15329,13 +15386,15 @@ components:
           $ref: "#/components/schemas/TimeRange"
         eventsStoreRef:
           $ref: "#/components/schemas/DocRef"
+        extentQuery:
+          type: string
         factsStoreRef:
           $ref: "#/components/schemas/DocRef"
         groups:
           type: array
           items:
             $ref: "#/components/schemas/FloorMapGroup"
-        locationIdColumn:
+        histogramQuery:
           type: string
         matrix:
           $ref: "#/components/schemas/FloorMapTransformationMatrix"
@@ -15369,6 +15428,51 @@ components:
             $ref: "#/components/schemas/FloorMapFieldMapping"
         version:
           type: string
+    FloorMapEventColumns:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+    FloorMapEventStoreDoc:
+      type: object
+      properties:
+        createTimeMs:
+          type: integer
+          format: int64
+        createUser:
+          type: string
+        description:
+          type: string
+        eventExpiry:
+          $ref: "#/components/schemas/SimpleDuration"
+        name:
+          type: string
+        settings:
+          $ref: "#/components/schemas/AbstractPlanBSettings"
+        stateType:
+          type: string
+          enum:
+          - STATE
+          - TEMPORAL_STATE
+          - RANGED_STATE
+          - TEMPORAL_RANGED_STATE
+          - SESSION
+          - HISTOGRAM
+          - METRIC
+          - TRACE
+        type:
+          type: string
+        updateTimeMs:
+          type: integer
+          format: int64
+        updateUser:
+          type: string
+        uuid:
+          type: string
+        version:
+          type: string
     FloorMapFieldMapping:
       type: object
       properties:
@@ -15390,6 +15494,7 @@ components:
           - GEOMETRY
           - FILL
           - OPACITY
+          - STATUS
           - CUSTOM
     FloorMapGroup:
       type: object
@@ -15940,6 +16045,7 @@ components:
           - HASH_LOOKUP
           - VARIABLE
           - TAGS
+          - TERMINATED_STRING
         temporalResolution:
           type: string
           enum:
@@ -16917,6 +17023,10 @@ components:
     McpToolServerConfig:
       type: object
       properties:
+        allowedTools:
+          type: array
+          items:
+            type: string
         apiKeyHeaderName:
           type: string
         apiKeyValuePrefix:
@@ -16931,6 +17041,10 @@ components:
           - STROOM_SESSION_TOKEN
         credentialName:
           type: string
+        deniedTools:
+          type: array
+          items:
+            type: string
         enabled:
           type: boolean
         endpoint:
@@ -17025,6 +17139,7 @@ components:
           - HASH_LOOKUP
           - VARIABLE
           - TAGS
+          - TERMINATED_STRING
         temporalResolution:
           type: string
           enum:
@@ -17710,6 +17825,7 @@ components:
           - DOCUMENT_FAVOURITES
           - DOCUMENT_FEED
           - DOCUMENT_FLOOR_MAP
+          - DOCUMENT_FLOOR_MAP_EVENT_STORE
           - DOCUMENT_FOLDER
           - DOCUMENT_GIT_REPO
           - DOCUMENT_GIT_REPO_FOLDER
@@ -20497,6 +20613,7 @@ components:
           - HASH_LOOKUP
           - VARIABLE
           - TAGS
+          - TERMINATED_STRING
         temporalPrecision:
           type: string
           enum:
@@ -21217,6 +21334,7 @@ components:
           - HASH_LOOKUP
           - VARIABLE
           - TAGS
+          - TERMINATED_STRING
     StateSettings:
       type: object
       allOf:
@@ -22079,6 +22197,7 @@ components:
           - HASH_LOOKUP
           - VARIABLE
           - TAGS
+          - TERMINATED_STRING
         temporalPrecision:
           type: string
           enum:
@@ -22495,6 +22614,8 @@ components:
         colour:
           type: string
         graphic:
+          type: string
+        icon:
           type: string
         shape:
           type: string

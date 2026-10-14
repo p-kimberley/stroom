@@ -11003,6 +11003,7 @@ components:
           - DOWNLOADING
           - READY
           - ERROR
+          - UNAVAILABLE
         truncated:
           type: boolean
         updateTimeMs:

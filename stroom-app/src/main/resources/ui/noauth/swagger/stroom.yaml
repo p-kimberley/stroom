@@ -18225,6 +18225,13 @@ components:
           type: string
       required:
       - type
+    McpToolGroupRule:
+      type: object
+      properties:
+        group:
+          type: string
+        toolPattern:
+          type: string
     McpToolPolicyRule:
       type: object
       properties:
@@ -18270,6 +18277,10 @@ components:
           $ref: "#/components/schemas/HttpClientConfig"
         name:
           type: string
+        toolGroups:
+          type: array
+          items:
+            $ref: "#/components/schemas/McpToolGroupRule"
         toolPolicies:
           type: array
           items:

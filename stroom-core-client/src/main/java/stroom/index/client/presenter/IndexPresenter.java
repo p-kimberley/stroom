@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ public class IndexPresenter extends DocTabPresenter<LinkTabPanelView, LuceneInde
     private static final TabData SETTINGS = new TabDataImpl("Settings");
     private static final TabData FIELDS = new TabDataImpl("Fields");
     private static final TabData SHARDS = new TabDataImpl("Shards");
+    private static final TabData DATA = new TabDataImpl("Data");
     private static final TabData DOCUMENTATION = new TabDataImpl("Documentation");
     private static final TabData PERMISSIONS = new TabDataImpl("Permissions");
 
@@ -48,6 +49,7 @@ public class IndexPresenter extends DocTabPresenter<LinkTabPanelView, LuceneInde
                           final Provider<IndexSettingsPresenter> indexSettingsPresenterProvider,
                           final Provider<IndexFieldListPresenter> indexFieldListPresenterProvider,
                           final Provider<IndexShardPresenter> indexShardPresenterProvider,
+                          final Provider<IndexDataPresenter> indexDataPresenterProvider,
                           final Provider<MarkdownEditPresenter> markdownEditPresenterProvider,
                           final DocumentUserPermissionsTabProvider<LuceneIndexDoc> documentUserPermissionsTabProvider,
                           final ClientSecurityContext securityContext) {
@@ -62,6 +64,7 @@ public class IndexPresenter extends DocTabPresenter<LinkTabPanelView, LuceneInde
 
         addTab(FIELDS, new DocTabProvider<LuceneIndexDoc>(indexFieldListPresenterProvider::get));
         addTab(SETTINGS, new DocTabProvider<LuceneIndexDoc>(indexSettingsPresenterProvider::get));
+        addTab(DATA, new DocTabProvider<LuceneIndexDoc>(indexDataPresenterProvider::get));
         addTab(DOCUMENTATION, new MarkdownTabProvider<LuceneIndexDoc>(eventBus, markdownEditPresenterProvider) {
             @Override
             public void onRead(final MarkdownEditPresenter presenter,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2024 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,9 @@ public class DateTimeBox
     }
 
     private void showPopup() {
+        if (!isEnabled()) {
+            return;
+        }
         final DateTimePopup popup = getPopup();
         if (popup != null) {
             final UTCDate date = UTCDate.create(textBox.getValue());
@@ -126,6 +129,7 @@ public class DateTimeBox
 
     public void setEnabled(final boolean enabled) {
         textBox.setEnabled(enabled);
+        svgIconBox.setReadonly(!enabled);
         updateInvalidState();
     }
 

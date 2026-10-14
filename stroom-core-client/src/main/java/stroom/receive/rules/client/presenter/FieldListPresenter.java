@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,6 @@ public class FieldListPresenter extends DocPresenter<PagerView, ReceiveDataRules
 
     private final MyDataGrid<QueryField> dataGrid;
     private final MultiSelectionModelImpl<QueryField> selectionModel;
-    private final UiConfigCache uiConfigCache;
     private final FieldEditPresenter fieldEditPresenter;
     private final ButtonView newButton;
     private final ButtonView editButton;
@@ -76,7 +75,6 @@ public class FieldListPresenter extends DocPresenter<PagerView, ReceiveDataRules
         view.setDataWidget(dataGrid);
 
         this.fieldEditPresenter = fieldEditPresenter;
-        this.uiConfigCache = uiConfigCache;
 
         newButton = getView().addButton(SvgPresets.NEW_ITEM);
         newButton.setTitle("New Field");
@@ -338,7 +336,7 @@ public class FieldListPresenter extends DocPresenter<PagerView, ReceiveDataRules
 //                if (column instanceof OrderByColumn<?, ?> orderByColumn) {
 //                    final String sortField = orderByColumn.getField();
 //                    final boolean isAscending = columnSortInfo.isAscending();
-////                    GWT.log("sortField " + i + ": " + sortField + " isAscending: " + isAscending);
+//                    GWT.log("sortField " + i + ": " + sortField + " isAscending: " + isAscending);
 //
 //                    Comparator<QueryField> comparator = null;
 //                    if (NAME_FIELD.equals(sortField)) {

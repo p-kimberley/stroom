@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2017 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+// STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master
+// Local addition: getInitialisationHandler(), which lets a document type collect required
+// configuration before its editor opens, plus the postSaveCallback save() overload. FloorMap
+// needs both - the handler prompts for the Facts and Events store refs, and the callback
+// flushes pending temporal-store changes and saves assets after the document is persisted.
+// Upstream has neither. Taking upstream's version wholesale means a FloorMapDoc opens with no
+// stores selected, and FloorMapPlugin's save throws (it deliberately fails the legacy save).
 public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
 
     private final DocumentTabManager documentTabManager = new DocumentTabManager();
@@ -152,6 +159,7 @@ public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
             // If we already have a tab item for this document then make sure it is
             // visible.
             if (!existing.isEmpty() && !duplicate) {
+                @SuppressWarnings("SequencedCollectionMethodCanBeUsed") // Not in GWT
                 final DocumentTabData existingTab = existing.get(0);
                 // Tell the content presenter to select this existing tab.
                 SelectContentTabEvent.fire(this, existingTab);
@@ -322,7 +330,6 @@ public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
     /**
      * 5. This method will save a document.
      */
-    @SuppressWarnings("unchecked")
     public void save(final DocumentTabData tabData) {
         save(tabData, () -> {
         });
@@ -335,6 +342,11 @@ public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
                 D document = presenter.getEntity();
                 document = presenter.write(document);
                 if (document != null) {
+                    final String validationError = getPreSaveError(document);
+                    if (validationError != null) {
+                        AlertEvent.fireWarn(this, validationError, onComplete::run);
+                        return;
+                    }
                     final D finalDocument = document;
                     save(getDocRef(document), document,
                             presenter.getPostSaveCallback(),
@@ -359,14 +371,15 @@ public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
     }
 
     /**
-     * Called when saving a document, just prior to it being saved.
-     * Subclasses should override this to implement custom save validation/confirmation.
+     * Called after {@link DocPresenter#write} but before the document is sent to the server.
+     * Subclasses may override to block the save when the document is in an invalid state.
      *
-     * @param doc The doc after onWrite() has been called.
-     * @return True to continue with the save, else the save will be aborted.
+     * @param doc The document as produced by the presenter's write step.
+     * @return A user-facing validation error message to display, or {@code null} if the
+     *         document is valid and the save should proceed.
      */
-    public boolean validateBeforeSave(final D doc) {
-        return true;
+    protected String getPreSaveError(final D doc) {
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -708,6 +721,21 @@ public abstract class DocumentPlugin<D> extends TabPlugin implements HasSave {
     protected abstract DocRef getDocRef(D document);
 
     public abstract String getType();
+
+    /**
+     * Returns the initialisation handler for this document type.
+     *
+     * <p>The default implementation returns a no-op handler that immediately
+     * signals completion, meaning the document editor opens without any
+     * additional user interaction. Override this method to provide a custom
+     * dialog that collects required configuration before the editor opens.</p>
+     *
+     * @return a non-null {@link DocInitialisationHandler}; the default is a
+     *         no-op that calls {@code onComplete.accept(true)} immediately
+     */
+    public DocInitialisationHandler getInitialisationHandler() {
+        return (docRef, onComplete, tmf) -> onComplete.accept(true);
+    }
 
     public void create(final String documentName,
                        final Consumer<D> resultConsumer,

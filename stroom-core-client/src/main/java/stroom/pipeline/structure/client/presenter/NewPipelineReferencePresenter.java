@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.data.PipelineReference;
 import stroom.planb.shared.PlanBDoc;
 import stroom.security.shared.DocumentPermission;
+import stroom.sqlstore.shared.SqlTemporalStoreDoc;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.shared.NullSafe;
 
@@ -69,7 +70,7 @@ public class NewPipelineReferencePresenter
         this.uiConfigCache = uiConfigCache;
 
         // TODO : @66 FIX TEMPORARY ABUSE OF PIPELINE REF
-        pipelinePresenter.setIncludedTypes(PipelineDoc.TYPE, PlanBDoc.TYPE);
+        pipelinePresenter.setIncludedTypes(PipelineDoc.TYPE, PlanBDoc.TYPE, SqlTemporalStoreDoc.TYPE);
         pipelinePresenter.setRequiredPermissions(DocumentPermission.USE);
 
         feedPresenter.setIncludedTypes(FeedDoc.TYPE);

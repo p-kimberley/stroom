@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2019 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.List;
 import javax.inject.Inject;
 
+@SuppressWarnings("SequencedCollectionMethodCanBeUsed")
 public class LinkedEventPresenter
         extends DocPresenter<LinkedEventView, Annotation> {
 

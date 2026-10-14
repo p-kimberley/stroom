@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,7 @@ public class ScriptDependencyListPresenter extends MyPresenterWidget<WrapperView
 
     private void onRemove(final ClickEvent event) {
         final List<DocRef> list = scriptListPresenter.getSelectionModel().getSelectedItems();
+        //noinspection SizeReplaceableByIsEmpty
         if (list != null && list.size() > 0) {
             String message = "Are you sure you want to remove this script dependency?";
             if (list.size() > 1) {

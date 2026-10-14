@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2022 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -403,6 +403,7 @@ class QueryServiceImpl implements QueryService, QueryFieldProvider {
                         final Predicate<Item> columnValueSelectionPredicate = ColumnValueSelectionPredicateFactory
                                 .create(columnIdList, request.getSelections(), primaryColumnIndex);
 
+                        //noinspection unused row, count
                         dataStore.fetch(
                                 dataStore.getColumns(),
                                 OffsetRange.UNBOUNDED,
@@ -468,6 +469,7 @@ class QueryServiceImpl implements QueryService, QueryFieldProvider {
                                     rule.getExpression(),
                                     queryFieldIndex,
                                     dateTimeSettings);
+                    //noinspection unused t
                     final Predicate<Values> conditionalFormattingPredicate =
                             optionalValuesPredicate.orElse(t -> true);
                     ruleAndMatchers.add(new RuleAndMatcher(rule, conditionalFormattingPredicate));
@@ -1083,5 +1085,31 @@ class QueryServiceImpl implements QueryService, QueryFieldProvider {
             }
         }
         return nodeName;
+    }
+
+    @Override
+    public ExpressionOperator parseQuery(final String query) {
+        return securityContext.useAsReadResult(() -> {
+            try {
+                final SearchRequest sampleRequest = new SearchRequest(
+                        null,
+                        null,
+                        Query.builder().build(),
+                        null,
+                        null,
+                        false,
+                        null);
+                final ExpressionContext expressionContext = expressionContextFactory.createContext(sampleRequest);
+                final SearchRequest mappedRequest = searchRequestFactory.create(
+                        query,
+                        sampleRequest,
+                        expressionContext
+                );
+                return mappedRequest.getQuery().getExpression();
+            } catch (final RuntimeException e) {
+                LOGGER.debug(e.getMessage(), e);
+                throw e;
+            }
+        });
     }
 }

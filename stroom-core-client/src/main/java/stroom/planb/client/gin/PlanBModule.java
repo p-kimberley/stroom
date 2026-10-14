@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import stroom.planb.client.presenter.HistogramSettingsPresenter;
 import stroom.planb.client.presenter.HistogramSettingsPresenter.HistogramSettingsView;
 import stroom.planb.client.presenter.MetricSettingsPresenter;
 import stroom.planb.client.presenter.MetricSettingsPresenter.MetricSettingsView;
+import stroom.planb.client.presenter.PlanBDataPresenter;
 import stroom.planb.client.presenter.PlanBPresenter;
 import stroom.planb.client.presenter.PlanBSettingsPresenter;
 import stroom.planb.client.presenter.PlanBSettingsPresenter.PlanBSettingsView;
@@ -39,6 +40,7 @@ import stroom.planb.client.presenter.TraceSettingsPresenter;
 import stroom.planb.client.presenter.TraceSettingsPresenter.TraceSettingsView;
 import stroom.planb.client.view.HistogramSettingsViewImpl;
 import stroom.planb.client.view.MetricSettingsViewImpl;
+import stroom.planb.client.view.PlanBDataViewImpl;
 import stroom.planb.client.view.PlanBSettingsViewImpl;
 import stroom.planb.client.view.RangeStateSettingsViewImpl;
 import stroom.planb.client.view.SessionSettingsViewImpl;
@@ -56,6 +58,9 @@ public class PlanBModule extends PluginModule {
         bindPresenterWidget(PlanBSettingsPresenter.class,
                 PlanBSettingsView.class,
                 PlanBSettingsViewImpl.class);
+        bindPresenterWidget(PlanBDataPresenter.class,
+                PlanBDataPresenter.PlanBDataView.class,
+                PlanBDataViewImpl.class);
 
         bindPresenterWidget(StateSettingsPresenter.class,
                 StateSettingsView.class,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,6 +87,15 @@ public class ResizableOkCancelContent extends Composite implements DialogButtons
     public void setEnabled(final boolean enabled) {
         ok.setEnabled(enabled);
         cancel.setEnabled(enabled);
+    }
+
+    @Override
+    public void setEnabled(final DialogAction action, final boolean enabled) {
+        if (DialogAction.OK.equals(action)) {
+            ok.setEnabled(enabled);
+        } else if (DialogAction.CANCEL.equals(action)) {
+            cancel.setEnabled(enabled);
+        }
     }
 
 

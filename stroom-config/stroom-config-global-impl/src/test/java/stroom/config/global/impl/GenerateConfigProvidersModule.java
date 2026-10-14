@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2021 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -256,9 +256,16 @@ public class GenerateConfigProvidersModule {
 
         LOGGER.debug("PWD: {}", pwd.toString());
 
-        final Path moduleFile = pwd.resolve("stroom-config/stroom-config-global-impl/src/main/java")
-                .resolve(ConfigProvidersModule.class.getName().replace(".", File.separator) + ".java")
-                .normalize();
+        final Path moduleFile;
+        if (pwd.toString().endsWith("stroom-config-global-impl")) {
+            moduleFile = pwd.resolve("src/main/java")
+                    .resolve(ConfigProvidersModule.class.getName().replace(".", File.separator) + ".java")
+                    .normalize();
+        } else {
+            moduleFile = pwd.resolve("stroom-config/stroom-config-global-impl/src/main/java")
+                    .resolve(ConfigProvidersModule.class.getName().replace(".", File.separator) + ".java")
+                    .normalize();
+        }
 
         if (!Files.isRegularFile(moduleFile)) {
             throw new RuntimeException("Can't find " + moduleFile.toAbsolutePath());

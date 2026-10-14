@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,9 @@ import com.gwtplatform.mvp.client.View;
 import java.util.ArrayList;
 import java.util.List;
 
+// STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master.
+// Part of "Dialog box validation now supports disabling only the OK button" - a local addition
+// upstream does not have. FloorMap's edit dialogs rely on it, so keep this side on merge.
 public class PopupSupportImpl implements PopupSupport {
 
     private Popup popup;
@@ -141,6 +144,13 @@ public class PopupSupportImpl implements PopupSupport {
     public void setEnabled(final boolean enabled) {
         if (dialogButtons != null) {
             dialogButtons.setEnabled(enabled);
+        }
+    }
+
+    @Override
+    public void setEnabled(final DialogAction action, final boolean enabled) {
+        if (dialogButtons != null) {
+            dialogButtons.setEnabled(action, enabled);
         }
     }
 
@@ -295,10 +305,10 @@ public class PopupSupportImpl implements PopupSupport {
             }
         }
 
-        if (icon != null) {
+        if (popup != null && icon != null) {
             popup.setIcon(icon);
         }
-        if (caption != null) {
+        if (popup != null && caption != null) {
             popup.setCaption(caption);
         }
 

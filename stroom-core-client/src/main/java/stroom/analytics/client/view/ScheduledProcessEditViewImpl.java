@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2024 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,7 +151,9 @@ public class ScheduledProcessEditViewImpl
         this.node.clear();
         this.node.addItems(nodes);
         if (selectedNode == null) {
+            //noinspection SizeReplaceableByIsEmpty
             if (nodes.size() > 0) {
+                //noinspection SequencedCollectionMethodCanBeUsed
                 this.node.setValue(nodes.get(0));
             }
         } else {

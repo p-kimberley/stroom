@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2016 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,4 +21,6 @@ import com.google.gwt.user.client.ui.Focus;
 public interface DialogButtons extends Focus, DialogActionUiHandlers {
 
     void setEnabled(boolean enabled);
+
+    void setEnabled(DialogAction action, boolean enabled);
 }

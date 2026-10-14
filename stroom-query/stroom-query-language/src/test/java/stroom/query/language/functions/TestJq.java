@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2026 Crown Copyright
+ * Copyright 2026 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,15 @@ class TestJq extends AbstractFunctionTest<Jq> {
                         ValString.create("2"),
                         ValString.create(json),
                         ValString.create(".arr[1]")),
+                TestCase.of(
+                        // Field access on a key needing quoting (hyphens) uses
+                        // ."key" — the form FloorMapQueryBuilder generates for
+                        // e.g. tm-world-to-map. A bare "key" without the dot
+                        // would be a jq string literal, not a lookup.
+                        "Quoted hyphenated field",
+                        ValString.create("[1,0,0,1,50,60]"),
+                        ValString.create("{\"tm-world-to-map\":[1,0,0,1,50,60]}"),
+                        ValString.create(".\"tm-world-to-map\"")),
                 TestCase.of(
                         "Filter",
                         // The values of all the matched elements are concatenated.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2019 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,6 +146,11 @@ class RestFactoryImpl implements RestFactory, HasHandlers {
         public MethodExecutor<T, R> onFailure(final RestErrorHandler errorHandler) {
             this.errorConsumer = errorHandler;
             return this;
+        }
+
+        @Override
+        public void exec() {
+            taskMonitorFactory(null).exec();
         }
     }
 

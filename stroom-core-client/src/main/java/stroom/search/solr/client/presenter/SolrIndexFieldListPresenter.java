@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2025 Crown Copyright
+ * Copyright 2019 Crown Copyright
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,6 +285,7 @@ public class SolrIndexFieldListPresenter extends DocPresenter<SolrIndexFieldList
 
     private void onRemove() {
         final List<SolrIndexField> list = selectionModel.getSelectedItems();
+        //noinspection SizeReplaceableByIsEmpty
         if (list != null && list.size() > 0) {
             String message = "Are you sure you want to delete the selected field?";
             if (list.size() > 1) {

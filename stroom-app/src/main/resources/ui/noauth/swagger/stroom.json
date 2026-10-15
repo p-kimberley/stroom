@@ -25345,6 +25345,9 @@
           "apiKeyValuePrefix" : {
             "type" : "string"
           },
+          "audience" : {
+            "type" : "string"
+          },
           "authMode" : {
             "type" : "string",
             "enum" : [ "NONE", "BEARER_TOKEN", "API_KEY", "BASIC", "STROOM_SESSION_TOKEN" ]

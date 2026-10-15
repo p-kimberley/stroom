@@ -14906,6 +14906,8 @@ components:
           - CSV
           - TSV
           - MARKDOWN
+        includeSourceIds:
+          type: boolean
         percent:
           type: integer
           format: int32
@@ -14927,6 +14929,8 @@ components:
           - CSV
           - TSV
           - MARKDOWN
+        includeSourceIds:
+          type: boolean
         percent:
           type: integer
           format: int32

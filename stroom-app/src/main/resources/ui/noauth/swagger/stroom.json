@@ -16299,6 +16299,13 @@
           },
           "markRead" : {
             "type" : "boolean"
+          },
+          "watchedMessageIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
           }
         }
       },
@@ -16327,6 +16334,12 @@
             "$ref" : "#/components/schemas/AiChatRun"
           },
           "streamingMessages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AiChatMessage"
+            }
+          },
+          "watchedMessages" : {
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/AiChatMessage"

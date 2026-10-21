@@ -228,6 +228,26 @@ class ElasticIndexingFilter extends AbstractXMLFilter {
         }
     }
 
+    /// Starts each part of a stream afresh. A part that failed part-way through a document leaves the parsing
+    /// state (and the JSON generator) mid-document, which would otherwise stop every later part of the stream
+    /// from being indexed.
+    @Override
+    public void startStream() {
+        try {
+            inOuterArray = false;
+            currentDepth = 0;
+            currentDocFieldName = null;
+            currentDocIndexNameVariables.clear();
+            content.clear();
+            clearDocument();
+            jsonGenerator = JSON_FACTORY.createGenerator(currentDocument);
+        } catch (final JacksonException e) {
+            fatalError("Failed to initialise JsonGenerator", e);
+        } finally {
+            super.startStream();
+        }
+    }
+
     private void populateIndexNameVariableNames() {
         indexNameVariables = INDEX_NAME_VALUE_PATTERN.matcher(indexName).results()
                 .map(matchResult -> {
@@ -343,6 +363,9 @@ class ElasticIndexingFilter extends AbstractXMLFilter {
                             // We have closed out an outer `map`, so queue the document for indexing
                             processDocument();
                         }
+                    } catch (final LoggedException e) {
+                        // Already logged, e.g. a failed bulk request.
+                        throw e;
                     } catch (final Exception e) {
                         fatalError("Invalid end of object", e);
                     }
@@ -495,6 +518,9 @@ class ElasticIndexingFilter extends AbstractXMLFilter {
                     indexDocuments();
                 }
             }
+        } catch (final LoggedException e) {
+            // Already logged, e.g. a failed bulk request.
+            throw e;
         } catch (final JacksonException e) {
             fatalError("Failed to flush JSON to stream", e);
         } catch (final Exception e) {

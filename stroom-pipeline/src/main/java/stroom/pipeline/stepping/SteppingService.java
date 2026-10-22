@@ -67,6 +67,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -885,15 +886,26 @@ public class SteppingService {
                     streamIds,
                     () -> createSession(streamIds));
 
-            // The fingerprints are what this step is served under. If an element was edited they have
-            // changed, so it is served under new keys while the untouched elements are still read from what
-            // was already captured.
-            final SessionStepResult sessionResult = sessionStepResolver.resolve(
-                    session, request, fingerprints, request.getTimeout() == null ? 0L : request.getTimeout());
+            try {
+                // The fingerprints are what this step is served under. If an element was edited they have
+                // changed, so it is served under new keys while the untouched elements are still read from what
+                // was already captured.
+                final SessionStepResult sessionResult = sessionStepResolver.resolve(
+                        session, request, fingerprints, request.getTimeout() == null ? 0L : request.getTimeout());
 
-            sessionRegistry.reapIdle();
+                sessionRegistry.reapIdle();
 
-            return resultMapper.toResult(request, session, sessionResult);
+                return resultMapper.toResult(request, session, sessionResult);
+            } catch (final RuntimeException e) {
+                if (!Objects.equals(session.getSessionId(), request.getSessionUuid())) {
+                    // A session made for this step, whose id never reaches the client as the step failed:
+                    // nothing could use or end it, so it would hold its capture until it went idle.
+                    LOGGER.debug(() -> "Ending stepping session " + session.getSessionId()
+                                       + " made for a step that failed");
+                    sessionRegistry.terminate(userIdentity, session.getSessionId());
+                }
+                throw e;
+            }
         });
     }
 

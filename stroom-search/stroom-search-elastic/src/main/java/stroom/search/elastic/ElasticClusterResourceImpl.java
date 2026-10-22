@@ -23,12 +23,9 @@ import stroom.event.logging.rs.api.AutoLogged.OperationType;
 import stroom.search.elastic.shared.ElasticClusterDoc;
 import stroom.search.elastic.shared.ElasticClusterResource;
 import stroom.search.elastic.shared.ElasticClusterTestResponse;
-import stroom.search.elastic.shared.ElasticConnectionConfig;
 import stroom.util.shared.EntityServiceException;
 import stroom.util.shared.FetchWithUuid;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.InfoResponse;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 
@@ -73,30 +70,7 @@ class ElasticClusterResourceImpl implements ElasticClusterResource, FetchWithUui
     @Override
     @AutoLogged(value = OperationType.PROCESS, verb = "Testing Elasticsearch cluster")
     public ElasticClusterTestResponse testCluster(final ElasticClusterDoc cluster) {
-        try {
-            final ElasticConnectionConfig connectionConfig = cluster.getConnection();
-            final ElasticClientConfig elasticClientConfig = elasticConfigProvider.get().getClientConfig();
-            final ElasticsearchClient elasticClient = new ElasticClientFactory()
-                    .create(connectionConfig, elasticClientConfig);
-
-            final InfoResponse response = elasticClient.info();
-
-            final StringBuilder sb = new StringBuilder()
-                    .append("Cluster URLs: ")
-                    .append(connectionConfig.getConnectionUrls())
-                    .append("\nCluster name: ")
-                    .append(response.clusterName())
-                    .append("\nCluster UUID: ")
-                    .append(response.clusterUuid())
-                    .append("\nNode name: ")
-                    .append(response.name())
-                    .append("\nVersion: ")
-                    .append(response.version().number());
-
-            return new ElasticClusterTestResponse(true, sb.toString());
-
-        } catch (final Exception e) {
-            return new ElasticClusterTestResponse(false, e.getMessage());
-        }
+        return ElasticClusterConnectionTest.test(cluster.getConnection(),
+                elasticConfigProvider.get().getClientConfig());
     }
 }

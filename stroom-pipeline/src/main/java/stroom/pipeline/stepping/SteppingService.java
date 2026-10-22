@@ -56,6 +56,7 @@ import stroom.task.api.ThreadPoolImpl;
 import stroom.task.shared.ThreadPool;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.logging.LogUtil;
 import stroom.util.shared.ElementId;
 import stroom.util.shared.NullSafe;
 
@@ -900,8 +901,9 @@ public class SteppingService {
                 if (!Objects.equals(session.getSessionId(), request.getSessionUuid())) {
                     // A session made for this step, whose id never reaches the client as the step failed:
                     // nothing could use or end it, so it would hold its capture until it went idle.
-                    LOGGER.debug(() -> "Ending stepping session " + session.getSessionId()
-                                       + " made for a step that failed");
+                    LOGGER.debug(() -> LogUtil.message(
+                            "Ending stepping session {} made for a step that failed",
+                            session.getSessionId()));
                     sessionRegistry.terminate(userIdentity, session.getSessionId());
                 }
                 throw e;

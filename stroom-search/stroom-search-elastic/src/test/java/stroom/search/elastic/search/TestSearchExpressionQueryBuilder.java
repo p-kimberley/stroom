@@ -112,6 +112,10 @@ class TestSearchExpressionQueryBuilder {
     private static final Set<Condition> BOOLEAN_CONDITIONS = EnumSet.of(
             Condition.EQUALS,
             Condition.NOT_EQUALS);
+    // Supported by every field type, e.g. from StroomQL `where x is null`, although the UI doesn't offer them
+    private static final Set<Condition> NULL_CONDITIONS = EnumSet.of(
+            Condition.IS_NULL,
+            Condition.IS_NOT_NULL);
 
     private MockIndexFieldCache indexFieldCache;
     private WordListProvider wordListProvider;
@@ -537,6 +541,51 @@ class TestSearchExpressionQueryBuilder {
         assertThat(inner.exists().field()).isEqualTo(field);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ID_FIELD, INTEGER_FIELD, LONG_FIELD, UNSIGNED_LONG_FIELD, VERSION_FIELD, FLOAT_FIELD, DOUBLE_FIELD,
+            DATE_FIELD, IP_FIELD, TEXT_FIELD, KEYWORD_FIELD, BOOLEAN_FIELD, WILDCARD_FIELD, DENSE_VECTOR_FIELD})
+    void testIsNotNullIsExistsQuery(final String field) {
+        // StroomQL gives null conditions an empty value
+        final Query query = buildSingleTerm(field, Condition.IS_NOT_NULL, "");
+
+        assertThat(query.isExists()).isTrue();
+        assertThat(query.exists().field()).isEqualTo(field);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            ID_FIELD, INTEGER_FIELD, LONG_FIELD, UNSIGNED_LONG_FIELD, VERSION_FIELD, FLOAT_FIELD, DOUBLE_FIELD,
+            DATE_FIELD, IP_FIELD, TEXT_FIELD, KEYWORD_FIELD, BOOLEAN_FIELD, WILDCARD_FIELD, DENSE_VECTOR_FIELD})
+    void testIsNullIsNegatedExistsQuery(final String field) {
+        final Query inner = assertNegated(buildSingleTerm(field, Condition.IS_NULL, ""));
+
+        assertThat(inner.isExists()).isTrue();
+        assertThat(inner.exists().field()).isEqualTo(field);
+    }
+
+    @Test
+    void testNullConditionsIgnoreValue() {
+        assertThat(buildSingleTerm(TEXT_FIELD, Condition.IS_NOT_NULL, null).isExists()).isTrue();
+        assertThat(buildSingleTerm(TEXT_FIELD, Condition.IS_NOT_NULL, "abc").isExists()).isTrue();
+        assertThat(assertNegated(buildSingleTerm(TEXT_FIELD, Condition.IS_NULL, null)).isExists()).isTrue();
+    }
+
+    @Test
+    void testIsNullCombinedWithOtherTerm() {
+        final Query query = buildQuery(ExpressionOperator.builder()
+                .op(Op.AND)
+                .addTerm(term(LONG_FIELD, Condition.EQUALS, "42"))
+                .addTerm(term(TEXT_FIELD, Condition.IS_NULL, ""))
+                .build());
+
+        assertThat(query.isBool()).isTrue();
+        final List<Query> must = query.bool().must();
+        assertThat(must).hasSize(2);
+        assertTerm(must.get(0), LONG_FIELD, 42L);
+        assertThat(assertNegated(must.get(1)).exists().field()).isEqualTo(TEXT_FIELD);
+    }
+
     @Test
     void testInStarOnTextFieldIsNotExistsQuery() {
         // Only EQUALS and NOT_EQUALS treat a lone `*` as an exists query
@@ -858,6 +907,27 @@ class TestSearchExpressionQueryBuilder {
 
         final Query leaf = assertNestedPaths(inner, "user");
         assertThat(leaf.isExists()).isTrue();
+    }
+
+    @Test
+    void testNestedFieldIsNull() {
+        addNestedUserFields();
+
+        final Query inner = assertNegated(buildSingleTerm("user.age", Condition.IS_NULL, ""));
+
+        final Query leaf = assertNestedPaths(inner, "user");
+        assertThat(leaf.isExists()).isTrue();
+        assertThat(leaf.exists().field()).isEqualTo("user.age");
+    }
+
+    @Test
+    void testNestedFieldIsNotNull() {
+        addNestedUserFields();
+
+        final Query leaf = assertNestedPaths(buildSingleTerm("user.age", Condition.IS_NOT_NULL, ""), "user");
+
+        assertThat(leaf.isExists()).isTrue();
+        assertThat(leaf.exists().field()).isEqualTo("user.age");
     }
 
     @Test
@@ -1311,22 +1381,28 @@ class TestSearchExpressionQueryBuilder {
     }
 
     static Stream<Arguments> scalarTypeUnsupportedConditionMatrix() {
-        return scalarCases().flatMap(scalarCase -> EnumSet.complementOf(EnumSet.copyOf(SCALAR_CONDITIONS))
+        return scalarCases().flatMap(scalarCase -> unsupportedConditions(SCALAR_CONDITIONS)
                 .stream()
                 .map(condition -> Arguments.of(scalarCase, condition)));
     }
 
     static Stream<Arguments> stringTypeUnsupportedConditionMatrix() {
         final Stream<Arguments> stringFields = Stream.of(TEXT_FIELD, KEYWORD_FIELD, WILDCARD_FIELD)
-                .flatMap(field -> EnumSet.complementOf(EnumSet.copyOf(STRING_CONDITIONS))
+                .flatMap(field -> unsupportedConditions(STRING_CONDITIONS)
                         .stream()
                         .map(condition -> Arguments.of(field, condition)));
         // A boolean field is only compared with one of its two values, so IN, IN_DICTIONARY and MATCHES_REGEX
         // aren't supported
-        final Stream<Arguments> booleanField = EnumSet.complementOf(EnumSet.copyOf(BOOLEAN_CONDITIONS))
+        final Stream<Arguments> booleanField = unsupportedConditions(BOOLEAN_CONDITIONS)
                 .stream()
                 .map(condition -> Arguments.of(BOOLEAN_FIELD, condition));
         return Stream.concat(stringFields, booleanField);
+    }
+
+    private static Set<Condition> unsupportedConditions(final Set<Condition> supportedConditions) {
+        final Set<Condition> unsupportedConditions = EnumSet.complementOf(EnumSet.copyOf(supportedConditions));
+        unsupportedConditions.removeAll(NULL_CONDITIONS);
+        return unsupportedConditions;
     }
 
     // --------------------------------------------------------------------------------

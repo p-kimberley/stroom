@@ -20,17 +20,38 @@ import stroom.dictionary.api.WordListProvider;
 import stroom.dictionary.shared.DictionaryDoc;
 import stroom.dictionary.shared.WordList;
 import stroom.docref.DocRef;
+import stroom.index.lucene553.analyser.AnalyzerFactory;
 import stroom.index.shared.LuceneIndexField;
 import stroom.query.api.DateTimeSettings;
 import stroom.query.api.ExpressionOperator;
 import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.api.datasource.AnalyzerType;
+import stroom.query.api.datasource.FieldType;
 import stroom.query.common.v2.MockIndexFieldCache;
+import stroom.query.language.functions.Val;
+import stroom.query.language.functions.ValBoolean;
+import stroom.query.language.functions.ValDate;
+import stroom.query.language.functions.ValDouble;
+import stroom.query.language.functions.ValFloat;
+import stroom.query.language.functions.ValInteger;
+import stroom.query.language.functions.ValLong;
+import stroom.query.language.functions.ValString;
+import stroom.search.extraction.FieldValue;
 
+import org.apache.lucene553.analysis.Analyzer;
+import org.apache.lucene553.index.IndexableField;
+import org.apache.lucene553.index.memory.MemoryIndex;
+import org.apache.lucene553.search.Query;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -113,5 +134,102 @@ public class TestSearchExpressionQueryBuilder {
         System.out.println(query2.toString());
 
         assertThat(query2.getQuery()).isEqualTo(query1.getQuery());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullConditionCases")
+    void testNullConditions(final String name,
+                            final LuceneIndexField field,
+                            final Val value) throws IOException {
+        final LuceneIndexField otherField = LuceneIndexField.createField("other", AnalyzerType.KEYWORD);
+        final MockIndexFieldCache indexFieldCache = new MockIndexFieldCache();
+        indexFieldCache.put(field.getFldName(), field);
+        indexFieldCache.put(otherField.getFldName(), otherField);
+        final SearchExpressionQueryBuilder builder = new SearchExpressionQueryBuilder(
+                new DocRef("test", "test"),
+                indexFieldCache,
+                null,
+                1024,
+                DateTimeSettings.builder().build());
+
+        final FieldValue otherValue = new FieldValue(otherField, ValString.create("foo"));
+        final List<FieldValue> docWithValue = List.of(otherValue, new FieldValue(field, value));
+        final List<FieldValue> docWithoutValue = List.of(otherValue);
+
+        // StroomQL gives null conditions an empty value.
+        final Query isNull = buildQuery(builder, ExpressionOperator.builder()
+                .addTerm(field.getFldName(), Condition.IS_NULL, "")
+                .build());
+        final Query isNotNull = buildQuery(builder, ExpressionOperator.builder()
+                .addTerm(field.getFldName(), Condition.IS_NOT_NULL, "")
+                .build());
+        final Query isNullAndOther = buildQuery(builder, ExpressionOperator.builder()
+                .addTerm(otherField.getFldName(), Condition.EQUALS, "foo")
+                .addTerm(field.getFldName(), Condition.IS_NULL, "")
+                .build());
+
+        assertThat(matches(isNull, docWithValue)).isFalse();
+        assertThat(matches(isNull, docWithoutValue)).isTrue();
+        assertThat(matches(isNotNull, docWithValue)).isTrue();
+        assertThat(matches(isNotNull, docWithoutValue)).isFalse();
+        assertThat(matches(isNullAndOther, docWithValue)).isFalse();
+        assertThat(matches(isNullAndOther, docWithoutValue)).isTrue();
+    }
+
+    private static Stream<Arguments> nullConditionCases() {
+        return Stream.of(
+                Arguments.of("keyword",
+                        LuceneIndexField.createField("field", AnalyzerType.KEYWORD),
+                        ValString.create("bar")),
+                Arguments.of("alpha numeric",
+                        LuceneIndexField.createField("field", AnalyzerType.ALPHA_NUMERIC),
+                        ValString.create("bar baz")),
+                Arguments.of("boolean",
+                        createField(FieldType.BOOLEAN, AnalyzerType.KEYWORD),
+                        ValBoolean.create(true)),
+                Arguments.of("integer",
+                        createField(FieldType.INTEGER, AnalyzerType.NUMERIC),
+                        ValInteger.create(-5)),
+                Arguments.of("long",
+                        createField(FieldType.LONG, AnalyzerType.NUMERIC),
+                        ValLong.create(Long.MIN_VALUE)),
+                Arguments.of("float",
+                        createField(FieldType.FLOAT, AnalyzerType.NUMERIC),
+                        ValFloat.create(-1.5F)),
+                Arguments.of("double",
+                        createField(FieldType.DOUBLE, AnalyzerType.NUMERIC),
+                        ValDouble.create(Double.MAX_VALUE)),
+                Arguments.of("date",
+                        createField(FieldType.DATE, AnalyzerType.NUMERIC),
+                        ValDate.create(1613525014000L)),
+                Arguments.of("id",
+                        createField(FieldType.ID, AnalyzerType.KEYWORD),
+                        ValLong.create(42L)));
+    }
+
+    private static LuceneIndexField createField(final FieldType fieldType, final AnalyzerType analyzerType) {
+        return LuceneIndexField.builder()
+                .fldName("field")
+                .fldType(fieldType)
+                .analyzerType(analyzerType)
+                .build();
+    }
+
+    private static Query buildQuery(final SearchExpressionQueryBuilder builder,
+                                    final ExpressionOperator expression) {
+        return builder.buildQuery(expression).getQuery();
+    }
+
+    private static boolean matches(final Query query, final List<FieldValue> fieldValues) throws IOException {
+        // Index the fields the same way a shard would, as a single document.
+        final MemoryIndex memoryIndex = new MemoryIndex();
+        for (final FieldValue fieldValue : fieldValues) {
+            final LuceneIndexField indexField = LuceneIndexField.fromIndexField(fieldValue.field());
+            final Analyzer analyzer = AnalyzerFactory.create(indexField.getAnalyzerType(),
+                    indexField.isCaseSensitive());
+            final IndexableField field = FieldFactory.create(fieldValue);
+            memoryIndex.addField(field.name(), field.tokenStream(analyzer, null), field.boost());
+        }
+        return memoryIndex.createSearcher().search(query, 1).totalHits > 0;
     }
 }

@@ -45,6 +45,7 @@ import org.apache.lucene553.search.MatchNoDocsQuery;
 import org.apache.lucene553.search.NumericRangeQuery;
 import org.apache.lucene553.search.Query;
 import org.apache.lucene553.search.TermQuery;
+import org.apache.lucene553.search.TermRangeQuery;
 import org.apache.lucene553.search.WildcardQuery;
 
 import java.util.ArrayList;
@@ -254,6 +255,13 @@ class SearchExpressionQueryBuilder {
             return new MatchNoDocsQuery();
         }
         final String fieldName = indexField.getFldName();
+
+        // Null conditions have no value so must be handled before the empty value check below.
+        if (Condition.IS_NULL.equals(condition)) {
+            return negate(getExistsQuery(indexField));
+        } else if (Condition.IS_NOT_NULL.equals(condition)) {
+            return getExistsQuery(indexField);
+        }
 
         // Ensure an appropriate value has been provided for the condition type.
         if (Condition.IN_DICTIONARY.equals(condition)) {
@@ -612,6 +620,28 @@ class SearchExpressionQueryBuilder {
                 .add(new MatchAllDocsQuery(), Occur.SHOULD)
                 .add(query, Occur.MUST_NOT)
                 .build();
+    }
+
+    private Query getExistsQuery(final IndexField indexField) {
+        // Match any document that has a value for the field. Numeric fields need an open range
+        // using the precision step the field was indexed with (see FieldTypeFactory), otherwise
+        // the query looks for lower precision terms that may not exist.
+        final String fieldName = indexField.getFldName();
+        final FieldType fieldType = indexField.getFldType();
+        final int precisionStep = FieldType.ID.equals(fieldType)
+                ? Integer.MAX_VALUE
+                : FieldTypeFactory.DEFAULT_PRECISION_STEP;
+        if (FieldType.INTEGER.equals(fieldType)) {
+            return NumericRangeQuery.newIntRange(fieldName, precisionStep, null, null, true, true);
+        } else if (FieldType.FLOAT.equals(fieldType)) {
+            return NumericRangeQuery.newFloatRange(fieldName, precisionStep, null, null, true, true);
+        } else if (FieldType.DOUBLE.equals(fieldType)) {
+            return NumericRangeQuery.newDoubleRange(fieldName, precisionStep, null, null, true, true);
+        } else if (FieldType.DATE.equals(fieldType) || fieldType.isNumeric()) {
+            return NumericRangeQuery.newLongRange(fieldName, precisionStep, null, null, true, true);
+        } else {
+            return TermRangeQuery.newStringRange(fieldName, null, null, true, true);
+        }
     }
 
     private Query getIntIn(final String fieldName, final String value) {

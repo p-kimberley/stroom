@@ -292,6 +292,14 @@ public class SearchExpressionQueryBuilder {
         // query per remaining level of nesting.
         final List<String> nestedPaths = getRemainingNestedPaths(getNestedPaths(fieldName), enclosingPaths);
 
+        // Null conditions have no value so must be handled before the empty value check below.
+        // They apply to any field type, including boolean.
+        if (Condition.IS_NULL.equals(condition)) {
+            return negate(buildExistsQuery(fieldName, nestedPaths));
+        } else if (Condition.IS_NOT_NULL.equals(condition)) {
+            return buildExistsQuery(fieldName, nestedPaths);
+        }
+
         // A boolean field is only compared with one of its two values
         if (Kind.Boolean.jsonValue().equals(elasticIndexField.getNativeType())
             && !Condition.EQUALS.equals(condition)
@@ -316,9 +324,9 @@ public class SearchExpressionQueryBuilder {
         // Special case: if the expression is a wildcard, use the `exists` query
         if (value.equals("*")) {
             if (Condition.EQUALS.equals(condition)) {
-                return wrapInNested(nestedPaths, QueryBuilders.exists(q -> q.field(fieldName)));
+                return buildExistsQuery(fieldName, nestedPaths);
             } else if (Condition.NOT_EQUALS.equals(condition)) {
-                return negate(wrapInNested(nestedPaths, QueryBuilders.exists(q -> q.field(fieldName))));
+                return negate(buildExistsQuery(fieldName, nestedPaths));
             }
         }
 
@@ -549,6 +557,10 @@ public class SearchExpressionQueryBuilder {
             default -> throw new SearchException("Unexpected condition '" + condition.getDisplayValue() + "' for " +
                                                  indexField.getFldType().getDisplayValue() + " field type");
         }
+    }
+
+    private Query buildExistsQuery(final String fieldName, final List<String> nestedPaths) {
+        return wrapInNested(nestedPaths, QueryBuilders.exists(q -> q.field(fieldName)));
     }
 
     private Query negate(final Query query) {

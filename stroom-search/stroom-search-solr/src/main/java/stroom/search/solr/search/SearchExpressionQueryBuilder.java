@@ -38,6 +38,7 @@ import org.apache.lucene553.search.MatchAllDocsQuery;
 import org.apache.lucene553.search.NumericRangeQuery;
 import org.apache.lucene553.search.Query;
 import org.apache.lucene553.search.TermQuery;
+import org.apache.lucene553.search.TermRangeQuery;
 import org.apache.lucene553.search.WildcardQuery;
 
 import java.util.ArrayList;
@@ -225,6 +226,13 @@ public class SearchExpressionQueryBuilder {
         }
         final String fieldName = indexField.getFldName();
 
+        // Null conditions have no value so must be handled before the empty value check below.
+        if (Condition.IS_NULL.equals(condition)) {
+            return negate(getExistsQuery(indexField));
+        } else if (Condition.IS_NOT_NULL.equals(condition)) {
+            return getExistsQuery(indexField);
+        }
+
         // Ensure an appropriate value has been provided for the condition type.
         if (Condition.IN_DICTIONARY.equals(condition)) {
             if (docRef == null || docRef.getUuid() == null) {
@@ -385,6 +393,12 @@ public class SearchExpressionQueryBuilder {
                 .add(new MatchAllDocsQuery(), Occur.SHOULD)
                 .add(query, Occur.MUST_NOT)
                 .build();
+    }
+
+    private Query getExistsQuery(final IndexField indexField) {
+        // The query is sent to Solr as a string and this serialises to `field:[* TO *]`,
+        // which Solr treats as matching any document with a value, whatever the field type.
+        return TermRangeQuery.newStringRange(indexField.getFldName(), null, null, true, true);
     }
 
     private Query getNumericIn(final String fieldName, final String value) {

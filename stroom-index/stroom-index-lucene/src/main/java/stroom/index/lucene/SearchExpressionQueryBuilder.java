@@ -49,10 +49,12 @@ import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BooleanQuery.Builder;
+import org.apache.lucene.search.FieldExistsQuery;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 
 import java.util.ArrayList;
@@ -260,6 +262,13 @@ class SearchExpressionQueryBuilder {
             return new MatchNoDocsQuery();
         }
         final String fieldName = indexField.getFldName();
+
+        // Null conditions have no value so must be handled before the empty value check below.
+        if (Condition.IS_NULL.equals(condition)) {
+            return negate(getExistsQuery(indexField));
+        } else if (Condition.IS_NOT_NULL.equals(condition)) {
+            return getExistsQuery(indexField);
+        }
 
         // Ensure an appropriate value has been provided for the condition type.
         if (Condition.IN_DICTIONARY.equals(condition)) {
@@ -599,6 +608,26 @@ class SearchExpressionQueryBuilder {
                 .add(new MatchAllDocsQuery(), Occur.SHOULD)
                 .add(query, Occur.MUST_NOT)
                 .build();
+    }
+
+    private Query getExistsQuery(final IndexField indexField) {
+        // Match any document that has a value for the field, using the same field type
+        // that FieldFactory used to index it.
+        final String fieldName = indexField.getFldName();
+        final FieldType fieldType = indexField.getFldType();
+        if (FieldType.INTEGER.equals(fieldType)) {
+            return IntField.newRangeQuery(fieldName, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        } else if (FieldType.FLOAT.equals(fieldType)) {
+            return FloatField.newRangeQuery(fieldName, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY);
+        } else if (FieldType.DOUBLE.equals(fieldType)) {
+            return DoubleField.newRangeQuery(fieldName, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+        } else if (FieldType.DATE.equals(fieldType) || fieldType.isNumeric()) {
+            return LongField.newRangeQuery(fieldName, Long.MIN_VALUE, Long.MAX_VALUE);
+        } else if (FieldType.DENSE_VECTOR.equals(fieldType)) {
+            return new FieldExistsQuery(fieldName);
+        } else {
+            return TermRangeQuery.newStringRange(fieldName, null, null, true, true);
+        }
     }
 
     private Query getIntIn(final String fieldName, final String value) {

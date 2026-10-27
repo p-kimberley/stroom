@@ -50,6 +50,8 @@ import stroom.config.global.api.GlobalConfigReader;
 import stroom.config.global.shared.ConfigProperty;
 import stroom.config.global.shared.OverrideValue;
 import stroom.dashboard.impl.DashboardService;
+import stroom.dashboard.impl.script.ScriptStore;
+import stroom.dashboard.impl.visualisation.VisualisationStore;
 import stroom.dashboard.shared.ValidateExpressionResult;
 import stroom.data.store.api.AttributeMapFactory;
 import stroom.data.store.api.DataService;
@@ -78,7 +80,9 @@ import stroom.node.api.NodeService;
 import stroom.pipeline.cache.SchemaPool;
 import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.XsltDoc;
+import stroom.pipeline.stepping.SteppingService;
 import stroom.pipeline.xmlschema.XmlSchemaStore;
+import stroom.pipeline.xslt.XsltStore;
 import stroom.processor.api.ProcessorFilterService;
 import stroom.processor.api.ProcessorTaskService;
 import stroom.query.api.datasource.QueryField;
@@ -89,6 +93,7 @@ import stroom.query.shared.QueryContext;
 import stroom.query.shared.QuerySearchRequest;
 import stroom.resource.api.ResourceStore;
 import stroom.search.elastic.shared.ElasticIndexDoc;
+import stroom.security.api.DocumentPermissionService;
 import stroom.security.api.SecurityContext;
 import stroom.security.api.UserIdentity;
 import stroom.security.shared.AppPermission;
@@ -197,6 +202,11 @@ public final class BuiltInToolWorld implements AutoCloseable {
             Map.entry("ask_user", "{\"intro\":\"Which feed?\",\"questions\":[{\"id\":\"feed\",\"question\":\"Feed?\","
                                   + "\"type\":\"text\"}]}"),
             Map.entry("fetch_events", "{\"path\":\"/outputs/a.csv\"}"),
+            Map.entry("preview_extraction", "{\"table\":\"Users\",\"path\":\"/outputs/a.csv\",\"fields\":"
+                                            + "[{\"name\":\"Org\",\"xpath\":\"Org\"}]}"),
+            Map.entry("propose_extraction_pipeline", "{\"table\":\"Users\",\"name\":\"Users "
+                                                     + "extraction\",\"fields\":[{\"name\":\"Org\",\"xpath\":"
+                                                     + "\"Org\"}]}"),
             Map.entry("search_events", "{\"path\":\"/outputs/a.xml\",\"text\":\"a\"}"),
             Map.entry("table", "{\"help\":true}"),
             Map.entry("pipeline", "{\"steps\":[]}"),
@@ -359,7 +369,8 @@ public final class BuiltInToolWorld implements AutoCloseable {
             case "propose_query_change" -> openTab(QUERY, AiTabSnapshotPart.QUERY, STROOMQL);
             case "propose_code_change" -> openStepping();
             case "current_results" -> openQueryResults();
-            case "propose_dashboard_change" -> openTab(DASHBOARD, AiTabSnapshotPart.QUERY, STROOMQL);
+            case "propose_dashboard_change", "preview_extraction", "propose_extraction_pipeline" -> openTab(
+                    DASHBOARD, AiTabSnapshotPart.QUERY, STROOMQL);
             default -> {
                 // Nothing to open.
             }
@@ -533,6 +544,12 @@ public final class BuiltInToolWorld implements AutoCloseable {
                 bind(FeedProperties.class).toInstance(Mockito.mock(FeedProperties.class));
                 bind(DocFinder.class).toInstance(docFinder);
                 bind(XmlSchemaStore.class).toInstance(Mockito.mock(XmlSchemaStore.class));
+                bind(ScriptStore.class).toInstance(Mockito.mock(ScriptStore.class));
+                bind(XsltStore.class).toInstance(Mockito.mock(XsltStore.class));
+                bind(SteppingService.class).toInstance(Mockito.mock(SteppingService.class));
+                bind(VisualisationStore.class).toInstance(Mockito.mock(VisualisationStore.class));
+                bind(DocumentPermissionService.class)
+                        .toInstance(Mockito.mock(DocumentPermissionService.class));
                 bind(SchemaPool.class).toInstance(Mockito.mock(SchemaPool.class));
                 bind(ContentIndex.class).toInstance(Mockito.mock(ContentIndex.class));
                 bind(StroomEventLoggingService.class).toInstance(eventLoggingService);

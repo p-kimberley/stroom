@@ -20,6 +20,7 @@ import stroom.alert.client.event.AlertEvent;
 import stroom.alert.client.event.ConfirmEvent;
 import stroom.content.client.event.RefreshContentTabEvent;
 import stroom.core.client.UrlParameters;
+import stroom.dashboard.client.embeddedquery.EmbeddedQueryPresenter;
 import stroom.dashboard.client.flexlayout.FlexLayout;
 import stroom.dashboard.client.flexlayout.FlexLayoutChangeHandler;
 import stroom.dashboard.client.flexlayout.MutableLayoutConfig;
@@ -37,15 +38,19 @@ import stroom.dashboard.client.query.QueryPresenter;
 import stroom.dashboard.client.table.TableChange;
 import stroom.dashboard.client.table.TablePresenter;
 import stroom.dashboard.client.text.TextPresenter;
+import stroom.dashboard.client.vis.VisPresenter;
+import stroom.dashboard.shared.AbstractQueryComponentSettings;
 import stroom.dashboard.shared.Automate;
 import stroom.dashboard.shared.ComponentConfig;
+import stroom.dashboard.shared.ComponentSelectionHandler;
 import stroom.dashboard.shared.ComponentSettings;
 import stroom.dashboard.shared.DashboardConfig;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.dashboard.shared.Dimension;
+import stroom.dashboard.shared.HasSelectionFilter;
+import stroom.dashboard.shared.HasSelectionQuery;
 import stroom.dashboard.shared.KeyValueInputComponentSettings;
 import stroom.dashboard.shared.LayoutConstraints;
-import stroom.dashboard.shared.QueryComponentSettings;
 import stroom.dashboard.shared.Search;
 import stroom.dashboard.shared.TableComponentSettings;
 import stroom.dashboard.shared.TextComponentSettings;
@@ -74,6 +79,7 @@ import stroom.query.client.presenter.SearchStateListener;
 import stroom.security.shared.DocumentPermission;
 import stroom.svg.shared.SvgImage;
 import stroom.task.client.HasTaskMonitorFactory;
+import stroom.util.client.JSONUtil;
 import stroom.util.shared.ErrorMessage;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.Version;
@@ -95,6 +101,9 @@ import stroom.widget.util.client.SafeHtmlUtil;
 
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.event.dom.client.ClickEvent;
+import com.google.gwt.json.client.JSONObject;
+import com.google.gwt.json.client.JSONString;
+import com.google.gwt.json.client.JSONValue;
 import com.google.gwt.user.client.ui.Widget;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -127,6 +136,9 @@ public class DashboardPresenter
 
     private static final String VERSION_7_2_0 = Version.of(7, 2, 0).toString();
     private static final String DEFAULT_PARAMS_INPUT = "Params";
+    // What starts the line of a Visualisation's render report in the description, and the most of it given.
+    private static final String RENDER_REPORT = "Render report: ";
+    private static final int MAX_RENDER_REPORT_CHARS = 1200;
 
     private static final Logger logger = Logger.getLogger(DashboardPresenter.class.getName());
     private final FlexLayout layoutPresenter;
@@ -1074,9 +1086,21 @@ public class DashboardPresenter
     }
 
     /// @return A description of the dashboard as edited, in plain text, for tools and people reading it: each
-    /// query's data source and expression, each table's columns, formatting rules and settings, each other
-    /// component's settings, the parameters, the time range, and the components shown.
+    /// query's data source and expression, each table's columns, formatting rules and settings, each
+    /// Visualisation's document, linked table, settings and latest render report, each other component's
+    /// settings, the parameters, the time range, and the components shown.
     public String getDescription() {
+        return describe(true);
+    }
+
+    /// @return The dashboard's description ([#getDescription()]) without the Visualisations' render reports,
+    /// which change as they render, for telling whether the dashboard itself has changed.
+    public String getComparableDescription() {
+        return describe(false);
+    }
+
+    // The dashboard's description, with the Visualisations' render reports or without them.
+    private String describe(final boolean withRenderReports) {
         final StringBuilder sb = new StringBuilder();
         sb.append("Time range: ").append(queryToolbarPresenter.getTimeRange()).append('\n');
         sb.append("Parameters: ").append(NullSafe.list(dashboardContext.getParams())).append('\n');
@@ -1117,7 +1141,12 @@ public class DashboardPresenter
                         sb.append(i + 1).append(". ").append(describeRule(rules.get(i))).append('\n');
                     }
                 }
+            } else if (component instanceof final VisPresenter visPresenter) {
+                describeVis(sb, visPresenter, withRenderReports);
+            } else if (component instanceof final EmbeddedQueryPresenter embeddedQuery) {
+                describeEmbeddedQuery(sb, embeddedQuery);
             }
+            describeSelectionFilters(sb, NullSafe.get(component.getComponentConfig(), ComponentConfig::getSettings));
             final String settings = describeSettings(NullSafe.get(component.getComponentConfig(),
                     ComponentConfig::getSettings));
             if (settings != null) {
@@ -1125,6 +1154,33 @@ public class DashboardPresenter
             }
         }
         return sb.toString();
+    }
+
+    // The filters a component takes from other components' selections (e.g. a chart's): a query's, applied to its
+    // search, and a table's, applied to its rows. A term's value names a selection, e.g.
+    // ${component.vis-1.selection.category}.
+    private static void describeSelectionFilters(final StringBuilder sb, final ComponentSettings settings) {
+        if (settings instanceof final HasSelectionQuery query) {
+            describeHandlers(sb, "Query selection filters", query.getSelectionQuery());
+        }
+        if (settings instanceof final HasSelectionFilter filter) {
+            describeHandlers(sb, "Table selection filters", filter.getSelectionFilter());
+        }
+    }
+
+    private static void describeHandlers(final StringBuilder sb,
+                                         final String heading,
+                                         final List<ComponentSelectionHandler> handlers) {
+        final List<String> described = NullSafe.list(handlers).stream()
+                .filter(handler -> handler.getExpression() != null)
+                .map(handler -> "[id " + NullSafe.nonBlankStringElse(handler.getId(), "none") + "] "
+                                + handler.getExpression().toString() + (handler.isEnabled()
+                        ? ""
+                        : " (disabled)"))
+                .toList();
+        if (!described.isEmpty()) {
+            sb.append(heading).append(": ").append(String.join("; ", described)).append('\n');
+        }
     }
 
     // A component's main settings (those its Settings dialog has), by short keys, or null if it has none.
@@ -1141,7 +1197,7 @@ public class DashboardPresenter
             if (table.overrideMaxStringFieldLength()) {
                 parts.add("maxStringFieldLength " + table.getMaxStringFieldLength());
             }
-        } else if (settings instanceof final QueryComponentSettings query) {
+        } else if (settings instanceof final AbstractQueryComponentSettings query) {
             final Automate automate = query.getAutomate();
             parts.add("queryOnOpen " + (automate != null && automate.isOpen()));
             parts.add("autoRefresh " + (automate != null && automate.isRefresh()));
@@ -1157,6 +1213,57 @@ public class DashboardPresenter
             return null;
         }
         return String.join("; ", parts);
+    }
+
+    // An embedded query: the Query it shows by reference, if it does, and its StroomQL, between lines of three
+    // backticks.
+    private static void describeEmbeddedQuery(final StringBuilder sb, final EmbeddedQueryPresenter embeddedQuery) {
+        final DocRef referenced = embeddedQuery.getReferencedQuery();
+        sb.append("Query: ").append(referenced == null
+                ? "embedded in the dashboard"
+                : "Query " + describeDoc(referenced) + " by reference").append('\n');
+        sb.append("StroomQL:\n```\n").append(NullSafe.string(embeddedQuery.getQueryText()).strip())
+                .append("\n```\n");
+    }
+
+    // A Visualisation component: the Visualisation it shows, the table it is linked to, its settings as a JSON
+    // object of control ids and values, and (if wanted) its latest render report, on one line and cut short, as the
+    // visualisation's script wrote it.
+    private void describeVis(final StringBuilder sb, final VisPresenter vis, final boolean withRenderReport) {
+        final VisComponentSettings settings = vis.getSettings() instanceof final VisComponentSettings visSettings
+                ? visSettings
+                : null;
+        final DocRef visualisation = NullSafe.get(settings, VisComponentSettings::getVisualisation);
+        sb.append("Visualisation: ").append(visualisation == null
+                ? "none"
+                : "'" + NullSafe.string(visualisation.getName()) + "' (uuid " + visualisation.getUuid() + ")")
+                .append('\n');
+        sb.append("Linked table: ").append(describeComponent(NullSafe.get(settings, VisComponentSettings::getTableId)))
+                .append('\n');
+        final String json = NullSafe.get(settings, VisComponentSettings::getJson);
+        final JSONObject object = parseObject(json);
+        sb.append("Vis settings: ").append(object != null
+                ? object.toString()
+                : NullSafe.string(json).replaceAll("\\s+", " ")).append('\n');
+        final String report = vis.getLastRenderReport();
+        if (withRenderReport && NullSafe.isNonBlankString(report)) {
+            final String line = report.replaceAll("[\\r\\n]+", " ").trim();
+            sb.append(RENDER_REPORT).append(line.length() > MAX_RENDER_REPORT_CHARS
+                    ? line.substring(0, MAX_RENDER_REPORT_CHARS) + "..."
+                    : line).append('\n');
+        }
+    }
+
+    // A JSON object, or null if the text is empty or isn't one.
+    private static JSONObject parseObject(final String json) {
+        if (NullSafe.isBlankString(json)) {
+            return null;
+        }
+        try {
+            return JSONUtil.getObject(JSONUtil.parse(json));
+        } catch (final RuntimeException e) {
+            return null;
+        }
     }
 
     private static String describeDoc(final DocRef doc) {
@@ -1225,21 +1332,23 @@ public class DashboardPresenter
                 : " (" + String.join("; ", state) + ")";
     }
 
-    /// Applies changes made programmatically to one of the dashboard's tables, as its column menus would, unsaved:
-    /// changes to the table, to the expression of the classic query that feeds it, and tables added beside it as
-    /// tabs (fed by the same query), which later changes name as their table. They are applied all or none: if one
-    /// can't be, the dashboard is put back as it was. Once applied, they can be undone with
-    /// [#undoTableChanges(String)] while the dashboard is as they left it.
+    /// The settings of a table on the dashboard as it is now, unsaved changes included.
     ///
     /// @param componentId The table's component id.
-    /// @param name        The table's name, used if no component has the id.
-    /// @param changes     The changes, in order.
-    /// @param undoKey     What the changes are known by, to undo them, or null if they can't be undone.
-    /// @return Why they couldn't all be applied, or null if they were.
-    public String applyTableChanges(final String componentId,
-                                      final String name,
-                                      final List<TableChange> changes,
-                                      final String undoKey) {
+    /// @param name        The table's name, to find it by if no id is given.
+    /// @return Its settings, or null if the dashboard has no such table.
+    public TableComponentSettings tableSettings(final String componentId, final String name) {
+        // By its id alone, if it has one: another table may have its name.
+        final Component component = componentId != null
+                ? components.get(componentId)
+                : findComponent(null, name);
+        return component instanceof final TablePresenter table
+                ? table.getTableComponentSettings()
+                : null;
+    }
+
+    // A component by its id, or else by its name.
+    private Component findComponent(final String componentId, final String name) {
         Component component = componentId == null
                 ? null
                 : components.get(componentId);
@@ -1250,13 +1359,37 @@ public class DashboardPresenter
                 }
             }
         }
+        return component;
+    }
+
+    /// Applies changes made programmatically to one of the dashboard's tables, as its column menus would, unsaved:
+    /// changes to the table, to the expression of the classic query that feeds it, and tables added beside it as
+    /// tabs (fed by the same query), which later changes name as their table. They are applied all or none: if one
+    /// can't be, the dashboard is put back as it was. They are applied on top of whatever else has changed since
+    /// they were proposed: each finds what it changes again, and a query expression they replace must be as it was
+    /// (see [DashboardDescriptions#sameExpression(String, ExpressionOperator)]). Once applied, they can be undone
+    /// with [#undoTableChanges(String)] while the components they changed or added are as they left them.
+    ///
+    /// @param componentId The table's component id.
+    /// @param name        The table's name, used if no component has the id.
+    /// @param changes     The changes, in order.
+    /// @param undoKey     What the changes are known by, to undo them, or null if they can't be undone.
+    /// @return Why they couldn't all be applied, or null if they were.
+    public String applyTableChanges(final String componentId,
+                                      final String name,
+                                      final List<TableChange> changes,
+                                      final String undoKey) {
+        final Component component = findComponent(componentId, name);
         if (component == null) {
             return "The dashboard has no table '" + name + "'.";
         }
         ExpressionOperator expression = null;
+        // The hash of the expression it replaces, as it was when proposed.
+        String replacedExpression = null;
         for (final TableChange change : changes) {
             if (TableChange.SET_EXPRESSION.equals(change.getOp())) {
                 expression = change.getQuery();
+                replacedExpression = change.getRef();
                 if (expression == null) {
                     return "The query's new expression can't be read.";
                 }
@@ -1272,11 +1405,17 @@ public class DashboardPresenter
                 return "Table '" + name + "' isn't fed by a classic query on this dashboard, so its expression "
                        + "can't be set.";
             }
+            // Everything else changed since it was proposed is kept, but not an expression changed since: the
+            // new one would replace it.
+            if (replacedExpression != null && !DashboardDescriptions.sameExpression(replacedExpression,
+                    query.getExpression())) {
+                return "The query's expression has changed since this was proposed, so it isn't replaced. Ask "
+                       + "again for an up-to-date change.";
+            }
         } else {
             query = null;
         }
 
-        final String descriptionBefore = getDescription();
         final TableComponentSettings before = TableChange.snapshot(component);
         final ExpressionOperator expressionBefore = query != null
                 ? query.getExpression()
@@ -1284,6 +1423,10 @@ public class DashboardPresenter
         // The tables added, by the name the changes give them (lower case), and the name and settings of each other
         // component renamed or changed, as they were, by id.
         final Map<String, Component> added = new LinkedHashMap<>();
+        // Of several charts added together, the last added and the first of the row it is in, which later ones are
+        // placed beside, under or with (see TableChange.RIGHT, UNDER and WITH).
+        Component lastVis = null;
+        Component rowStart = null;
         final Map<String, ComponentConfig> configsBefore = new LinkedHashMap<>();
         for (int i = 0; i < changes.size(); i++) {
             final TableChange change = changes.get(i);
@@ -1308,7 +1451,102 @@ public class DashboardPresenter
                 } else {
                     added.put(NullSafe.string(change.getName()).toLowerCase(), text);
                 }
-            } else if (TableChange.RENAME.equals(change.getOp()) || TableChange.SET_SETTING.equals(change.getOp())) {
+            } else if (TableChange.ADD_VIS.equals(change.getOp())) {
+                final Component linked = change.getTable() == null || change.getTable().equalsIgnoreCase(name)
+                        ? component
+                        : added.containsKey(change.getTable().toLowerCase())
+                                ? added.get(change.getTable().toLowerCase())
+                                : tableNamed(change.getTable());
+                final Component vis = linked == null
+                        ? null
+                        : addVis(linked, change, lastVis, rowStart);
+                if (vis != null) {
+                    if (!TableChange.RIGHT.equals(change.getPlacement())
+                        && !TableChange.WITH.equals(change.getPlacement())) {
+                        rowStart = vis;
+                    }
+                    lastVis = vis;
+                }
+                if (vis == null) {
+                    failed = prefix + "the visualisation couldn't be added.";
+                } else {
+                    added.put(NullSafe.string(change.getName()).toLowerCase(), vis);
+                }
+            } else if (TableChange.REMOVE_SELECTION_FILTER.equals(change.getOp())) {
+                final Component target = change.getTargetId() == null
+                        ? null
+                        : components.get(change.getTargetId());
+                if (target == null) {
+                    failed = prefix + "there is no component '" + NullSafe.string(change.getTarget()) + "'.";
+                } else {
+                    if (!added.containsValue(target) && !configsBefore.containsKey(target.getId())) {
+                        configsBefore.put(target.getId(), ComponentSettingChanges.snapshot(target));
+                    }
+                    final String problem = ComponentSettingChanges.removeSelectionFilter(target, change.getFilter());
+                    failed = problem == null
+                            ? null
+                            : prefix + problem;
+                }
+            } else if (TableChange.REMAP_SELECTION.equals(change.getOp())) {
+                // Every filter the chart's clicks drive, wherever it is.
+                final Map<String, String> renamed = DashboardDescriptions.renamedKeys(change.getValue());
+                for (final Component each : components) {
+                    final ComponentConfig config = added.containsValue(each)
+                                                   || configsBefore.containsKey(each.getId())
+                            ? null
+                            : ComponentSettingChanges.snapshot(each);
+                    if (ComponentSettingChanges.renameSelections(each, change.getTargetId(), renamed)
+                        && config != null) {
+                        configsBefore.put(each.getId(), config);
+                    }
+                }
+            } else if (TableChange.ADD_SELECTION_FILTER.equals(change.getOp())) {
+                // What it filters, and the chart whose clicks filter it, may be added by these changes (a chart and
+                // its table): found by name, the chart's own id put in its terms in place of the one planned.
+                final Component existing = change.getTargetId() == null
+                        ? null
+                        : components.get(change.getTargetId());
+                final Component target = existing != null || change.getTarget() == null
+                        ? existing
+                        : added.get(change.getTarget().toLowerCase());
+                final Component chart = change.getName() == null
+                        ? null
+                        : added.get(change.getName().toLowerCase());
+                final ExpressionOperator filter = chart != null && change.getRef() != null
+                        ? DashboardDescriptions.withChartId(change.getQuery(), change.getRef(), chart.getId())
+                        : change.getQuery();
+                if (target == null) {
+                    failed = prefix + "there is no component '" + NullSafe.string(change.getTarget()) + "'.";
+                } else {
+                    if (!added.containsValue(target) && !configsBefore.containsKey(target.getId())) {
+                        configsBefore.put(target.getId(), ComponentSettingChanges.snapshot(target));
+                    }
+                    final String problem = ComponentSettingChanges.addSelectionFilter(target, change.getValue(),
+                            filter);
+                    failed = problem == null
+                            ? null
+                            : prefix + problem;
+                }
+            } else if (TableChange.SET_QUERY.equals(change.getOp())) {
+                final Component target = change.getTargetId() == null
+                        ? null
+                        : components.get(change.getTargetId());
+                if (!(target instanceof final EmbeddedQueryPresenter embeddedQuery)) {
+                    failed = prefix + "there is no embedded query '" + NullSafe.string(change.getTargetId()) + "'.";
+                } else if (!Objects.equals(NullSafe.string(embeddedQuery.getQueryText()).strip(),
+                        NullSafe.string(change.getRef()).strip())) {
+                    failed = prefix + "the embedded query's StroomQL has changed since this was proposed.";
+                } else {
+                    if (!configsBefore.containsKey(target.getId())) {
+                        configsBefore.put(target.getId(), ComponentSettingChanges.snapshot(target));
+                    }
+                    final String problem = embeddedQuery.setQueryText(change.getValue());
+                    failed = problem == null
+                            ? null
+                            : prefix + problem;
+                }
+            } else if (TableChange.RENAME.equals(change.getOp()) || TableChange.SET_SETTING.equals(change.getOp())
+                       || TableChange.SET_VIS_SETTINGS.equals(change.getOp())) {
                 final Component target = change.getTargetId() != null
                         ? components.get(change.getTargetId())
                         : change.getTarget() == null
@@ -1323,6 +1561,20 @@ public class DashboardPresenter
                     }
                     if (TableChange.RENAME.equals(change.getOp())) {
                         target.setComponentName(change.getName());
+                    } else if (TableChange.SET_VIS_SETTINGS.equals(change.getOp())) {
+                        // Linked to the table it names, if it names one: one these changes add, or the
+                        // dashboard has (e.g. a chart replaced, moved to a table added for it).
+                        final Component linked = change.getTable() == null
+                                ? null
+                                : added.containsKey(change.getTable().toLowerCase())
+                                        ? added.get(change.getTable().toLowerCase())
+                                        : tableNamed(change.getTable());
+                        failed = change.getTable() != null && linked == null
+                                ? "there is no table '" + change.getTable() + "' to link it to."
+                                : applyVisSettings(target, change, linked);
+                        failed = failed == null
+                                ? null
+                                : prefix + failed;
                     } else {
                         failed = ComponentSettingChanges.apply(target, change.getSetting(), change.getValue(),
                                 change.getRef(), change.getDoc());
@@ -1342,6 +1594,7 @@ public class DashboardPresenter
             if (failed != null) {
                 added.values().forEach(this::removeAddedComponent);
                 configsBefore.forEach((id, config) -> ComponentSettingChanges.restore(components.get(id), config));
+                refreshVisData(configsBefore.keySet());
                 TableChange.restore(component, before);
                 syncSettingsDialogs(component, configsBefore.keySet());
                 return failed;
@@ -1351,14 +1604,29 @@ public class DashboardPresenter
             query.setExpression(expression);
             query.onChange();
         }
+        // A table added has no rows until its query runs again, which a search started before it gives none of.
+        // Seen in testing: a table added for a chart stayed empty, and the chart with it, until the query was run.
+        if (added.values().stream().anyMatch(table -> table instanceof TablePresenter)) {
+            rerunQuery(component);
+        }
         syncSettingsDialogs(component, configsBefore.keySet());
-        if (undoKey != null && before != null) {
+        // A change to an embedded query, rather than a table, is undone by putting its settings back.
+        if (undoKey != null && (before != null || !configsBefore.isEmpty())) {
             appliedChanges.put(undoKey, new AppliedChanges(component.getComponentConfig().getId(), before,
                     NullSafe.get(query, Component::getId), expressionBefore,
-                    added.values().stream().map(Component::getId).toList(), configsBefore, descriptionBefore,
-                    getDescription()));
+                    added.values().stream().map(Component::getId).toList(), configsBefore,
+                    getComparableDescription()));
         }
         return null;
+    }
+
+    // Runs the classic query that feeds a table again, unless it is running.
+    private void rerunQuery(final Component table) {
+        final String queryId = TableChange.queryId(table);
+        if (queryId != null && components.get(queryId) instanceof final QueryPresenter queryPresenter
+            && !queryPresenter.getSearchState()) {
+            queryPresenter.start();
+        }
     }
 
     // Adds a table beside another as a tab, fed by the same query, with its columns or none, with the name asked for
@@ -1430,6 +1698,206 @@ public class DashboardPresenter
         return text;
     }
 
+    // A table on the dashboard, by its name (ignoring case), e.g. for one of several charts added together that is
+    // linked to another table than the change's; or null.
+    private Component tableNamed(final String name) {
+        for (final Component component : components) {
+            if (component instanceof TablePresenter
+                && name.equalsIgnoreCase(NullSafe.get(component.getComponentConfig(), ComponentConfig::getName))) {
+                return component;
+            }
+        }
+        return null;
+    }
+
+    // Adds a Visualisation component linked to a table, showing the Visualisation the change gives with its settings,
+    // with the name asked for (made unique if the dashboard has the name already). It goes where the change says:
+    // by default as a tab with the dashboard's charts, or in a new pane at the bottom of the dashboard if it has none.
+    private Component addVis(final Component table,
+                             final TableChange change,
+                             final Component lastVis,
+                             final Component rowStart) {
+        final MutableTabConfig tableTab = table.getTabConfig();
+        final ComponentType type = components.getComponentTypes().stream()
+                .filter(componentType -> VisPresenter.TYPE.getId().equals(componentType.getId()))
+                .findFirst()
+                .orElse(null);
+        final String json = mergeVisSettings(null, change.getValue());
+        if (type == null || tableTab == null || tableTab.getParent() == null || change.getDoc() == null
+            || json == null) {
+            return null;
+        }
+        final ComponentId componentId = new ComponentNameSet(components).createUnique(type, change.getName());
+        final ComponentConfig componentConfig = ComponentConfig.builder()
+                .type(type.getId())
+                .id(componentId.id)
+                .name(componentId.name)
+                .settings(VisComponentSettings.builder()
+                        .tableId(table.getId())
+                        .visualisation(change.getDoc())
+                        .json(json)
+                        .build())
+                .build();
+        final Component vis = addComponent(componentConfig.getType(), componentConfig);
+        if (vis == null) {
+            return null;
+        }
+        // Linking it to the table fetches its data, if the table's query has run.
+        vis.link();
+        final MutableTabConfig tabConfig = new MutableTabConfig(componentId.id, true);
+        vis.setTabConfig(tabConfig);
+        // Of several charts added together: beside, under or with one added before it.
+        final MutableTabConfig lastTab = NullSafe.get(lastVis, Component::getTabConfig);
+        final MutableTabConfig rowStartTab = NullSafe.get(rowStart, Component::getTabConfig);
+        if (TableChange.WITH.equals(change.getPlacement()) && lastTab != null && lastTab.getParent() != null) {
+            lastTab.getParent().add(tabConfig);
+            layoutPresenter.clear();
+            layoutPresenter.refresh();
+            onChange();
+            return vis;
+        }
+        if (TableChange.RIGHT.equals(change.getPlacement()) && lastTab != null
+            && layoutPresenter.addTabRight(lastTab.getParent(), tabConfig)) {
+            onChange();
+            return vis;
+        }
+        if (TableChange.UNDER.equals(change.getPlacement()) && rowStartTab != null
+            && layoutPresenter.addTabBelow(rowStartTab.getParent(), tabConfig)) {
+            onChange();
+            return vis;
+        }
+        final String placement = NullSafe.nonBlankStringElse(change.getPlacement(), TableChange.CHARTS);
+        final MutableTabLayoutConfig chartPane = TableChange.CHARTS.equals(placement)
+                ? chartPane(table, vis)
+                : null;
+        if (chartPane != null) {
+            addShownTab(chartPane, tabConfig);
+        } else if (TableChange.TAB.equals(placement)) {
+            addShownTab(tableTab.getParent(), tabConfig);
+        } else if (TableChange.BELOW.equals(placement)
+                ? !layoutPresenter.addTabBelow(tableTab.getParent(), tabConfig)
+                : !layoutPresenter.addTabAtBottom(tabConfig)) {
+            // Beside the table if it can't go where asked.
+            addShownTab(tableTab.getParent(), tabConfig);
+        }
+        onChange();
+        return vis;
+    }
+
+    // The pane of a chart already on the dashboard, which a new chart joins as a tab: one linked to the same table if
+    // there is one, else the last chart's; null if the dashboard has no other chart.
+    private MutableTabLayoutConfig chartPane(final Component table, final Component added) {
+        MutableTabLayoutConfig sameTable = null;
+        MutableTabLayoutConfig any = null;
+        for (final Component component : components) {
+            final MutableTabLayoutConfig pane = component instanceof VisPresenter && component != added
+                    ? NullSafe.get(component.getTabConfig(), MutableTabConfig::getParent)
+                    : null;
+            if (pane != null) {
+                any = pane;
+                if (((VisPresenter) component).getSettings() instanceof final VisComponentSettings settings
+                    && table.getId().equals(settings.getTableId())) {
+                    sameTable = pane;
+                }
+            }
+        }
+        return sameTable != null
+                ? sameTable
+                : any;
+    }
+
+    // Adds a tab to a pane and shows it, so a chart added among others is the one seen.
+    private void addShownTab(final MutableTabLayoutConfig pane, final MutableTabConfig tabConfig) {
+        pane.add(tabConfig);
+        pane.setSelected(pane.indexOf(tabConfig));
+        layoutPresenter.clear();
+        layoutPresenter.refresh();
+    }
+
+    // Changes a Visualisation component's settings: merges the change's settings into them, switches it to the
+    // change's Visualisation if it gives one, and fetches its data again, as its data depends on them.
+    private String applyVisSettings(final Component target, final TableChange change, final Component linked) {
+        if (!(target instanceof final VisPresenter vis)
+            || !(vis.getSettings() instanceof final VisComponentSettings current)) {
+            return "the component isn't a visualisation.";
+        }
+        final String json = mergeVisSettings(current.getJson(), change.getValue());
+        if (json == null) {
+            return "the visualisation's settings can't be read.";
+        }
+        final VisComponentSettings.Builder builder = current.copy().json(json);
+        if (change.getDoc() != null) {
+            builder.visualisation(change.getDoc());
+        }
+        if (linked != null) {
+            builder.tableId(linked.getId());
+        }
+        vis.applySettings(builder.build());
+        refreshVisData(vis);
+        return null;
+    }
+
+    // A Visualisation's settings (a JSON object of control ids and values) with changes merged in: each key the
+    // changes give set to their value, or removed if their value is empty, so the control's default applies.
+    // Null if either can't be read.
+    private static String mergeVisSettings(final String currentJson, final String changesJson) {
+        final JSONObject current = NullSafe.isBlankString(currentJson)
+                ? new JSONObject()
+                : parseObject(currentJson);
+        final JSONObject changes = NullSafe.isBlankString(changesJson)
+                ? new JSONObject()
+                : parseObject(changesJson);
+        if (current == null || changes == null) {
+            return null;
+        }
+        final JSONObject merged = new JSONObject();
+        for (final String key : current.keySet()) {
+            if (!changes.containsKey(key)) {
+                merged.put(key, current.get(key));
+            }
+        }
+        for (final String key : changes.keySet()) {
+            final JSONValue value = changes.get(key);
+            final String text = value == null || value.isNull() != null
+                    ? ""
+                    : value.isString() != null
+                            ? value.isString().stringValue()
+                            : value.toString();
+            if (!text.isEmpty()) {
+                merged.put(key, new JSONString(text));
+            }
+        }
+        return merged.toString();
+    }
+
+    // Fetches the data of each Visualisation component among those named again, e.g. after its settings change.
+    private void refreshVisData(final Collection<String> componentIds) {
+        for (final String id : componentIds) {
+            if (components.get(id) instanceof final VisPresenter vis) {
+                refreshVisData(vis);
+            }
+        }
+    }
+
+    // Fetches a Visualisation's data again, with its settings as they are now, from the query that feeds the table
+    // it is linked to, if that query has run.
+    private void refreshVisData(final VisPresenter vis) {
+        final String tableId = vis.getSettings() instanceof final VisComponentSettings settings
+                ? settings.getTableId()
+                : null;
+        final String queryId = tableId == null
+                ? null
+                : TableChange.queryId(components.get(tableId));
+        if (queryId != null && components.get(queryId) instanceof final QueryPresenter query
+            && query.getSearchModel() != null) {
+            query.getSearchModel().refresh(vis.getId(), result -> {
+                if (result != null) {
+                    vis.setData(result);
+                }
+            });
+        }
+    }
+
     // Removes a component added by applied changes, with its tab.
     private void removeAddedComponent(final Component component) {
         if (component.getTabConfig() != null && component.getTabConfig().getParent() != null) {
@@ -1444,30 +1912,21 @@ public class DashboardPresenter
         enableQueryButtons();
     }
 
-    /// @return For each set of changes applied with an undo key and not undone, the dashboard's description just
-    /// after them mapped to its description just before them, so a change proposed before them can be told from
-    /// one proposed against a dashboard changed some other way.
-    public Map<String, String> getAppliedChangeDescriptions() {
-        final Map<String, String> descriptions = new HashMap<>();
-        for (final AppliedChanges applied : appliedChanges.values()) {
-            descriptions.put(applied.descriptionAfter, applied.descriptionBefore);
-        }
-        return descriptions;
-    }
-
     /// @param undoKey What applied changes are known by.
-    /// @return True if they can be undone: they were applied here, and the dashboard is as they left it.
+    /// @return True if they can be undone: they were applied here, and the components they changed or added are as
+    /// they left them (others may have changed since, as undoing doesn't touch them).
     public boolean canUndoTableChanges(final String undoKey) {
         final AppliedChanges undo = undoKey == null
                 ? null
                 : appliedChanges.get(undoKey);
         return undo != null
                && components.get(undo.componentId) != null
-               && undo.descriptionAfter.equals(getDescription());
+               && DashboardDescriptions.sameComponents(undo.descriptionAfter, getComparableDescription(),
+                undo.touchedIds());
     }
 
     /// Undoes applied changes, putting the table back as it was before them, as an unsaved edit, if the
-    /// dashboard is as they left it.
+    /// components they changed or added are as they left them.
     ///
     /// @param undoKey What the changes are known by.
     /// @return True if they were undone.
@@ -1483,11 +1942,13 @@ public class DashboardPresenter
             }
         }
         undo.configsBefore.forEach((id, config) -> ComponentSettingChanges.restore(components.get(id), config));
+        refreshVisData(undo.configsBefore.keySet());
         if (undo.queryId != null && components.get(undo.queryId) instanceof final QueryPresenter query) {
             query.setExpression(undo.expressionBefore);
             query.onChange();
         }
-        final boolean restored = TableChange.restore(components.get(undo.componentId), undo.before);
+        final boolean restored = undo.before == null
+                                 || TableChange.restore(components.get(undo.componentId), undo.before);
         syncSettingsDialogs(components.get(undo.componentId), undo.configsBefore.keySet());
         return restored;
     }
@@ -1592,8 +2053,8 @@ public class DashboardPresenter
 
     // Changes that have been applied: the table they changed and its settings before, the query whose expression
     // they set (if they did) and that expression before, the components they added, the name and settings of each
-    // other component they renamed or changed, and the dashboard's description just before and just after, which it
-    // must still have for them to be undone.
+    // other component they renamed or changed, and the dashboard's description just after, whose parts for those
+    // components it must still have for them to be undone.
     private static class AppliedChanges {
 
         private final String componentId;
@@ -1602,7 +2063,6 @@ public class DashboardPresenter
         private final ExpressionOperator expressionBefore;
         private final List<String> addedIds;
         private final Map<String, ComponentConfig> configsBefore;
-        private final String descriptionBefore;
         private final String descriptionAfter;
 
         private AppliedChanges(final String componentId,
@@ -1611,7 +2071,6 @@ public class DashboardPresenter
                        final ExpressionOperator expressionBefore,
                        final List<String> addedIds,
                        final Map<String, ComponentConfig> configsBefore,
-                       final String descriptionBefore,
                        final String descriptionAfter) {
             this.componentId = componentId;
             this.before = before;
@@ -1619,8 +2078,17 @@ public class DashboardPresenter
             this.expressionBefore = expressionBefore;
             this.addedIds = addedIds;
             this.configsBefore = configsBefore;
-            this.descriptionBefore = descriptionBefore;
             this.descriptionAfter = descriptionAfter;
+        }
+
+        // The ids of the components the changes changed or added.
+        private Set<String> touchedIds() {
+            final Set<String> ids = new HashSet<>();
+            ids.add(componentId);
+            NullSafe.consume(queryId, ids::add);
+            ids.addAll(addedIds);
+            ids.addAll(configsBefore.keySet());
+            return ids;
         }
     }
 

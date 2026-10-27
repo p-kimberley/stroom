@@ -28,6 +28,7 @@ import stroom.query.api.ExpressionTerm.Condition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -67,6 +68,98 @@ class TestDashboardChanges {
                 "Clear the filter on column 'EventType'");
         // Only the fields each has are given to the browser.
         assertThat(changes.get(1).toMap()).containsOnlyKeys("op", "column");
+    }
+
+    @Test
+    void aSelectionFilterIsReadAndDescribed() {
+        final Change change = DashboardChanges.parse(List.of(Map.of("op", "add_selection_filter",
+                "target", "Events", "chart", "Codes", "mode", "table", "match", "any",
+                "terms", List.of(Map.of("field", "Sender", "selection", "node"),
+                        Map.of("field", "Recipient", "selection", "node"))))).getFirst();
+
+        assertThat(change.target()).isEqualTo("Events");
+        assertThat(change.name()).isEqualTo("Codes");
+        assertThat(change.value()).isEqualTo(DashboardChanges.TABLE_FILTER);
+        assertThat(change.settings()).containsExactly(Map.entry("Sender", "node"), Map.entry("Recipient", "node"));
+        assertThat(DashboardChanges.describe(List.of(change))).containsExactly(
+                "Filter the rows of 'Events' by what is selected in chart 'Codes': Sender = its node or Recipient "
+                + "= its node");
+    }
+
+    @Test
+    void eachOperationReadsBackFromTheFormTheBrowserIsGiven() {
+        // A proposal's action is checked again from its changes as the browser is given them, so each must read
+        // back as it was. Seen in testing: a selection filter didn't, so its Apply button was never shown.
+        final List<Change> changes = new ArrayList<>(DashboardChanges.parse(List.of(
+                Map.of("op", "group", "column", "EventType", "level", 1),
+                Map.of("op", "ungroup", "column", "UserId"),
+                Map.of("op", "add_column", "name", "Count", "expression", "count()", "position", 2),
+                Map.of("op", "edit_column", "column", "UserId", "name", "User", "expression", "upperCase(${UserId})"),
+                Map.of("op", "hide_column", "column", "EventTime"),
+                Map.of("op", "sort", "column", "Count", "direction", "descending", "priority", 1),
+                Map.of("op", "filter", "column", "EventType", "filter", "Logon"),
+                Map.of("op", "rename", "target", "Events", "target_id", "table-1", "name", "Logons"),
+                Map.of("op", "remove_selection_filter", "target", "Events", "target_id", "table-1",
+                        "filter", "ab12c"))));
+        changes.add(DashboardChanges.parse(List.of(Map.of("op", "add_selection_filter",
+                        "target", "Query", "chart", "Network", "mode", "query", "match", "any",
+                        "terms", List.of(Map.of("field", "user.full_name", "selection", "node"),
+                                Map.of("field", "user.target.name", "selection", "node")))))
+                .getFirst()
+                .toBuilder()
+                .targetId("query-1")
+                .ref("vis-1")
+                .query(ExpressionOperator.builder()
+                        .op(Op.OR)
+                        .addTerm(ExpressionTerm.builder().field("user.full_name").condition(Condition.EQUALS)
+                                .value("${component.vis-1.selection.node}").build())
+                        .addTerm(ExpressionTerm.builder().field("user.target.name").condition(Condition.EQUALS)
+                                .value("${component.vis-1.selection.node}").build())
+                        .build())
+                .build());
+
+        assertThat(DashboardChanges.parse(changes.stream().map(Change::toMap).toList()))
+                .containsExactlyElementsOf(changes);
+    }
+
+    @Test
+    void aSelectionFilterNeedsItsTargetChartModeAndTerms() {
+        final Map<String, Object> filter = Map.of("op", "add_selection_filter", "target", "Events", "chart", "Codes",
+                "mode", "query", "terms", List.of(Map.of("field", "event.code", "selection", "category")));
+        assertThat(DashboardChanges.parse(List.of(filter)).getFirst().filter()).isEqualTo("all");
+
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(without(filter, "mode"))))
+                .hasMessageContaining("needs mode: query")
+                .hasMessageContaining("Ask the user which if they haven't said.");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(without(filter, "chart"))))
+                .hasMessageContaining("needs the target");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(with(filter, "terms", List.of()))))
+                .hasMessageContaining("needs terms");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(with(filter, "terms",
+                List.of(Map.of("field", "a", "selection", "x"), Map.of("field", "a", "selection", "x"))))))
+                .hasMessageContaining("'a' = x is in two terms");
+        // A field may be compared with more than one part of the selection, e.g. a node and a link's source.
+        final Change both = DashboardChanges.parse(List.of(with(filter, "terms",
+                List.of(Map.of("field", "a", "selection", "node"), Map.of("field", "a", "selection", "source")))))
+                .getFirst();
+        assertThat(both.settings()).containsExactly(Map.entry("a", "node,source"));
+        assertThat(DashboardChanges.describe(List.of(both))).singleElement().asString()
+                .endsWith("a = its node and a = its source");
+        assertThat(DashboardChanges.parse(List.of(both.toMap()))).containsExactly(both);
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(with(filter, "match", "most"))))
+                .hasMessageContaining("match must be all or any");
+    }
+
+    private static Map<String, Object> without(final Map<String, Object> map, final String key) {
+        final Map<String, Object> copy = new LinkedHashMap<>(map);
+        copy.remove(key);
+        return copy;
+    }
+
+    private static Map<String, Object> with(final Map<String, Object> map, final String key, final Object value) {
+        final Map<String, Object> copy = new LinkedHashMap<>(map);
+        copy.put(key, value);
+        return copy;
     }
 
     @Test
@@ -383,5 +476,148 @@ class TestDashboardChanges {
 
         assertThat(checked.problems()).isEmpty();
         assertThat(checked.changes()).hasSize(DashboardChanges.MAX_TABLES * 3);
+    }
+
+    @Test
+    void aVisualisationIsAddedBelowOrBesideATableAndReadBackAsStored() {
+        final List<Change> changes = DashboardChanges.parse(List.of(
+                Map.of("op", "add_vis", "name", "Users", "visualisation", "vis-uuid",
+                        "settings", ordered("category", "UserId", "value", "", "limit", 10)),
+                Map.of("op", "add_table", "name", "Logons"),
+                Map.of("op", "add_vis", "name", "Logon chart", "table", "Logons", "visualisation", "vis-uuid",
+                        "placement", "TAB")));
+
+        final Checked checked = DashboardChanges.check(changes, COLUMNS, "Events", List.of("Events"));
+
+        assertThat(checked.problems()).isEmpty();
+        final Change named = checked.changes().getFirst().toBuilder()
+                .doc(new DocRef("Visualisation", "vis-uuid", "Bar chart"))
+                .build();
+        // An empty value is the control's default, which a new component has anyway; numbers are text.
+        assertThat(named.settings()).containsExactly(Map.entry("category", "UserId"), Map.entry("limit", "10"));
+        assertThat(named.describe())
+                .isEqualTo("Add a visualisation 'Users' (Bar chart) of this table as a tab with the dashboard's "
+                           + "charts (at the bottom of the dashboard if it has none), with category 'UserId', "
+                           + "limit '10'");
+        assertThat(checked.changes().get(2).describe())
+                .isEqualTo("Add a visualisation 'Logon chart' (vis-uuid) of table 'Logons' as a tab beside the "
+                           + "table");
+        assertThat(checked.columnsOf(null)).isEqualTo(COLUMNS);
+        assertThat(checked.columnsOf("events")).isEqualTo(COLUMNS);
+        assertThat(checked.columnsOf("Logons")).isEmpty();
+        assertThat(checked.columnsOf("Nope")).isNull();
+
+        // As stored with the button and read back when it is offered.
+        final Map<String, Object> stored = named.toMap();
+        assertThat(stored)
+                .containsEntry("doc", Map.of("type", "Visualisation", "uuid", "vis-uuid", "name", "Bar chart"))
+                .containsEntry("settings", Map.of("category", "UserId", "limit", "10"))
+                .doesNotContainKey("placement");
+        assertThat(checked.changes().get(2).toMap()).containsEntry("placement", "tab");
+        assertThat(DashboardChanges.parse(List.of(stored)).getFirst()).isEqualTo(named);
+    }
+
+    @Test
+    void addingAVisualisationNeedsANameAVisualisationAndATable() {
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "visualisation", "v"))))
+                .hasMessageContaining("add_vis needs the new Visualisation component's name");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart"))))
+                .hasMessageContaining("add_vis needs visualisation");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart",
+                "visualisation", "v", "placement", "above"))))
+                .hasMessageContaining("placement must be one of charts, bottom, below, tab");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart",
+                "visualisation", "v", "settings", "category=UserId"))))
+                .hasMessageContaining("settings must be an object");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart",
+                "visualisation", "v", "settings", Map.of("category", List.of("UserId"))))))
+                .hasMessageContaining("the value of setting 'category' must be text");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart",
+                "doc", Map.of("type", "Pipeline", "uuid", "p")))))
+                .hasMessageContaining("can only show a Visualisation");
+
+        assertThat(DashboardChanges.check(DashboardChanges.parse(List.of(Map.of("op", "add_vis", "name", "Chart",
+                "visualisation", "v", "table", "Nope"))), COLUMNS, "Events", List.of("Events")).problems())
+                .containsExactly("Change 1 (add_vis): there is no table 'Nope' for it to be linked to. It is "
+                                 + "linked to table 'Events', or a table added before it with add_table.");
+    }
+
+    @Test
+    void aVisualisationsSettingsAreChangedAndDescribed() {
+        final List<Change> changes = DashboardChanges.parse(List.of(
+                Map.of("op", "set_vis_settings", "target", "Users", "settings", ordered("category", "EventType",
+                        "value", "")),
+                Map.of("op", "set_vis_settings", "target", "Users", "visualisation", "pie-uuid")));
+
+        assertThat(DashboardChanges.check(changes, COLUMNS).problems()).isEmpty();
+        assertThat(DashboardChanges.describe(changes)).containsExactly(
+                "Change visualisation 'Users': set category 'EventType', value back to its default",
+                "Change visualisation 'Users': show pie-uuid");
+        // An empty value is kept, to remove the control's value.
+        final Change readBack = DashboardChanges.parse(List.of(changes.getFirst().toBuilder()
+                .targetId("vis-1")
+                .build()
+                .toMap())).getFirst();
+        assertThat(readBack.settings()).containsEntry("value", "");
+        assertThat(readBack.targetId()).isEqualTo("vis-1");
+
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "set_vis_settings",
+                "settings", Map.of("a", "b")))))
+                .hasMessageContaining("set_vis_settings needs the target");
+        assertThatThrownBy(() -> DashboardChanges.parse(List.of(Map.of("op", "set_vis_settings",
+                "target", "Users"))))
+                .hasMessageContaining("needs settings to change, or a visualisation to switch to");
+    }
+
+    @Test
+    void aVisualisationsControlsAreReadFromItsSettings() {
+        final String settings = """
+                {"data": {}, "tabs": [
+                  {"name": "Data", "controls": [
+                    {"id": "category", "type": "field", "label": "Category"},
+                    {"id": "value", "type": "field"}]},
+                  {"name": "Style", "controls": [{"id": "colour", "type": "text"}, {"type": "text"}]}]}
+                """;
+
+        assertThat(DashboardChanges.visControls(settings)).containsExactly(Map.entry("category", "field"),
+                Map.entry("value", "field"), Map.entry("colour", "text"));
+        assertThat(DashboardChanges.visControls("not json")).isEmpty();
+        assertThat(DashboardChanges.visControls(null)).isEmpty();
+        assertThat(DashboardChanges.visControls("{\"tabs\": 3}")).isEmpty();
+    }
+
+    @Test
+    void aVisualisationsSettingsMustBeItsControlsWithColumnsOfItsTable() {
+        final Map<String, String> controls = Map.of("category", "field", "colour", "text");
+
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("category", "UserId", "colour", "red"), controls,
+                COLUMNS, "Bar chart", "table 'Events'")).isEmpty();
+        // An empty value goes back to the default; unknown columns aren't checked.
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("category", ""), controls, COLUMNS, "Bar chart",
+                "table 'Events'")).isEmpty();
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("category", "Nope"), controls, null, "Bar chart",
+                "table 'Events'")).isEmpty();
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("category", "userid"), controls, COLUMNS,
+                "Bar chart", "table 'Events'")).containsExactly("control 'category' takes a column of table "
+                                                               + "'Events', which has no column 'userid' (did you "
+                                                               + "mean 'UserId'?). Its columns are: EventTime, "
+                                                               + "UserId, EventType.");
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("Colour", "red"), Map.of("colour", "text"),
+                COLUMNS, "Bar chart", "table 'Events'")).containsExactly("Visualisation 'Bar chart' has no "
+                                                                         + "control 'Colour' (did you mean "
+                                                                         + "'colour'?). Its controls are: colour "
+                                                                         + "(text).");
+        assertThat(DashboardChanges.visSettingsProblems(Map.of("x", "y"), Map.of(), COLUMNS, "Plain",
+                "table 'Events'")).containsExactly("Visualisation 'Plain' has no control 'x'. Its controls are: "
+                                                   + "none.");
+    }
+
+    // A map keeping the order its keys are given in, as the model's JSON objects do.
+    private static Map<String, Object> ordered(final Object... keysAndValues) {
+        final Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < keysAndValues.length; i += 2) {
+            map.put(String.valueOf(keysAndValues[i]), keysAndValues[i + 1]);
+        }
+        return map;
     }
 }

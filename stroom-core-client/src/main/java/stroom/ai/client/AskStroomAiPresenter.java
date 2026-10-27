@@ -20,6 +20,7 @@ import stroom.ai.client.AskStroomAiPresenter.AskStroomAiProxy;
 import stroom.ai.client.AskStroomAiPresenter.AskStroomAiView;
 import stroom.ai.shared.AiAgentMode;
 import stroom.ai.shared.AiApprovalScope;
+import stroom.ai.shared.AiChangeExtraction;
 import stroom.ai.shared.AiChat;
 import stroom.ai.shared.AiChatAttachment;
 import stroom.ai.shared.AiChatMessage;
@@ -29,6 +30,8 @@ import stroom.ai.shared.AiChatRunStatus;
 import stroom.ai.shared.AiChatSearchHit;
 import stroom.ai.shared.AiChatStatus;
 import stroom.ai.shared.AiContextUsage;
+import stroom.ai.shared.AiCreateExtraction;
+import stroom.ai.shared.AiCreateVisualisation;
 import stroom.ai.shared.AiMcpPrompt;
 import stroom.ai.shared.AiMcpPromptArgument;
 import stroom.ai.shared.AiMemory;
@@ -36,6 +39,7 @@ import stroom.ai.shared.AiMemoryScope;
 import stroom.ai.shared.AiMessageType;
 import stroom.ai.shared.AiSuggestions;
 import stroom.ai.shared.AiTabSnapshot;
+import stroom.ai.shared.AiWriteExtractionRequest;
 import stroom.ai.shared.AnswerAiApprovalRequest;
 import stroom.ai.shared.AnswerAiElicitationRequest;
 import stroom.ai.shared.AskStroomAiConfig;
@@ -63,6 +67,8 @@ import stroom.core.client.ContentManager;
 import stroom.core.client.LocationManager;
 import stroom.dashboard.client.event.ApplyDashboardChangeEvent;
 import stroom.dashboard.client.table.TableChange;
+import stroom.dashboard.client.vis.ClearFunctionCacheEvent;
+import stroom.dashboard.client.vis.VisRenderReportEvent;
 import stroom.dashboard.shared.DashboardConfig;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.data.client.event.AskStroomAiBadgeEvent;
@@ -84,14 +90,18 @@ import stroom.entity.client.presenter.DocPresenter;
 import stroom.entity.client.presenter.MarkdownConverter;
 import stroom.explorer.client.event.ExplorerTreeSelectEvent;
 import stroom.explorer.client.presenter.DocSelectionBoxPresenter;
+import stroom.explorer.client.presenter.DocSelectionPopup;
 import stroom.explorer.client.presenter.DocumentTypeCache;
 import stroom.explorer.shared.DocumentTypes;
+import stroom.explorer.shared.ExplorerConstants;
 import stroom.explorer.shared.ExplorerNode;
 import stroom.main.client.event.DockEvent;
 import stroom.main.client.event.DockResizeEvent;
 import stroom.openai.shared.OpenAIModelDoc;
+import stroom.pipeline.shared.PipelineDoc;
 import stroom.pipeline.shared.SourceLocation;
 import stroom.pipeline.stepping.client.event.SteppingCodeChangeEvent;
+import stroom.pipeline.stepping.client.presenter.CodeChangeReviewPresenter;
 import stroom.pipeline.stepping.client.presenter.CodeDiffCardRenderer;
 import stroom.preferences.client.DateTimeFormatter;
 import stroom.query.client.event.QueryCodeChangeEvent;
@@ -105,6 +115,7 @@ import stroom.util.client.ClipboardUtil;
 import stroom.util.client.CopiedFlash;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.diff.LineDiff;
+import stroom.visualisation.shared.VisualisationDoc;
 import stroom.widget.menu.client.presenter.HideMenuEvent;
 import stroom.widget.menu.client.presenter.IconMenuItem;
 import stroom.widget.menu.client.presenter.Item;
@@ -141,6 +152,7 @@ import com.google.gwt.json.client.JSONObject;
 import com.google.gwt.json.client.JSONParser;
 import com.google.gwt.json.client.JSONString;
 import com.google.gwt.safehtml.shared.SafeHtml;
+import com.google.gwt.safehtml.shared.SafeHtmlBuilder;
 import com.google.gwt.safehtml.shared.SafeHtmlUtils;
 import com.google.gwt.user.client.Timer;
 import com.google.gwt.user.client.Window;
@@ -159,6 +171,7 @@ import com.gwtplatform.mvp.client.View;
 import com.gwtplatform.mvp.client.annotations.ProxyCodeSplit;
 import com.gwtplatform.mvp.client.annotations.ProxyEvent;
 import com.gwtplatform.mvp.client.proxy.Proxy;
+import edu.ycp.cs.dh.acegwt.client.ace.AceEditorMode;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -203,6 +216,12 @@ public class AskStroomAiPresenter
     private static final SafeHtml BUTTON = SafeHtmlUtils.fromSafeConstant("button");
     private static final String WORKING_MESSAGE_ID = AiConversationEntries.WORKING_MESSAGE_ID;
     private static final String WORKING_TEXT_ID = "ai-working-text";
+    // The question asked before a search extraction is changed in place. Fixed and short, as the alert shows a long
+    // message in place of its detail (what would change), so the user wouldn't see that.
+    private static final String CHANGE_EXTRACTION_QUESTION = "Change this extraction pipeline in place? Below is "
+                                                             + "what changes, and the other documents that use it, "
+                                                             + "which change too. Next, you'll review the change to "
+                                                             + "its XSLT; nothing is written until you write it there.";
     // On what the model said alongside its tool calls, while the Working line shows it.
     private static final String SHOWN_AS_PROGRESS_CLASS = "ai-message--shown-as-progress";
     private static final String MESSAGE_ID_ATTRIBUTE = "data-message-id";
@@ -276,6 +295,8 @@ public class AskStroomAiPresenter
     private final Provider<AiAttachmentDataPresenter> aiAttachmentDataPresenterProvider;
     private final Provider<AskStroomAiTabPresenter> askStroomAiTabPresenterProvider;
     private final Provider<AiCommandErrorPresenter> commandErrorPresenterProvider;
+    private final Provider<DocSelectionPopup> docSelectionPopupProvider;
+    private final Provider<CodeChangeReviewPresenter> codeChangeReviewPresenterProvider;
     private final ContentManager contentManager;
     private final LocationManager locationManager;
     private final DateTimeFormatter dateTimeFormatter;
@@ -298,6 +319,9 @@ public class AskStroomAiPresenter
     private boolean overviewShowing;
     private boolean overviewRefreshDue;
     private boolean overviewWorking;
+    // The tool results whose steps for the user (e.g. an Apply button) are held while the agent works, by message id,
+    // in order: shown once it stops, after its answer, so the user isn't asked to act while more is to come.
+    private final Map<Integer, AiChatMessage> heldUserActions = new LinkedHashMap<>();
     // The prompt waiting for the user, kept in view as it grows.
     private Element watchedPrompt;
     // What the overview is searched for, if anything.
@@ -307,6 +331,8 @@ public class AskStroomAiPresenter
     // The suggestions offered above the input: the follow-ups to the latest answer (answerFollowUps, kept while that
     // answer is the latest thing in the chat), or suggestions for what was attached since.
     private List<String> followUps = List.of();
+    // Visualisations created from the chat whose first render report is awaited, by UUID.
+    private final Map<String, AwaitedReport> awaitedRenderReports = new HashMap<>();
     private List<String> answerFollowUps = List.of();
     // Searching the list of chats: what is in the box, the text the hits are for, the hits (null when not
     // searching), and a count so that a slow answer to an earlier search is ignored.
@@ -433,6 +459,8 @@ public class AskStroomAiPresenter
                                 final Provider<AiAttachmentDataPresenter> aiAttachmentDataPresenterProvider,
                                 final Provider<AskStroomAiTabPresenter> askStroomAiTabPresenterProvider,
                                 final Provider<AiCommandErrorPresenter> commandErrorPresenterProvider,
+                                final Provider<DocSelectionPopup> docSelectionPopupProvider,
+                                final Provider<CodeChangeReviewPresenter> codeChangeReviewPresenterProvider,
                                 final ContentManager contentManager,
                                 final LocationManager locationManager,
                                 final DateTimeFormatter dateTimeFormatter,
@@ -448,6 +476,8 @@ public class AskStroomAiPresenter
         this.aiAttachmentDataPresenterProvider = aiAttachmentDataPresenterProvider;
         this.askStroomAiTabPresenterProvider = askStroomAiTabPresenterProvider;
         this.commandErrorPresenterProvider = commandErrorPresenterProvider;
+        this.docSelectionPopupProvider = docSelectionPopupProvider;
+        this.codeChangeReviewPresenterProvider = codeChangeReviewPresenterProvider;
         this.contentManager = contentManager;
         this.locationManager = locationManager;
         this.docSelectionBoxPresenter = docSelectionBoxPresenter;
@@ -477,6 +507,7 @@ public class AskStroomAiPresenter
         statusTimer.schedule(0);
         registerHandler(docSelectionBoxPresenter.addDataSelectionHandler(event ->
                 writeModel()));
+        registerHandler(getEventBus().addHandler(VisRenderReportEvent.getType(), this::onRenderReport));
 
         registerHandler(getView().getChatList().addDomHandler(e -> {
             if (MouseUtil.isPrimary(e)) {
@@ -2318,6 +2349,35 @@ public class AskStroomAiPresenter
      * hidden in the tool call's entry). Everything in it was written by Stroom, which checked each step; the
      * server's own text only appears in "Do first" conditions, as plain text.
      */
+    // Shows the steps a tool result offers the user, or holds them while the agent is still working (see
+    // heldUserActions). A card already shown is updated in place.
+    private void showOrHoldUserActions(final Element markdownContainer, final AiChatMessage msg, final long nowMs) {
+        final JSONArray actions = AiToolMessages.getArray(msg.getMessage(), "userActions");
+        if (actions == null || actions.size() == 0) {
+            return;
+        }
+        if ((overviewWorking || requestInFlight)
+            && findMessageElement(markdownContainer, msg.getId() + USER_ACTIONS_ID_SUFFIX) == null) {
+            heldUserActions.put(msg.getId(), msg);
+        } else {
+            appendUserActionsCard(markdownContainer, msg, nowMs);
+        }
+    }
+
+    // Shows the steps held while the agent worked, now that it has stopped (answered, asks the user something, or
+    // ended), at the end of the conversation, in the order they were offered.
+    private void showHeldUserActions() {
+        if (heldUserActions.isEmpty()) {
+            return;
+        }
+        final List<AiChatMessage> held = new ArrayList<>(heldUserActions.values());
+        heldUserActions.clear();
+        final Element markdownContainer = getView().getMarkdownContainer().getElement();
+        final long nowMs = System.currentTimeMillis();
+        held.forEach(msg -> appendUserActionsCard(markdownContainer, msg, nowMs));
+        scrollToBottom();
+    }
+
     private void appendUserActionsCard(final Element markdownContainer, final AiChatMessage msg, final long nowMs) {
         final JSONArray actions = AiToolMessages.getArray(msg.getMessage(), "userActions");
         if (actions == null || actions.size() == 0) {
@@ -2434,7 +2494,7 @@ public class AskStroomAiPresenter
                 // No button.
                 return;
             } else if (pending) {
-                row.elem(UserActionsUi.buttonText(action), BUTTON,
+                row.elem(UserActionsUi.buttonText(action, request), BUTTON,
                         Attribute.className("allow-focus ai-approval-button ai-approval-button--approve"),
                         new Attribute(USER_ACTION_MESSAGE_ATTRIBUTE, String.valueOf(messageId)),
                         new Attribute(USER_ACTION_ID_ATTRIBUTE,
@@ -2669,16 +2729,7 @@ public class AskStroomAiPresenter
         }
         final int chatId = currentChat.getId();
         final String change = AiToolMessages.getString(json, "dashboardChange");
-        final List<TableChange> changes = new ArrayList<>();
-        final JSONArray operations = AiToolMessages.getArray(change, "operations");
-        for (int i = 0; operations != null && i < operations.size(); i++) {
-            final JSONObject operation = operations.get(i).isObject();
-            if (operation != null) {
-                final String operationJson = operation.toString();
-                changes.add(UserActionsUi.tableChange(name -> AiToolMessages.getString(operationJson, name),
-                        AiToolMessages.toJava(operation.get("query")), AiToolMessages.toJava(operation.get("doc"))));
-            }
-        }
+        final List<TableChange> changes = operations(AiToolMessages.getArray(change, "operations"));
         final DocRef dashboard = docRef(AiToolMessages.getString(json, "doc"));
         button.setAttribute("disabled", "disabled");
         final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
@@ -2686,7 +2737,6 @@ public class AskStroomAiPresenter
                 AiToolMessages.getString(change, "componentId"),
                 AiToolMessages.getString(change, "component"),
                 changes,
-                AiToolMessages.getString(change, "snapshotHash"),
                 onResult -> askStroomAiClient.doUserAction(chatId, messageId, actionId,
                         result -> onResult.accept(result.isDone()
                                 ? null
@@ -2991,6 +3041,37 @@ public class AskStroomAiPresenter
                 createDashboard(result.getCreateDashboardName(), result.getCreateDashboardConfig());
                 return;
             }
+            if (result.isDone() && result.getCreateVisualisation() != null
+                && result.getCreateVisualisation().getReplaced() != null) {
+                // Already rewritten: show it in place of the old chart. Using the button again writes it again.
+                button.removeAttribute("disabled");
+                showReplacement(messageId, actionId, result.getCreateVisualisation());
+                return;
+            }
+            if (result.isDone() && NullSafe.hasItems(result.getCreateVisualisations())) {
+                // The button can be used again, as the user may cancel the folder dialog.
+                button.removeAttribute("disabled");
+                createVisualisations(messageId, actionId, result.getCreateVisualisations());
+                return;
+            }
+            if (result.isDone() && result.getCreateVisualisation() != null) {
+                // The button can be used again, as the user may cancel the dialog.
+                button.removeAttribute("disabled");
+                createVisualisation(messageId, actionId, result.getCreateVisualisation());
+                return;
+            }
+            if (result.isDone() && result.getCreateExtraction() != null) {
+                // Nothing is written yet, and the user may cancel, so the button can be used again.
+                button.removeAttribute("disabled");
+                createExtraction(messageId, actionId, result.getCreateExtraction());
+                return;
+            }
+            if (result.isDone() && result.getChangeExtraction() != null) {
+                // Nothing is written yet, and the user may cancel, so the button can be used again.
+                button.removeAttribute("disabled");
+                changeExtraction(messageId, actionId, result.getChangeExtraction());
+                return;
+            }
             if (result.getOpenDocument() != null) {
                 OpenDocumentEvent.fire(this, result.getOpenDocument(), true);
                 button.removeAttribute("disabled");
@@ -3048,6 +3129,572 @@ public class AskStroomAiPresenter
                 });
     }
 
+    /// Opens Stroom's own New Visualisation dialog with the agent's suggested name, in the dashboard's (or query's)
+    /// folder. Once the user creates the Visualisation, it is given the chart Stroom built from the agent's plan,
+    /// then added to the open dashboard below (or beside) its table, or put in the query's show clause, unsaved.
+    /// Nothing is saved unless the user creates it.
+    private void createVisualisation(final int messageId,
+                                     final String actionId,
+                                     final AiCreateVisualisation create) {
+        ShowCreateDocumentDialogEvent.fire(
+                this,
+                "New Visualisation",
+                create.getFolder() != null
+                        ? create.getFolder()
+                        : selectedExplorerNode,
+                VisualisationDoc.TYPE,
+                NullSafe.string(create.getName()),
+                true,
+                newNode -> {
+                    final DocRef visualisation = newNode.getDocRef();
+                    askStroomAiClient.setVisualisation(visualisation, create,
+                            doc -> wireVisualisation(messageId, actionId, create, visualisation),
+                            error -> showError(error, "Unable to set up " + visualisation.getName(), null),
+                            getView());
+                });
+    }
+
+    /// Makes a search extraction the agent proposed for a dashboard table: the user chooses the new pipeline's name
+    /// and folder in Stroom's New dialog (which creates nothing here); then the server writes it, as them, exactly as
+    /// the button prepared it. The table is then set up to use it, unsaved.
+    private void createExtraction(final int messageId, final String actionId, final AiCreateExtraction create) {
+        if (currentChat == null) {
+            return;
+        }
+        // The chat the button is in, should the user open another while choosing.
+        final int chatId = currentChat.getId();
+        ShowCreateDocumentDialogEvent.fireChoose(
+                this,
+                "New Extraction Pipeline",
+                create.getFolder() != null
+                        ? create.getFolder()
+                        : selectedExplorerNode,
+                PipelineDoc.TYPE,
+                NullSafe.string(create.getName()),
+                // Choosing the name and folder is the user's go-ahead: what is written is what the button
+                // prepared, which the server checks.
+                (name, folder, inheritance) -> whenTableExtractsWith(create.getDashboard(),
+                        create.getComponentId(), create.getComponentName(), create.getTablePipeline(),
+                        () -> writeExtraction(chatId, messageId, actionId, create, new AiWriteExtractionRequest(name,
+                                NullSafe.get(folder, ExplorerNode::getDocRef), inheritance,
+                                create.getContentHash())),
+                        problem -> AlertEvent.fireWarn(this, problem, null)));
+    }
+
+    // Goes on to write a search extraction only if its table extracts with the pipeline it did when the extraction
+    // was proposed (none, or the one it changes or replaces), as the dashboard has it now: else the table
+    // changes that follow would replace another, and nothing is written.
+    private void whenTableExtractsWith(final DocRef dashboard,
+                                       final String componentId,
+                                       final String componentName,
+                                       final DocRef expected,
+                                       final Runnable then,
+                                       final Consumer<String> onProblem) {
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireReadExtraction(this, dashboard,
+                componentId, componentName, pipeline -> {
+                    if (Objects.equals(NullSafe.get(pipeline, DocRef::getUuid),
+                            NullSafe.get(expected, DocRef::getUuid))) {
+                        then.run();
+                    } else {
+                        onProblem.accept("Nothing was written: table '" + componentName + "' extracts its values "
+                                         + (pipeline == null
+                                ? "with no pipeline"
+                                : "with pipeline '" + docName(pipeline) + "'")
+                                         + " now, not as it did when this was proposed. Ask for the extraction "
+                                         + "again.");
+                    }
+                }, message -> onProblem.accept("Nothing was written: " + NullSafe.nonBlankStringElse(message,
+                        "the table's extraction pipeline couldn't be read.")));
+        if (!event.isHandled()) {
+            onProblem.accept("Nothing was written: the dashboard can't be opened here to check table '"
+                             + componentName + "'.");
+        }
+    }
+
+    // Has the server write a search extraction the user chose a name and folder for, then sets the table up to use
+    // it, unsaved.
+    private void writeExtraction(final int chatId,
+                                 final int messageId,
+                                 final String actionId,
+                                 final AiCreateExtraction create,
+                                 final AiWriteExtractionRequest request) {
+        askStroomAiClient.writeExtraction(chatId, messageId, actionId, request, result -> {
+            if (!result.isDone()) {
+                AlertEvent.fireWarn(this, NullSafe.string(result.getMessage()), null);
+                return;
+            }
+            showUserActionStatus(messageId, actionId, "DONE", result.getMessage());
+            setUpTable(messageId, actionId, create.getDashboard(), create.getComponentId(),
+                    create.getComponentName(), result.getTableChanges(),
+                    "Wrote pipeline and XSLT '" + request.getName() + "'",
+                    "Set its extraction pipeline in the table's settings.");
+        }, getView());
+    }
+
+    // Makes the changes to a table that follow a search extraction written (its pipeline set, new columns),
+    // unsaved; says so if they can't be made.
+    private void setUpTable(final int messageId,
+                            final String actionId,
+                            final DocRef dashboard,
+                            final String componentId,
+                            final String componentName,
+                            final String tableChanges,
+                            final String written,
+                            final String instead) {
+        final List<TableChange> operations = operations(tableChanges);
+        if (operations.isEmpty()) {
+            return;
+        }
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
+                dashboard,
+                componentId,
+                componentName,
+                operations,
+                onResult -> onResult.accept(null),
+                this::pollAfterAnswer,
+                message -> {
+                    if (message != null) {
+                        AlertEvent.fireWarn(this, written + ", but table '" + componentName + "' couldn't be set "
+                                                  + "up: " + message + "\n" + instead, null);
+                    }
+                },
+                dashboardUndoKey(messageId, actionId));
+        if (!event.isHandled()) {
+            AlertEvent.fireWarn(this, written + ", but the dashboard can't be opened here to set table '"
+                                      + componentName + "' up. " + instead, null);
+        }
+    }
+
+    /// Shows the user a change to a dashboard table's extraction pipeline in place: what changes and the other
+    /// documents that use it, to go on with, then the change to its XSLT as a diff, which they write (all of it, as
+    /// shown) or cancel. Only then does the server write it, if it is still what they were shown, and columns for
+    /// new fields are added to the table, unsaved.
+    private void changeExtraction(final int messageId, final String actionId, final AiChangeExtraction change) {
+        if (currentChat == null) {
+            return;
+        }
+        // The chat the button is in, should the user open another while reviewing.
+        final int chatId = currentChat.getId();
+        ConfirmEvent.fire(this, SafeHtmlUtils.fromString(CHANGE_EXTRACTION_QUESTION), changeExtractionDetail(change),
+                ok -> {
+                    if (!ok) {
+                        return;
+                    }
+                    codeChangeReviewPresenterProvider.get().showToConfirm(
+                            "Change Extraction XSLT - " + docName(change.getXslt()),
+                            NullSafe.string(change.getCurrentXslt()),
+                            NullSafe.string(change.getProposedXslt()),
+                            AceEditorMode.XML,
+                            "Write",
+                            (andStep, code, rejected, onResult) -> whenTableExtractsWith(change.getDashboard(),
+                                    change.getComponentId(), change.getComponentName(), change.getPipeline(),
+                                    () -> writeExtractionChange(chatId, messageId, actionId, change, onResult),
+                                    onResult));
+                });
+    }
+
+    // Has the server write a change to a table's extraction pipeline the user confirmed in the review, then adds
+    // columns for new fields to the table, unsaved. The review is told what happened.
+    private void writeExtractionChange(final int chatId,
+                                       final int messageId,
+                                       final String actionId,
+                                       final AiChangeExtraction change,
+                                       final Consumer<String> onResult) {
+        final AiWriteExtractionRequest request = new AiWriteExtractionRequest(null, null, null,
+                change.getContentHash());
+        askStroomAiClient.writeExtraction(chatId, messageId, actionId, request, result -> {
+            if (!result.isDone()) {
+                onResult.accept(NullSafe.nonBlankStringElse(result.getMessage(), "The change can't be written."));
+                return;
+            }
+            onResult.accept(null);
+            showUserActionStatus(messageId, actionId, "DONE", result.getMessage());
+            setUpTable(messageId, actionId, change.getDashboard(), change.getComponentId(),
+                    change.getComponentName(), result.getTableChanges(),
+                    "Changed XSLT '" + docName(change.getXslt()) + "'",
+                    "Add columns for the new fields in the table's settings.");
+        }, getView());
+    }
+
+    // What changing a table's extraction pipeline in place changes, and what else uses it, for the user to confirm.
+    private static SafeHtml changeExtractionDetail(final AiChangeExtraction change) {
+        final SafeHtmlBuilder sb = new SafeHtmlBuilder();
+        sb.appendEscaped("Pipeline '" + docName(change.getPipeline()) + "', the extraction pipeline of table '"
+                         + change.getComponentName() + "':");
+        sb.appendHtmlConstant("<ul><li>").appendEscaped(NullSafe.string(change.getChange()))
+                .appendHtmlConstant("</li></ul>");
+        final List<String> usedBy = NullSafe.list(change.getUsedBy());
+        if (usedBy.isEmpty()) {
+            sb.appendEscaped("Nothing else uses it.");
+        } else {
+            sb.appendEscaped("These use it too, and change with it:");
+            sb.appendHtmlConstant("<ul>");
+            usedBy.forEach(user -> sb.appendHtmlConstant("<li>").appendEscaped(user).appendHtmlConstant("</li>"));
+            sb.appendHtmlConstant("</ul>");
+        }
+        final List<String> dashboardChanges = NullSafe.list(change.getDashboardChanges());
+        if (!dashboardChanges.isEmpty()) {
+            sb.appendEscaped("Then, unsaved, on the dashboard:");
+            sb.appendHtmlConstant("<ul>");
+            dashboardChanges.forEach(item ->
+                    sb.appendHtmlConstant("<li>").appendEscaped(item).appendHtmlConstant("</li>"));
+            sb.appendHtmlConstant("</ul>");
+        }
+        return sb.toSafeHtml();
+    }
+
+    private static String docName(final DocRef docRef) {
+        return docRef == null
+                ? ""
+                : NullSafe.nonBlankStringElse(docRef.getName(), docRef.getUuid());
+    }
+
+    /// Asks the user for one folder (the dashboard's, by default), creates a Visualisation there for each chart
+    /// planned together, named as the agent suggested, gives each its chart, then adds them all to the dashboard in
+    /// one change, arranged as planned, unsaved. Nothing is created unless the user picks a folder.
+    private void createVisualisations(final int messageId,
+                                      final String actionId,
+                                      final List<AiCreateVisualisation> creates) {
+        final DocSelectionPopup chooser = docSelectionPopupProvider.get();
+        chooser.setCaption("Folder For " + creates.size() + " New Visualisations");
+        chooser.setIncludedTypes(ExplorerConstants.FOLDER_TYPE);
+        chooser.setAllowFolderSelection(true);
+        chooser.setRequiredPermissions(DocumentPermission.VIEW);
+        final ExplorerNode suggested = creates.get(0).getFolder();
+        if (suggested != null) {
+            chooser.setSelectedEntityReference(suggested.getDocRef());
+        }
+        chooser.show(folder -> {
+            if (folder != null) {
+                createNextVisualisation(messageId, actionId, creates,
+                        ExplorerNode.builder().docRef(folder).build(), new ArrayList<>());
+            }
+        });
+    }
+
+    // Creates the next of several Visualisations, in turn; once all are, adds them to the dashboard. If one can't be
+    // created, those already created are still added, and the user is told which weren't.
+    private void createNextVisualisation(final int messageId,
+                                         final String actionId,
+                                         final List<AiCreateVisualisation> creates,
+                                         final ExplorerNode folder,
+                                         final List<DocRef> created) {
+        if (created.size() == creates.size()) {
+            wireVisualisations(messageId, actionId, creates, created);
+            return;
+        }
+        final AiCreateVisualisation create = creates.get(created.size());
+        askStroomAiClient.createVisualisation(folder, create,
+                visualisation -> {
+                    created.add(visualisation);
+                    createNextVisualisation(messageId, actionId, creates, folder, created);
+                },
+                error -> {
+                    showError(error, "Unable to create Visualisation '" + create.getName() + "'", null);
+                    if (!created.isEmpty()) {
+                        wireVisualisations(messageId, actionId, creates.subList(0, created.size()), created);
+                    }
+                },
+                getView());
+    }
+
+    // Adds several Visualisations the user has just created to the dashboard they were planned for, in one change
+    // (each chart linked to its own table), arranged as planned; then waits for each one's render report.
+    private void wireVisualisations(final int messageId,
+                                    final String actionId,
+                                    final List<AiCreateVisualisation> creates,
+                                    final List<DocRef> created) {
+        final AiCreateVisualisation first = creates.get(0);
+        final List<TableChange> changes = new ArrayList<>();
+        for (int i = 0; i < created.size(); i++) {
+            final AiCreateVisualisation create = creates.get(i);
+            final DocRef visualisation = created.get(i);
+            awaitedRenderReports.put(visualisation.getUuid(), new AwaitedReport(messageId, actionId,
+                    visualisation.getName()));
+            changes.add(TableChange.builder(TableChange.ADD_VIS)
+                    .name(create.getComponentName())
+                    .table(first.getTableId() != null && first.getTableId().equals(create.getTableId())
+                            ? null
+                            : create.getTableName())
+                    .doc(visualisation)
+                    .value(create.getComponentSettings())
+                    .placement(create.getPlacement())
+                    .build());
+        }
+        final String done = "Created " + created.size() + " Visualisations";
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
+                first.getTarget(),
+                first.getTableId(),
+                first.getTableName(),
+                changes,
+                onResult -> onResult.accept(null),
+                () -> showUserActionStatus(messageId, actionId, "DONE",
+                        done + " and added them to the dashboard, not saved. Save the dashboard to keep them."),
+                message -> {
+                    if (message != null) {
+                        AlertEvent.fireWarn(this, done + ", but they couldn't be added to the dashboard: "
+                                                  + message + "\nAdd each with a Visualisation pane linked to its "
+                                                  + "table.", null);
+                    }
+                },
+                dashboardUndoKey(messageId, actionId));
+        if (!event.isHandled()) {
+            AlertEvent.fireWarn(this, done + ", but the dashboard can't be opened here to add them.", null);
+        }
+    }
+
+    // Puts a Visualisation the user has just created in the show clause of an embedded query on the dashboard it was
+    // planned for, by UUID, unsaved, and runs the query; if its StroomQL hasn't changed since.
+    private void showInEmbeddedQuery(final int messageId,
+                                     final String actionId,
+                                     final AiCreateVisualisation create,
+                                     final DocRef visualisation,
+                                     final String created) {
+        final String clause = "show " + UserActionsUi.quoteStroomQl(visualisation.getUuid()) + " ("
+                              + create.getShowArguments() + ")";
+        final String base = NullSafe.string(create.getBaseQuery());
+        final TableChange change = TableChange.builder(TableChange.SET_QUERY)
+                .targetId(create.getTableId())
+                .value(UserActionsUi.withShowClause(base, clause))
+                .ref(base)
+                .build();
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
+                create.getTarget(),
+                create.getTableId(),
+                create.getTableName(),
+                List.of(change),
+                onResult -> onResult.accept(null),
+                () -> showUserActionStatus(messageId, actionId, "DONE",
+                        created + " and put it in the show clause of embedded query '" + create.getTableName()
+                        + "', not saved. Save the dashboard to keep it."),
+                message -> {
+                    if (message != null) {
+                        AlertEvent.fireWarn(this, created + ", but it couldn't be put in embedded query '"
+                                                  + create.getTableName() + "': " + message + "\nAdd this clause "
+                                                  + "at the end of its StroomQL to show it:\n" + clause, null);
+                    }
+                },
+                dashboardUndoKey(messageId, actionId));
+        if (!event.isHandled()) {
+            AlertEvent.fireInfo(this, created + ". To show it, open Dashboard '"
+                                      + NullSafe.get(create.getTarget(), DocRef::getName) + "' and add this clause at "
+                                      + "the end of embedded query '" + create.getTableName() + "':\n" + clause,
+                    null);
+        }
+    }
+
+    /// Shows a Visualisation Stroom AI has just rewritten for a new chart in the vis component that showed the old
+    /// one, unsaved: its settings become the new chart's columns (and its name, if that changes). Each vis
+    /// component loads the Visualisation again, as its settings and controls have changed.
+    private void showReplacement(final int messageId,
+                                 final String actionId,
+                                 final AiCreateVisualisation create) {
+        final DocRef visualisation = create.getReplaced();
+        awaitedRenderReports.put(visualisation.getUuid(), new AwaitedReport(messageId, actionId,
+                visualisation.getName()));
+        ClearFunctionCacheEvent.fire(this, visualisation);
+        // Its table's changes first (a table added for it, or its own changed, e.g. regrouped), then the pane's
+        // settings: on the new table, if one is added.
+        final List<TableChange> tableChanges = operations(create.getTableChanges());
+        final boolean newTable = addsTable(tableChanges);
+        final List<TableChange> changes = new ArrayList<>(tableChanges);
+        changes.add(TableChange.builder(TableChange.SET_VIS_SETTINGS)
+                .targetId(create.getReplaceComponentId())
+                .doc(visualisation)
+                .value(create.getComponentSettings())
+                .table(newTable
+                        ? create.getTableName()
+                        : null)
+                .build());
+        if (create.getComponentName() != null) {
+            changes.add(TableChange.builder(TableChange.RENAME)
+                    .targetId(create.getReplaceComponentId())
+                    .name(create.getComponentName())
+                    .build());
+        }
+        // The filters its clicks drive follow it, where it selects the same column under another key.
+        changes.addAll(operations(create.getFilterChanges()));
+        final String replaced = "Rewrote Visualisation '" + visualisation.getName() + "' for the new chart (saved)"
+                                + (newTable
+                ? ", added table '" + create.getTableName() + "' for it"
+                : tableChanges.isEmpty()
+                        ? ""
+                        : ", changed table '" + create.getTableName() + "' for it");
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
+                create.getTarget(),
+                create.getTableId(),
+                // A new table is found by its name among those the changes add, not as the table with tableId.
+                newTable
+                        ? null
+                        : create.getTableName(),
+                changes,
+                onResult -> onResult.accept(null),
+                () -> showUserActionStatus(messageId, actionId, "DONE",
+                        replaced + " and showed it in its pane, not saved. Save the dashboard to keep the pane's "
+                        + "new settings."),
+                message -> {
+                    if (message != null) {
+                        AlertEvent.fireWarn(this, replaced + ", but its pane couldn't be updated: " + message
+                                                  + "\nOpen the pane's settings to pick its columns.", null);
+                    }
+                },
+                dashboardUndoKey(messageId, actionId));
+        if (!event.isHandled()) {
+            AlertEvent.fireInfo(this, replaced + ". Open the dashboard to see it.", null);
+        }
+    }
+
+    /// Adds a Visualisation the user has just created to the dashboard it was planned for, or puts it in the
+    /// query's show clause, unsaved; then waits for its render report to say how it drew.
+    private void wireVisualisation(final int messageId,
+                                   final String actionId,
+                                   final AiCreateVisualisation create,
+                                   final DocRef visualisation) {
+        awaitedRenderReports.put(visualisation.getUuid(), new AwaitedReport(messageId, actionId,
+                visualisation.getName()));
+        final String created = "Created Visualisation '" + visualisation.getName() + "'";
+        if (create.isForQuery() && create.getTarget() != null
+            && DashboardDoc.TYPE.equals(create.getTarget().getType())) {
+            showInEmbeddedQuery(messageId, actionId, create, visualisation, created);
+            return;
+        }
+        if (create.isForQuery()) {
+            // By UUID, which Stroom resolves before a name, so another Visualisation of the same name can't
+            // make the query ambiguous.
+            final String clause = "show " + UserActionsUi.quoteStroomQl(visualisation.getUuid()) + " ("
+                                  + create.getShowArguments() + ")";
+            final String base = NullSafe.string(create.getBaseQuery());
+            final QueryCodeChangeEvent event = QueryCodeChangeEvent.fireApply(this,
+                    create.getTarget(),
+                    base,
+                    UserActionsUi.withShowClause(base, clause),
+                    (andStep, rejected, onResult) -> onResult.accept(null),
+                    () -> showUserActionStatus(messageId, actionId, "DONE",
+                            created + " and put it in the query's show clause, not saved. Run the query to see "
+                            + "it; save the query to keep it."));
+            if (!event.isHandled()) {
+                OpenDocumentEvent.fire(this, create.getTarget(), true);
+                AlertEvent.fireInfo(this, created + ". To show it, open Query '"
+                                          + NullSafe.get(create.getTarget(), DocRef::getName)
+                                          + "' and add this clause at its end:\n" + clause, null);
+            } else if (event.getMessage() != null) {
+                AlertEvent.fireInfo(this, created + ". " + event.getMessage() + "\nAdd this clause at the "
+                                          + "query's end to show it:\n" + clause, null);
+            }
+            return;
+        }
+
+        // A table of its own is added first (beside the table with tableId), and its filter last, once it is on the
+        // dashboard.
+        final List<TableChange> tableChanges = operations(create.getTableChanges());
+        final List<TableChange> filterChanges = operations(create.getFilterChanges());
+        // Changes to its table that add one for it, rather than changing the table with tableId.
+        final boolean newTable = addsTable(tableChanges);
+        final List<TableChange> changes = new ArrayList<>(tableChanges);
+        changes.add(TableChange.builder(TableChange.ADD_VIS)
+                .name(create.getComponentName())
+                .table(newTable
+                        ? create.getTableName()
+                        : null)
+                .doc(visualisation)
+                .value(create.getComponentSettings())
+                .placement(create.getPlacement())
+                .build());
+        changes.addAll(filterChanges);
+        final String added = created + " and added it to the dashboard" + (newTable
+                ? " with table '" + create.getTableName() + "'"
+                : "") + (filterChanges.isEmpty()
+                ? ""
+                : ", its clicks filtering it") + ", not saved. Save the dashboard to keep it.";
+        final ApplyDashboardChangeEvent event = ApplyDashboardChangeEvent.fireApply(this,
+                create.getTarget(),
+                create.getTableId(),
+                // A new table is found by its name among those the changes add, not as the table with tableId.
+                newTable
+                        ? null
+                        : create.getTableName(),
+                changes,
+                onResult -> onResult.accept(null),
+                () -> showUserActionStatus(messageId, actionId, "DONE", added),
+                message -> {
+                    if (message != null) {
+                        AlertEvent.fireWarn(this, created + ", but it couldn't be added to the dashboard: "
+                                                  + message + "\nAdd it with a Visualisation pane linked to table '"
+                                                  + create.getTableName() + "'.", null);
+                    }
+                },
+                dashboardUndoKey(messageId, actionId));
+        if (!event.isHandled()) {
+            AlertEvent.fireWarn(this, created + ", but the dashboard can't be opened here to add it.", null);
+        }
+    }
+
+    // True if the changes add a table (for a chart of its own), rather than only changing the table they are for.
+    private static boolean addsTable(final List<TableChange> changes) {
+        return changes.stream().anyMatch(change -> TableChange.ADD_TABLE.equals(change.getOp()));
+    }
+
+    /// @param json Dashboard changes as the server gives them: a JSON array of operations, or null.
+    /// @return The changes, for the dashboard to apply; none if null.
+    private static List<TableChange> operations(final String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        return operations(JSONParser.parseStrict(json).isArray());
+    }
+
+    private static List<TableChange> operations(final JSONArray operations) {
+        final List<TableChange> changes = new ArrayList<>();
+        for (int i = 0; operations != null && i < operations.size(); i++) {
+            final JSONObject operation = operations.get(i).isObject();
+            if (operation != null) {
+                final String operationJson = operation.toString();
+                changes.add(UserActionsUi.tableChange(name -> AiToolMessages.getString(operationJson, name),
+                        AiToolMessages.toJava(operation.get("query")), AiToolMessages.toJava(operation.get("doc"))));
+            }
+        }
+        return changes;
+    }
+
+    /// Shows how a Visualisation the user created from the chat drew, on the button's card: what it drew, or
+    /// its error with a follow-up to ask the agent to fix it. Only the first report on the table's rows after it
+    /// is wired up is shown; later ones (each time the table updates) reach the agent through the dashboard's
+    /// description.
+    private void onRenderReport(final VisRenderReportEvent event) {
+        final DocRef visualisation = event.getVisualisation();
+        final AwaitedReport awaited = visualisation != null
+                ? awaitedRenderReports.get(visualisation.getUuid())
+                : null;
+        if (awaited == null) {
+            return;
+        }
+        final Map<String, Object> report = renderReport(event.getReportJson());
+        final String status = String.valueOf(report.get("status"));
+        final String summary = UserActionsUi.renderReportSummary(report);
+        showUserActionStatus(awaited.messageId(), awaited.actionId(), "DONE", summary);
+        if ("empty".equals(status)) {
+            // Drawn before the table's rows arrived: wait for the report on them.
+            return;
+        }
+        awaitedRenderReports.remove(visualisation.getUuid());
+        if (!"ok".equals(status) && !currentRunActive && !requestInFlight) {
+            followUps = List.of("Fix the visualisation '" + awaited.name() + "': " + summary);
+            refreshFollowUps();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> renderReport(final String json) {
+        try {
+            final Object report = AiToolMessages.toJava(JSONParser.parseStrict(json));
+            return report instanceof Map
+                    ? (Map<String, Object>) report
+                    : Map.of();
+        } catch (final RuntimeException e) {
+            return Map.of();
+        }
+    }
+
     /// Opens a document the user has just created with a button in the chat, and attaches its tab to the chat once
     /// it opens, in place of any tab attached before.
     private void openCreatedDocument(final DocRef docRef) {
@@ -3085,6 +3732,11 @@ public class AskStroomAiPresenter
                 msg.getMessageType(), msg.getAttachmentId(), result.toString(), msg.getTurnId(),
                 msg.getTokenCount());
         renderedMessages.put(messageId, updated);
+        if (heldUserActions.containsKey(messageId)) {
+            // Not shown yet: shown as it now is, once the agent stops.
+            heldUserActions.put(messageId, updated);
+            return;
+        }
         appendUserActionsCard(getView().getMarkdownContainer().getElement(), updated, System.currentTimeMillis());
     }
 
@@ -3834,6 +4486,9 @@ public class AskStroomAiPresenter
         }
         getView().setInProgress(working);
         getView().setSendButtonLoadingState(requestInFlight || working);
+        if (!working && !requestInFlight) {
+            showHeldUserActions();
+        }
     }
 
     // True if the latest message shown is an error, which ends the question it was answering.
@@ -3946,7 +4601,7 @@ public class AskStroomAiPresenter
             && findMessageElement(markdownContainer, messageId) == null
             && AiConversationEntries.addResultToCall(markdownContainer, messageElement, msg.getMessage())) {
             // Shown in its call's entry.
-            appendUserActionsCard(markdownContainer, msg, nowMs);
+            showOrHoldUserActions(markdownContainer, msg, nowMs);
             keepProgressInPlace(markdownContainer);
             return;
         }
@@ -3986,7 +4641,7 @@ public class AskStroomAiPresenter
             unwatchPrompt();
         }
         if (msg.getMessageType() == AiMessageType.TOOL_RESULT) {
-            appendUserActionsCard(markdownContainer, msg, nowMs);
+            showOrHoldUserActions(markdownContainer, msg, nowMs);
         } else if (msg.getMessageType() == AiMessageType.INTERIM_RESPONSE
                    && findInConversation(WORKING_MESSAGE_ID) != null) {
             // While the agent works, shown once the Working line moves on from it (see updateWorkingMessage).
@@ -4114,6 +4769,7 @@ public class AskStroomAiPresenter
         answerFollowUps = List.of();
         refreshFollowUps();
         renderedMessages.clear();
+        heldUserActions.clear();
         pendingAttachments.clear();
         sentAttachments.clear();
         sendingAttachments = List.of();
@@ -5861,5 +6517,12 @@ public class AskStroomAiPresenter
         public int hashCode() {
             return Objects.hash(dockType, dockLocation);
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+
+    /// A Visualisation created from the chat whose first render report is awaited, and the button that made it.
+    private record AwaitedReport(int messageId, String actionId, String name) {
+
     }
 }

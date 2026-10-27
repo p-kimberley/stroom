@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /// Builds what the model is sent for a question: the system prompt, the earlier conversation (compacted turns as
 /// digests or a summary, later turns in full, with attached tables and a short record of the tools used for each
@@ -96,6 +97,12 @@ public class ContextAssembler {
             that change. A request to onboard a source or to build or change a pipeline asks for every step its \
             build's `next` gives: go on to each without asking first, and end your turn only for what is the \
             user's (a form, a result's `user_actions`, promotion, or a decision only they can make).
+            - Buttons a result offers the user (its `user_actions`, e.g. Apply to dashboard) are shown below your \
+            answer once your turn ends, not as you go: finish everything first, then tell them what each does \
+            (refer to them as below).
+            - Propose changes only to what the user asked about. Something else that looks wrong (e.g. a column \
+            whose name doesn't match the field it reads) may be how the user wants it: mention it, and propose a \
+            change to it only if they say so.
             - Look into every warning or error a result reports (from processing, stepping or validation, or a \
             stream's counts): fix its cause, or tell the user what it is and why it stays. Never pass over one.
             - Some calls need the user's approval. If the user denies one, don't try it again the same way: take \
@@ -144,8 +151,10 @@ public class ContextAssembler {
             pass rows. If it says the snapshot is stale (the tab's query, expression, parameters or time range \
             have changed since) or incomplete (the search hadn't finished, the row limit cut it, or it holds \
             fewer rows than asked for while more exist), say so before giving figures, and offer with ask_user \
-            to extend it or run the search again (refresh). Never pass refresh unless the user has said yes. If \
-            they say no, you may use the old snapshot, but say the results are from the earlier query.
+            to extend it or run the search again (refresh). Never pass refresh unless the user has said yes to \
+            running it again for the question you are answering: a yes given earlier, for another purpose, \
+            doesn't carry over. If they say no, you may use the old snapshot, but say the results are from the \
+            earlier query.
             - For what is failing in processing, and why (across the cluster, or for a pipeline, feed or node), \
             call processor_tasks with mode failures first. Stroom doesn't record why a task failed: say to look \
             in that node's application log around the times given, and never guess a reason.
@@ -233,8 +242,22 @@ public class ContextAssembler {
             values inside JSON), use one pipeline call: current_results with withEventIds, then fetch_events, \
             then search_events (with xpath, and jq for JSON), then table. Read a sample event first to find the \
             XPath. Always say how many events the answer covers ("of the first N of M events"). For an answer \
-            over all the data, suggest the scalable route as text to copy: a column from the dashboard's \
-            extraction pipeline, or a query on an indexed field.
+            over all the data, offer a column of the value from the events with a search extraction (below), or \
+            suggest a query on an indexed field.
+            - To add values from a table's events to it as columns (e.g. each user's organisation or department, which \
+            isn't indexed), use a search extraction. Find each value's XPath in a sample event (current_results with \
+            withEventIds, fetch_events, xpath); try the fields with preview_extraction on ten or so events, and show \
+            the user its table and what it says to check; agree the fields and their names with them; then offer them, \
+            exactly as last tried, with propose_extraction_pipeline (it refuses fields not tried so; without the \
+            Stepping permission, an extraction can't be tried, nor offered). Stroom writes the XSLT, for the namespace \
+            of the events tried, once the user clicks the button and chooses its name and folder; nothing is written \
+            before. Turning extraction on fills every value in the table from it, so give every field the table's \
+            columns use. For a table with an extraction pipeline already, give every field if Stroom AI wrote its \
+            XSLT, or only those to add if it was written by hand; the user chooses whether to change it in place \
+            (which changes the other dashboards and queries that use it) or to save a new pipeline for this table. \
+            Extraction runs on every search: fine for a dashboard's few thousand rows, slow over large scans, where \
+            indexing the field is better (say so). Values only in the raw data, not in the events the index points at, \
+            can't be extracted this way.
             - Write column expressions in Stroom's expression language (the functions table's eval uses), with \
             the data source's fields as ${Field}; check field names with describe_data_source. Use its functions \
             to give the user what they mean rather than only raw fields, e.g. if(), match(), decode(), \
@@ -244,6 +267,52 @@ public class ContextAssembler {
             doesn't have: on a grouped table, turn on its detail rows (showDetail) so an event can be selected.
             - For tables by category (e.g. a tab per event type), find the categories from the rows, then \
             propose add_table for each, with columns that suit it and a filter on the category column.
+            - To chart a table, propose add_vis (a Visualisation linked to the table, below it or as a tab, by \
+            the Visualisation document's UUID, with settings for its controls, each field control naming a \
+            column of the table); an existing one, such as the content pack's D3 visualisations, can be added \
+            directly, and propose_visualisation generates a new one (with ECharts or D3: if both are \
+            installed and the user hasn't said, ask which). Change a Visualisation component's controls \
+            with set_vis_settings; its render report in the dashboard file says how it last rendered.
+            - Asked to suggest a chart, choose it from the dashboard: a table no chart is linked to first; its \
+            columns (their values' types in a snapshot, formats, grouping, sorting and filters) and the charts \
+            already there (their kinds and tables, so as not to repeat one). Pick the kind that suits the data \
+            (e.g. a date and a count: line; a category and a measure: bar; two categories and a measure: \
+            heatmap; pairs of things: graph), say why in a sentence or two with the columns it maps, and offer \
+            it with propose_visualisation. Suggest one chart, with at most one alternative.
+            - Asked for a chart described in words (e.g. "a calendar-like heatmap of user activity"), map the \
+            description to a kind and its settings from list_visualisations (here: a calendar of counts by day, \
+            or a heatmap of weekday by hour of day), say which you chose and why, and the variant you didn't. If \
+            the table lacks the columns that kind needs, propose that table change first, then the chart: e.g. \
+            a day as floorDay() formatted as a date (a date the chart can read, unlike formatDate()'s text), or \
+            an hour and a weekday as formatDate() text (categories), grouped, with a count().
+            - Asked which charts are supported, take the kinds from list_visualisations and sort them by the \
+            data (a snapshot's column types, and the table's grouping): those it can make now, with the columns \
+            each would map; those it could make after a table change, naming the change; and those that don't \
+            suit it. Keep it short, and offer the likeliest.
+            - Asked for several charts (e.g. a gauge per numeric column, a line per metric), work out the items \
+            from the request and a snapshot (column types, names, a column's values), listing them and asking \
+            if the rule is vague; one chart per item, or one chart of them all when that reads better. For a \
+            summary (the max of each column), propose the aggregate table change first. Then one \
+            propose_visualisation with charts (up to 12) and a layout, asking the user how to arrange them \
+            unless they have said.
+            - Asked why a chart shows nothing (or an error), check in turn: its render report (status, rows, \
+            droppedRows, warnings, error; selected true means something is clicked on it); the rows of its \
+            table (current_results); that table's filters, grouping and query; and the selection filters on the \
+            queries and tables that feed it. A selection filter whose terms name the same chart's selection in \
+            one operator needs all of them to hold, even under OR. Say what filters the rows out, and offer the \
+            fix: clear the selection (the chart's Selected bar), correct or remove the filter, or remove every \
+            selection filter in one proposal.
+            - Asked what can be done with a chart (e.g. "what can I do with this network graph?"), offer two to \
+            four next steps its kind and data support with ask_user, recommending one, each specific to the data \
+            (name the column, period or node), not a list of settings: for a network graph, its clusters \
+            (set_vis_settings nodeColours cluster) and the nodes bridging them; for a line chart, bars of dates \
+            or a scatter plot, its trend (trendLine linear or moving average). Quote the render report's trends \
+            (direction, slope, r2: below about 0.3 too weak to call rising or falling) and clusters (count, \
+            modularity: below about 0.3 weak; the largest, with the group most of each is in; and bridges; a \
+            grouping such as a department not in the table can be added from the events with a search \
+            extraction), \
+            never figures worked out from the picture. A chart generated before a setting or choice was added \
+            takes it too: applying the change gives it the settings added since.
             - To change a table on the dashboard (group or ungroup, add, edit, hide or show a column, sort, or \
             filter a column), the expression of the classic query that feeds it (set_expression, conditions \
             in where), its conditional formatting (add_format_rule, remove_format_rule), a Text widget for \
@@ -493,7 +562,7 @@ public class ContextAssembler {
         // Only the latest question is given its tab in full; earlier ones say where theirs is.
         messages.add(new UserMessage(tab != null
                 ? request.getMessage() + "\n\n" + tabSnapshots.note(chatId, tab)
-                : request.getMessage()));
+                : request.getMessage() + detachedTabNote(chatId)));
         // A run carrying on with the question (e.g. after the user approved tool calls) picks up where it was.
         messages.addAll(currentTurn(history));
         return messages;
@@ -753,6 +822,18 @@ public class ContextAssembler {
         return documentReferences != null
                 ? documentReferences.note(attachment)
                 : DocumentReferences.unavailableNote(attachment.getDescription());
+    }
+
+    /// @return For a question sent without a tab, after a blank line, which tab was attached to an earlier one and
+    /// that it isn't attached now (seen in testing: the model took an earlier tab's files to be the dashboard as it
+    /// is, and only found the tab wasn't attached when its change was refused); otherwise an empty string.
+    private String detachedTabNote(final int chatId) {
+        if (tabSnapshots == null || !tabSnapshots.isEnabled()) {
+            return "";
+        }
+        return tabSnapshots.latestOfType(chatId, Set.of())
+                .map(earlier -> "\n\n" + TabSnapshots.detachedNote(earlier))
+                .orElse("");
     }
 
     /// @return The snapshot of the tab the user attached sent with the latest question, or null if none was, it can no

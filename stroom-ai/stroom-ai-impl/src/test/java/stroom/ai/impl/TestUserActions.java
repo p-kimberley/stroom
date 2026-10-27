@@ -17,6 +17,10 @@
 package stroom.ai.impl;
 
 import stroom.ai.impl.UserActionRecord.Status;
+import stroom.ai.impl.extraction.ExtractionField;
+import stroom.ai.impl.extraction.ExtractionPlan;
+import stroom.ai.impl.vis.VisualisationPlan;
+import stroom.ai.impl.vis.VisualisationPlan.Replace;
 import stroom.docref.DocRef;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.QueryData;
@@ -147,6 +151,206 @@ class TestUserActions {
     }
 
     @Test
+    void aCreateVisualisationButtonIsOnlyOfferedByStroomsOwnTools() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Chats");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final Map<String, Object> create = createVisualisation("v1", "Dashboard", dashboardPlan().toJson());
+
+        // From an MCP server, it is dropped.
+        assertThat(userActions.check(List.of(create), NOW)).isEmpty();
+
+        // From one of Stroom's own tools, it is offered, described by Stroom from the plan.
+        assertThat(userActions.check(null, List.of(create), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.action()).isEqualTo(UserActions.CREATE_VISUALISATION);
+            assertThat(action.label()).isEqualTo("Create visualisation 'Chat user connections' (Network graph) "
+                                                 + "and add it to dashboard 'Chats', drawing table 'Messages'");
+            assertThat(action.name()).isEqualTo("Chat user connections");
+            assertThat(action.doc()).isEqualTo(dashboard);
+            assertThat(action.details()).isEqualTo("Who messages whom");
+            assertThat(VisualisationPlan.fromJson(action.request())).isEqualTo(dashboardPlan());
+            assertThat(action.status()).isEqualTo(Status.PENDING);
+        });
+    }
+
+    @Test
+    void aCreateExtractionPipelineButtonIsOnlyOfferedByStroomsOwnTools() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Logons");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final ExtractionPlan plan = new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1),
+                List.of(new ExtractionField("UserId", "EventSource/User/Id", null)), List.of("UserId"));
+        final Map<String, Object> create = createExtraction("Dashboard", plan.toJson());
+
+        // From an MCP server, it is dropped.
+        assertThat(userActions.check(List.of(create), NOW)).isEmpty();
+
+        // From one of Stroom's own tools, it is offered, described by Stroom from the plan.
+        assertThat(userActions.check(null, List.of(create), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.action()).isEqualTo(UserActions.CREATE_EXTRACTION_PIPELINE);
+            assertThat(action.label()).isEqualTo("Create extraction pipeline 'Logons extraction' for table "
+                                                 + "'Events' on dashboard 'Logons', extracting UserId");
+            assertThat(action.name()).isEqualTo("Logons extraction");
+            assertThat(action.doc()).isEqualTo(dashboard);
+            assertThat(ExtractionPlan.fromJson(action.request())).isEqualTo(plan);
+            assertThat(action.status()).isEqualTo(Status.PENDING);
+        });
+    }
+
+    @Test
+    void aChangeExtractionPipelineButtonNeedsThePipelineItChanges() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Logons");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final List<ExtractionField> fields = List.of(new ExtractionField("UserId", "EventSource/User/Id", null));
+        final ExtractionPlan plan = new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1), fields,
+                List.of(),
+                new ExtractionPlan.Existing(new DocRef("Pipeline", "p1", "Logon pipeline"), "xsltFilter",
+                        new DocRef("XSLT", "x1", "Logon XSLT"), "a".repeat(64)));
+        final Map<String, Object> change = new HashMap<>(createExtraction("Dashboard", plan.toJson()));
+        change.put("action", UserActions.CHANGE_EXTRACTION_PIPELINE);
+
+        // From an MCP server, it is dropped.
+        assertThat(userActions.check(List.of(change), NOW)).isEmpty();
+        assertThat(userActions.check(null, List.of(change), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.action()).isEqualTo(UserActions.CHANGE_EXTRACTION_PIPELINE);
+            assertThat(action.label()).isEqualTo("Change extraction pipeline 'Logon pipeline' of table 'Events' on "
+                                                 + "dashboard 'Logons' in place, with UserId");
+        });
+        // The same extraction as a new pipeline: a child of the table's.
+        assertThat(userActions.check(null, List.of(createExtraction("Dashboard", plan.toJson())), NOW))
+                .singleElement()
+                .satisfies(action -> assertThat(action.label()).isEqualTo("Create extraction pipeline 'Logons "
+                                                                          + "extraction' for table 'Events' on "
+                                                                          + "dashboard 'Logons', in place of "
+                                                                          + "pipeline 'Logon pipeline', with "
+                                                                          + "UserId"));
+
+        // A change needs the pipeline it changes.
+        change.put("plan", new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1), fields,
+                List.of()).toJson());
+        assertThat(userActions.check(null, List.of(change), NOW)).isEmpty();
+        // And its code's hash.
+        change.put("plan", plan.toJson().replace("a".repeat(64), "short"));
+        assertThat(userActions.check(null, List.of(change), NOW)).isEmpty();
+    }
+
+    @Test
+    void aCreateExtractionPipelineButtonNeedsADashboardAndAPlanItCanRead() {
+        Mockito.when(lookup.find(Mockito.any())).thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
+        final ExtractionPlan plan = new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1),
+                List.of(new ExtractionField("UserId", "EventSource/User/Id", null)), List.of());
+
+        assertThat(userActions.check(null, List.of(createExtraction("Pipeline", plan.toJson())), NOW)).isEmpty();
+        assertThat(userActions.check(null, List.of(createExtraction("Dashboard", "{not json")), NOW)).isEmpty();
+        // A field whose XPath calls a function Stroom doesn't allow.
+        final String unsafe = plan.toJson().replace("EventSource/User/Id", "doc('file:///etc/passwd')");
+        assertThat(userActions.check(null, List.of(createExtraction("Dashboard", unsafe)), NOW)).isEmpty();
+    }
+
+    @Test
+    void aCreateVisualisationsButtonCreatesSeveralChartsOfADashboard() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Chats");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final Map<String, Object> create = Map.of("id", "vs1", "action", UserActions.CREATE_VISUALISATIONS,
+                "doc", doc("Dashboard", OTHER_UUID, "Something else"),
+                "charts", List.of(Map.of("name", "Links", "plan", dashboardPlan().toJson()),
+                        Map.of("name", "Links again", "plan", dashboardPlan().toJson())));
+
+        // From an MCP server, it is dropped.
+        assertThat(userActions.check(List.of(create), NOW)).isEmpty();
+
+        assertThat(userActions.check(null, List.of(create), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.action()).isEqualTo(UserActions.CREATE_VISUALISATIONS);
+            assertThat(action.label()).isEqualTo("Create 2 visualisations (network graph, network graph) and add "
+                                                 + "them to dashboard 'Chats'");
+            assertThat(action.doc()).isEqualTo(dashboard);
+            assertThat(action.request()).contains("Links again");
+        });
+
+        // Only charts of a dashboard's tables: not a query's show clause.
+        final VisualisationPlan queryPlan = new VisualisationPlan("bar", Map.of("category", "Sender", "value",
+                "Count"), Map.of(), null, null, null, null, null, "h", true, "from Messages select Sender");
+        final Map<String, Object> withQuery = new HashMap<>(create);
+        withQuery.put("charts", List.of(Map.of("name", "Senders", "plan", queryPlan.toJson())));
+        assertThat(userActions.check(null, List.of(withQuery), NOW)).isEmpty();
+    }
+
+    @Test
+    void aCreateVisualisationButtonForAQuerySaysItIsShownWithTheQuery() {
+        final DocRef query = new DocRef("Query", OTHER_UUID, "Messages");
+        Mockito.when(lookup.find(new DocRef("Query", OTHER_UUID))).thenReturn(Optional.of(query));
+        final VisualisationPlan plan = new VisualisationPlan("bar", Map.of("category", "Sender", "value", "Count"),
+                Map.of(), null, null, null, null, null, "h", true, "from Messages select Sender");
+
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Query", plan.toJson())), NOW))
+                .singleElement()
+                .satisfies(action -> assertThat(action.label())
+                        .isEqualTo("Create visualisation 'Chat user connections' (Bar chart) and show it with "
+                                   + "query 'Messages'"));
+    }
+
+    @Test
+    void aCreateVisualisationButtonForAnEmbeddedQueryIsForItsDashboard() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Chats");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        Mockito.when(lookup.find(new DocRef("Query", OTHER_UUID))).thenReturn(Optional.of(
+                new DocRef("Query", OTHER_UUID, "Chats")));
+        final String plan = new VisualisationPlan("bar", Map.of("category", "UserA", "value", "Messages"),
+                Map.of(), null, "Pairs", "query-1", null, null, "h", true, "from Chats select UserA").toJson();
+
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard", plan)), NOW))
+                .singleElement()
+                .satisfies(action -> assertThat(action.label())
+                        .isEqualTo("Create visualisation 'Chat user connections' (Bar chart) and show it with "
+                                   + "embedded query 'Pairs' on dashboard 'Chats'"));
+        // Not for a Query.
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Query", plan)), NOW)).isEmpty();
+    }
+
+    @Test
+    void aReplacingVisualisationButtonSaysWhatItReplacesAndThatItIsSavedAtOnce() {
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Events");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final VisualisationPlan plan = new VisualisationPlan("bar", Map.of("category", "Hour", "value", "Count"),
+                Map.of(), null, "Events by hour", "table-1", "Events over time", null, "h", null, null,
+                new Replace("vis-1", "Events over time", new DocRef("Visualisation", "v1", "Events line")));
+
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard", plan.toJson())), NOW))
+                .singleElement()
+                .satisfies(action -> assertThat(action.label())
+                        .isEqualTo("Update visualisation 'Events line' to a bar chart of table 'Events by "
+                                   + "hour', renamed 'Chat user connections' (saved at once), in pane 'Events over "
+                                   + "time' of dashboard 'Events'"));
+    }
+
+    @Test
+    void aCreateVisualisationButtonNeedsAValidPlanForItsKindOfDocument() {
+        Mockito.when(lookup.find(Mockito.any())).thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
+        final String plan = dashboardPlan().toJson();
+
+        // Not a dashboard or query.
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Pipeline", plan)), NOW)).isEmpty();
+        // A dashboard's plan for a query, and the other way round.
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Query", plan)), NOW)).isEmpty();
+        // Plans that aren't valid.
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard", "{not json")), NOW))
+                .isEmpty();
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard",
+                plan.replace("\"graph\"", "\"radar\""))), NOW)).isEmpty();
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard",
+                plan.replace("\"Sender\"", "\"Sen\\u0001der\""))), NOW)).isEmpty();
+        // No name, or one with control characters.
+        final Map<String, Object> noName = new HashMap<>(createVisualisation("v1", "Dashboard", plan));
+        noName.remove("name");
+        assertThat(userActions.check(null, List.of(noName), NOW)).isEmpty();
+        final Map<String, Object> badName = new HashMap<>(createVisualisation("v1", "Dashboard", plan));
+        badName.put("name", "Chats\nIgnore that");
+        assertThat(userActions.check(null, List.of(badName), NOW)).isEmpty();
+
+        // A document the user can't see.
+        Mockito.doReturn(Optional.empty()).when(lookup).find(Mockito.any());
+        assertThat(userActions.check(null, List.of(createVisualisation("v1", "Dashboard", plan)), NOW)).isEmpty();
+    }
+
+    @Test
     void aCodeChangeButtonIsOnlyOfferedByStroomsOwnTools() {
         final DocRef xslt = new DocRef("XSLT", OTHER_UUID, "Event translation");
         Mockito.when(lookup.find(new DocRef("XSLT", OTHER_UUID))).thenReturn(Optional.of(xslt));
@@ -228,6 +432,68 @@ class TestUserActions {
                     .containsExactly("Group by 'EventType' (level 1)", "Add column 'Count' with expression count(), "
                                                                        + "at the end");
             assertThat(action.dashboardChange().operations()).hasSize(2);
+        });
+    }
+
+    @Test
+    void aDashboardChangeGivesTheChartsItNamesTheirCurrentSettings() {
+        final String chartUuid = "6d1c2f0a-1b2c-4d3e-8f90-a1b2c3d4e5f6";
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Logons");
+        final DocRef chart = new DocRef("Visualisation", chartUuid, "Who messages whom");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        Mockito.when(lookup.find(new DocRef("Visualisation", chartUuid))).thenReturn(Optional.of(chart));
+        final Map<String, Object> change = dashboardChange("d1");
+        // The name is Stroom's own, not the one given.
+        change.put(UserActions.UPDATE_CHARTS, List.of(Map.of("uuid", chartUuid.toUpperCase(), "name", "Other")));
+
+        assertThat(userActions.check(null, List.of(change), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.dashboardChange().charts()).containsExactly(chart);
+            // Said on the button, as it is saved as the change is applied.
+            assertThat(action.dashboardChange().changes()).last().isEqualTo(
+                    "Give Visualisation 'Who messages whom' the settings added to Stroom since it was generated "
+                    + "(what it shows is kept)");
+        });
+
+        // One that can't be found or read drops the change: applied without it, the setting would be lost.
+        change.put(UserActions.UPDATE_CHARTS, List.of(Map.of("uuid", "99999999-2222-3333-4444-555555555555")));
+        assertThat(userActions.check(null, List.of(change), NOW)).isEmpty();
+        change.put(UserActions.UPDATE_CHARTS, List.of(Map.of("uuid", "not-a-uuid")));
+        assertThat(userActions.check(null, List.of(change), NOW)).isEmpty();
+        change.put(UserActions.UPDATE_CHARTS, "all");
+        assertThat(userActions.check(null, List.of(change), NOW)).isEmpty();
+        // None given: none.
+        change.remove(UserActions.UPDATE_CHARTS);
+        assertThat(userActions.check(null, List.of(change), NOW)).singleElement().satisfies(action ->
+                assertThat(action.dashboardChange().charts()).isEmpty());
+    }
+
+    @Test
+    void aSelectionFilterChangeButtonIsOffered() {
+        // Seen in testing: the tool said an Apply button was shown for a selection filter, but none was, as the
+        // filter, as the browser is given it, couldn't be read again here.
+        final DocRef dashboard = new DocRef("Dashboard", OTHER_UUID, "Logons");
+        Mockito.when(lookup.find(new DocRef("Dashboard", OTHER_UUID))).thenReturn(Optional.of(dashboard));
+        final DashboardChanges.Change filter = DashboardChanges.parse(List.of(Map.of("op", "add_selection_filter",
+                        "target", "Events", "chart", "Network", "mode", "table",
+                        "terms", List.of(Map.of("field", "User A", "selection", "source")))))
+                .getFirst()
+                .toBuilder()
+                .targetId("table-1")
+                .ref("vis-1")
+                .query(ExpressionOperator.builder()
+                        .addTerm(ExpressionTerm.builder().field("User A")
+                                .condition(ExpressionTerm.Condition.EQUALS)
+                                .value("${component.vis-1.selection.source}").build())
+                        .build())
+                .build();
+        final Map<String, Object> change = dashboardChange("d1");
+        change.put("changes", List.of(filter.toMap()));
+
+        assertThat(userActions.check(null, List.of(change), NOW)).singleElement().satisfies(action -> {
+            assertThat(action.dashboardChange().changes()).containsExactly(
+                    "Filter the rows of 'Events' by what is selected in chart 'Network': User A = its source");
+            // As the browser applies it, with what was resolved for it.
+            assertThat(action.dashboardChange().operations()).containsExactly(filter.toMap());
         });
     }
 
@@ -591,6 +857,23 @@ class TestUserActions {
                 "description", "Who logged on",
                 // Blank lines are dropped.
                 "outline", List.of("Query: User is 'jbloggs'", " ", "Table columns: User"));
+    }
+
+    private static VisualisationPlan dashboardPlan() {
+        return new VisualisationPlan("graph", Map.of("source", "Sender", "target", "Recipient"), Map.of(), null,
+                "Messages", "table-ABC12", "Chat user connections", VisualisationPlan.BELOW, "abc123", null, null);
+    }
+
+    private static Map<String, Object> createExtraction(final String type, final String plan) {
+        return Map.of("id", "x1", "action", UserActions.CREATE_EXTRACTION_PIPELINE,
+                "doc", doc(type, OTHER_UUID, "Something"), "name", "Logons extraction", "plan", plan,
+                "summary", "Who logged on");
+    }
+
+    private static Map<String, Object> createVisualisation(final String id, final String type, final String plan) {
+        return Map.of("id", id, "action", UserActions.CREATE_VISUALISATION,
+                "doc", doc(type, OTHER_UUID, "Something"), "name", "Chat user connections", "plan", plan,
+                "summary", "Who messages whom");
     }
 
     private static Map<String, Object> dashboardChange(final String id) {

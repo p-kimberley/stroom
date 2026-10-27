@@ -17,6 +17,9 @@
 package stroom.ai.impl;
 
 import stroom.ai.impl.UserActionRecord.Status;
+import stroom.ai.impl.extraction.ExtractionField;
+import stroom.ai.impl.extraction.ExtractionPlan;
+import stroom.ai.impl.vis.VisualisationPlan;
 import stroom.dashboard.shared.DashboardDoc;
 import stroom.docref.DocRef;
 import stroom.pipeline.shared.PipelineDoc;
@@ -24,10 +27,12 @@ import stroom.processor.shared.ProcessorFilter;
 import stroom.processor.shared.QueryData;
 import stroom.query.shared.QueryDoc;
 import stroom.util.date.DateUtil;
+import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
 import stroom.util.logging.LogUtil;
 import stroom.util.shared.NullSafe;
+import stroom.visualisation.shared.VisualisationDoc;
 
 import jakarta.inject.Inject;
 
@@ -81,12 +86,33 @@ public class UserActions {
     /// A change to a dashboard table that the agent proposed (only from Stroom's own propose_dashboard_change tool),
     /// which the button applies to the open dashboard, unsaved.
     public static final String APPLY_DASHBOARD_CHANGE = "apply_dashboard_change";
+    /// In an apply_dashboard_change, the charts Stroom AI generated whose Visualisations are given the settings
+    /// added to Stroom since they were generated, as the change is applied, by UUID: a list of objects with `uuid`.
+    public static final String UPDATE_CHARTS = "update_charts";
     /// Opens a review of a change to a document's Documentation tab that the agent proposed (only from Stroom's own
     /// propose_documentation_change tool), which the user can apply to the tab's editor (unsaved) and undo.
     public static final String APPLY_DOCUMENTATION_CHANGE = "apply_documentation_change";
     /// Opens Stroom's New Dashboard dialog with a suggested name; once created, the dashboard is given a query, a
     /// table and optionally a data preview, built from the StroomQL (only from Stroom's own propose_dashboard tool).
     public static final String CREATE_DASHBOARD = "create_dashboard";
+    /// Opens Stroom's New Visualisation dialog with a suggested name in the dashboard's (or query's) folder; once
+    /// created, the Visualisation is given a chart the agent planned, drawn with ECharts, and is added to the
+    /// dashboard (or the query's `show` clause), unsaved (only from Stroom's own propose_visualisation tool).
+    public static final String CREATE_VISUALISATION = "create_visualisation";
+    /// Writes a search extraction the agent proposed for a dashboard table (an XSLT and a pipeline), with the name
+    /// and folder the user chooses in Stroom's New dialog, as the button prepared it, and sets the table up to use
+    /// it, unsaved (only from Stroom's own propose_extraction_pipeline tool).
+    public static final String CREATE_EXTRACTION_PIPELINE = "create_extraction_pipeline";
+    /// Shows a change the agent proposed to a dashboard table's extraction pipeline, in place, as a diff of its
+    /// XSLT with the other documents that use it, for the user to confirm; only then is it written, and columns
+    /// added to the table for new fields, unsaved (only from Stroom's own propose_extraction_pipeline tool).
+    public static final String CHANGE_EXTRACTION_PIPELINE = "change_extraction_pipeline";
+    /// Creates several planned Visualisations in one folder the user picks, and adds them to a dashboard.
+    public static final String CREATE_VISUALISATIONS = "create_visualisations";
+    /// The most Visualisations one create_visualisations button creates.
+    static final int MAX_VISUALISATIONS = 12;
+    // The most charts a dashboard change gives their current settings: as many as it can add or change.
+    static final int MAX_CHARTS_TO_UPDATE = 50;
 
     /// How long a button works for, as for approvals and forms.
     static final Duration EXPIRY = Duration.ofHours(24);
@@ -214,6 +240,15 @@ public class UserActions {
                 case CREATE_DASHBOARD -> builtIn.contains(map)
                         ? createDashboard(id, map, expiresMs)
                         : Optional.empty();
+                case CREATE_VISUALISATIONS -> builtIn.contains(map)
+                        ? createVisualisations(id, map, expiresMs)
+                        : Optional.empty();
+                case CREATE_VISUALISATION -> builtIn.contains(map)
+                        ? createVisualisation(id, map, expiresMs)
+                        : Optional.empty();
+                case CREATE_EXTRACTION_PIPELINE, CHANGE_EXTRACTION_PIPELINE -> builtIn.contains(map)
+                        ? extraction(id, action, map, expiresMs)
+                        : Optional.empty();
                 default -> Optional.empty();
             };
             if (record.isPresent()) {
@@ -221,6 +256,10 @@ public class UserActions {
                 if (map.get("after") instanceof final List<?> after) {
                     afters.put(id, after);
                 }
+            } else if (builtIn.contains(map)) {
+                // Stroom's own tools check what they offer, and have told the model it is shown, so this is a fault.
+                LOGGER.warn("Dropping user action '{}' ({}) offered by one of Stroom's own tools, as it cannot be "
+                            + "offered", id, action);
             } else {
                 LOGGER.debug(() -> "Dropping user action '" + id + "' (" + action + "), as it cannot be offered");
             }
@@ -384,6 +423,162 @@ public class UserActions {
                 new UserActionRecord.NewDashboard(queryType, preview, List.copyOf(outline))));
     }
 
+    /// A button that opens Stroom's New Visualisation dialog with the suggested name, for a chart planned for a
+    /// dashboard or StroomQL query the user may see. The plan is kept as JSON in `request`, the dashboard or query
+    /// in `doc` and the suggested name in `name`; it is read and checked again when the button is clicked.
+    private Optional<UserActionRecord> createVisualisation(final String id,
+                                                           final Map<?, ?> map,
+                                                           final long expiresMs) {
+        final DocRef named = docRef(map.get("doc"));
+        final String name = NullSafe.get(string(map.get("name")), String::strip);
+        final String planJson = string(map.get("plan"));
+        if (named == null
+            || !(DashboardDoc.TYPE.equals(named.getType()) || QueryDoc.TYPE.equals(named.getType()))
+            || name == null || name.isEmpty() || name.length() > MAX_NAME_CHARS || hasControlCharacters(name)
+            || planJson == null || planJson.length() > MAX_REQUEST_CHARS) {
+            return Optional.empty();
+        }
+        final VisualisationPlan plan;
+        try {
+            plan = VisualisationPlan.fromJson(planJson);
+        } catch (final IllegalArgumentException e) {
+            LOGGER.debug(() -> "Dropping a visualisation that can't be read: " + e.getMessage());
+            return Optional.empty();
+        }
+        // A Query's show clause is planned for the Query; an embedded query's, and a table's chart, for a dashboard.
+        final boolean forQueryDoc = plan.isQuery() && !plan.isEmbeddedQuery();
+        if (forQueryDoc != QueryDoc.TYPE.equals(named.getType())) {
+            return Optional.empty();
+        }
+        final DocRef target = lookup.find(named).orElse(null);
+        if (target == null) {
+            return Optional.empty();
+        }
+        final String summary = NullSafe.get(string(map.get("summary")), String::strip);
+        final String label = plan.isReplacement()
+                ? "Update visualisation '" + plan.replace().visualisation().getName() + "' to a "
+                  + plan.chartKind().displayName().toLowerCase(Locale.ROOT) + " of table '" + plan.table()
+                  + "', renamed '" + name + "' (saved at once), in pane '" + plan.replace().componentName()
+                  + "' of dashboard '" + target.getName() + "'"
+                : "Create visualisation '" + name + "' (" + plan.chartKind().displayName() + ") "
+                  + (plan.isEmbeddedQuery()
+                        ? "and show it with embedded query '" + plan.table() + "' on dashboard '"
+                          + target.getName() + "'"
+                        : plan.isQuery()
+                        ? "and show it with query '" + target.getName() + "'"
+                        : "and add it to dashboard '" + target.getName() + "', drawing table '" + plan.table()
+                          + "'");
+        return Optional.of(new UserActionRecord(id, CREATE_VISUALISATION, label,
+                NullSafe.isBlankString(summary)
+                        ? null
+                        : truncate(summary, MAX_DETAILS_CHARS),
+                null, null, target, plan.toJson(), List.of(), expiresMs, Status.PENDING, null, name));
+    }
+
+    /// A button that shows what a search extraction proposed for a dashboard table the user may see would write, for
+    /// them to confirm: a new pipeline (create_extraction_pipeline), or a change to the table's pipeline in place
+    /// (change_extraction_pipeline, for a table with one). The extraction is kept as JSON in `request`
+    /// ([ExtractionPlan]), the dashboard in `doc` and the suggested name in `name`; it is read and checked again when
+    /// the button is clicked.
+    private Optional<UserActionRecord> extraction(final String id,
+                                                  final String action,
+                                                  final Map<?, ?> map,
+                                                  final long expiresMs) {
+        final DocRef named = docRef(map.get("doc"));
+        final String name = NullSafe.get(string(map.get("name")), String::strip);
+        final String planJson = string(map.get("plan"));
+        if (named == null || !DashboardDoc.TYPE.equals(named.getType())
+            || name == null || name.isEmpty() || name.length() > MAX_NAME_CHARS || hasControlCharacters(name)
+            || planJson == null || planJson.length() > MAX_REQUEST_CHARS) {
+            return Optional.empty();
+        }
+        final ExtractionPlan plan;
+        try {
+            plan = ExtractionPlan.fromJson(planJson);
+        } catch (final IllegalArgumentException e) {
+            LOGGER.debug(() -> "Dropping an extraction that can't be read: " + e.getMessage());
+            return Optional.empty();
+        }
+        final DocRef dashboard = lookup.find(named).orElse(null);
+        final boolean change = CHANGE_EXTRACTION_PIPELINE.equals(action);
+        if (dashboard == null || hasControlCharacters(plan.component())
+            || !ID_PATTERN.matcher(plan.componentId()).matches()
+            || (change && plan.existing() == null)) {
+            return Optional.empty();
+        }
+        final String summary = NullSafe.get(string(map.get("summary")), String::strip);
+        final String fields = String.join(", ", plan.fields().stream().map(ExtractionField::name).toList());
+        final String existing = plan.existing() == null
+                ? null
+                : NullSafe.nonBlankStringElse(plan.existing().pipeline().getName(),
+                        plan.existing().pipeline().getUuid());
+        final String label = change
+                ? "Change extraction pipeline '" + existing + "' of table '" + plan.component() + "' on dashboard '"
+                  + dashboard.getName() + "' in place, with " + fields
+                : "Create extraction pipeline '" + name + "' for table '" + plan.component() + "' on dashboard '"
+                  + dashboard.getName() + "', " + (existing == null
+                        ? "extracting "
+                        : "in place of pipeline '" + existing + "', with ") + fields;
+        return Optional.of(new UserActionRecord(id, action, truncate(label, MAX_DETAILS_CHARS),
+                NullSafe.isBlankString(summary)
+                        ? null
+                        : truncate(summary, MAX_DETAILS_CHARS),
+                null, null, dashboard, plan.toJson(), List.of(), expiresMs, Status.PENDING, null, name));
+    }
+
+    /// A button that creates several charts planned for a dashboard's tables, in one folder the user picks, for a
+    /// dashboard the user may see. The charts (each a name and a plan) are kept as JSON in `request`; they are read
+    /// and checked again when the button is clicked. Each is a new chart of a dashboard table: none replaces one,
+    /// nor goes in a query's show clause.
+    private Optional<UserActionRecord> createVisualisations(final String id,
+                                                            final Map<?, ?> map,
+                                                            final long expiresMs) {
+        final DocRef named = docRef(map.get("doc"));
+        if (named == null || !DashboardDoc.TYPE.equals(named.getType())
+            || !(map.get("charts") instanceof final List<?> charts) || charts.isEmpty()
+            || charts.size() > MAX_VISUALISATIONS) {
+            return Optional.empty();
+        }
+        final List<Map<String, String>> kept = new ArrayList<>();
+        final List<String> kinds = new ArrayList<>();
+        for (final Object item : charts) {
+            if (!(item instanceof final Map<?, ?> chart)) {
+                return Optional.empty();
+            }
+            final String name = NullSafe.get(string(chart.get("name")), String::strip);
+            final String planJson = string(chart.get("plan"));
+            if (name == null || name.isEmpty() || name.length() > MAX_NAME_CHARS || hasControlCharacters(name)
+                || planJson == null || planJson.length() > MAX_REQUEST_CHARS / MAX_VISUALISATIONS) {
+                return Optional.empty();
+            }
+            final VisualisationPlan plan;
+            try {
+                plan = VisualisationPlan.fromJson(planJson);
+            } catch (final IllegalArgumentException e) {
+                LOGGER.debug(() -> "Dropping visualisations that can't be read: " + e.getMessage());
+                return Optional.empty();
+            }
+            if (plan.isQuery() || plan.isReplacement()) {
+                return Optional.empty();
+            }
+            kept.add(Map.of("name", name, "plan", plan.toJson()));
+            kinds.add(plan.chartKind().displayName().toLowerCase(Locale.ROOT));
+        }
+        final DocRef target = lookup.find(named).orElse(null);
+        if (target == null) {
+            return Optional.empty();
+        }
+        final String summary = NullSafe.get(string(map.get("summary")), String::strip);
+        final String label = "Create " + kept.size() + " visualisations (" + String.join(", ", kinds)
+                             + ") and add them to dashboard '" + target.getName() + "'";
+        return Optional.of(new UserActionRecord(id, CREATE_VISUALISATIONS, label,
+                NullSafe.isBlankString(summary)
+                        ? null
+                        : truncate(summary, MAX_DETAILS_CHARS),
+                null, null, target, JsonUtil.writeValueAsString(kept, false), List.of(), expiresMs,
+                Status.PENDING, null, null));
+    }
+
     /// A button that opens a review of a change to a stepping element's code, for an element whose document exists
     /// and the user may view. Applying it needs Edit, which is checked when the user applies it.
     private Optional<UserActionRecord> codeChange(final String id, final Map<?, ?> map, final long expiresMs) {
@@ -523,6 +718,14 @@ public class UserActions {
         if (dashboard == null) {
             return Optional.empty();
         }
+        final List<DocRef> charts = chartsToUpdate(map.get(UPDATE_CHARTS));
+        if (charts == null) {
+            LOGGER.debug("Dropping a dashboard change whose charts to update can't be read");
+            return Optional.empty();
+        }
+        final List<String> described = new ArrayList<>(DashboardChanges.describe(changes));
+        charts.forEach(chart -> described.add("Give Visualisation '" + chart.getName() + "' the settings added to "
+                                              + "Stroom since it was generated (what it shows is kept)"));
         final String summary = NullSafe.get(string(map.get("summary")), String::strip);
         final String label = "Change to table '" + component + "' on dashboard '" + dashboard.getName() + "': "
                              + changes.size() + " change(s)";
@@ -534,7 +737,34 @@ public class UserActions {
                 new UserActionRecord.DashboardChange(component, componentId, snapshotHash.toLowerCase(Locale.ROOT),
                         lookup.canEdit(dashboard),
                         changes.stream().map(DashboardChanges.Change::toMap).toList(),
-                        DashboardChanges.describe(changes))));
+                        described, charts)));
+    }
+
+    // The charts whose Visualisations a dashboard change gives their current settings, as Stroom finds them (the
+    // user may view them), by UUID; none if none are given, or null if they can't be read.
+    private List<DocRef> chartsToUpdate(final Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (!(value instanceof final List<?> list) || list.size() > MAX_CHARTS_TO_UPDATE) {
+            return null;
+        }
+        final List<DocRef> charts = new ArrayList<>();
+        for (final Object item : list) {
+            final String uuid = item instanceof final Map<?, ?> map
+                    ? string(map.get("uuid"))
+                    : null;
+            if (uuid == null || !UUID_PATTERN.matcher(uuid).matches()) {
+                return null;
+            }
+            final DocRef chart = lookup.find(new DocRef(VisualisationDoc.TYPE, uuid.toLowerCase(Locale.ROOT)))
+                    .orElse(null);
+            if (chart == null) {
+                return null;
+            }
+            charts.add(chart);
+        }
+        return charts;
     }
 
     private static Integer count(final Object value) {

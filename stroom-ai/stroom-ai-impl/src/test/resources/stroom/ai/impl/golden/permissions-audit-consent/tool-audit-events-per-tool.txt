@@ -366,6 +366,9 @@
     }
   }
 
+## list_visualisations {}
+(nothing recorded)
+
 ## ls {"path":"/"}
 (nothing recorded)
 
@@ -373,6 +376,9 @@
 (nothing recorded)
 
 ## pipeline {"steps":[]}
+(nothing recorded)
+
+## preview_extraction {"table":"Users","path":"/outputs/a.csv","fields":[{"name":"Org","xpath":"Org"}]}
 (nothing recorded)
 
 ## processor_tasks {"mode":"list"}
@@ -468,6 +474,9 @@
     }
   }
 
+## propose_extraction_pipeline {"table":"Users","name":"Users extraction","fields":[{"name":"Org","xpath":"Org"}]}
+(nothing recorded)
+
 ## propose_query {"name":"Users","query":"from \"Test index\"\nselect UserId\n"}
 (nothing recorded)
 
@@ -492,6 +501,9 @@
       "success" : true
     }
   }
+
+## propose_visualisation {}
+(nothing recorded)
 
 ## read_document {"uuid":"xslt-uuid"}
 - audit: documentViewed(1, DocRef{type='XSLT', uuid='xslt-uuid', name='Test XSLT'}, "Read by the read_document tool")

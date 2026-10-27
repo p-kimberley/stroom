@@ -19,14 +19,12 @@ package stroom.dashboard.client.event;
 
 import stroom.dashboard.client.table.TableChange;
 import stroom.docref.DocRef;
-import stroom.util.shared.NullSafe;
 
 import com.google.gwt.event.shared.EventHandler;
 import com.google.gwt.event.shared.GwtEvent;
 import com.google.gwt.event.shared.HasHandlers;
 
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 /// Asks the dashboards to do something with a change to a dashboard table proposed in the AI chat: say whether
@@ -38,13 +36,10 @@ import java.util.function.Consumer;
 /// goes on as needed (opening first), and ends by calling one of the callbacks given.
 public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEvent.Handler> {
 
-    /// Why a change isn't applied to a dashboard that has changed since it was proposed.
-    public static final String CHANGED = "The dashboard has changed since this was proposed. Ask again for an "
-                                         + "up-to-date change.";
     /// Why an applied change can no longer be undone.
-    public static final String UNDO_WITHDRAWN = "The dashboard has been changed since this was applied, so Undo "
-                                                + "apply would lose those changes. Close the dashboard without "
-                                                + "saving to go back, or change the table by hand.";
+    public static final String UNDO_WITHDRAWN = "What this changed on the dashboard has been changed again since "
+                                                + "it was applied, so Undo apply would lose those changes. Close the "
+                                                + "dashboard without saving to go back, or change it by hand.";
     /// Why a change can't be applied to a dashboard the user can't edit.
     public static final String NOT_EDITABLE = "You can't edit this dashboard: it is read-only, or you don't have "
                                               + "permission to edit it.";
@@ -56,12 +51,13 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
     private final String componentId;
     private final String componentName;
     private final List<TableChange> changes;
-    private final String snapshotHash;
     private final Approver approver;
     private final Runnable onApplied;
     private final Consumer<String> onNotApplied;
     private final String undoKey;
 
+    // For Operation.READ_EXTRACTION: given the table's extraction pipeline, once read.
+    private Consumer<DocRef> onExtractionRead;
     private boolean handled;
     private boolean open;
     private boolean editable;
@@ -73,7 +69,6 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
                                       final String componentId,
                                       final String componentName,
                                       final List<TableChange> changes,
-                                      final String snapshotHash,
                                       final Approver approver,
                                       final Runnable onApplied,
                                       final Consumer<String> onNotApplied,
@@ -83,11 +78,43 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
         this.componentId = componentId;
         this.componentName = componentName;
         this.changes = changes;
-        this.snapshotHash = snapshotHash;
         this.approver = approver;
         this.onApplied = onApplied;
         this.onNotApplied = onNotApplied;
         this.undoKey = undoKey;
+    }
+
+    /// Asks for the extraction pipeline a dashboard table extracts its values with, as the open dashboard has it now
+    /// (unsaved changes included): e.g. so nothing is written for a table whose pipeline has changed since an
+    /// extraction was proposed for it. A dashboard that isn't open isn't read (onNotRead is told so).
+    ///
+    /// @param handlers      Where to fire it.
+    /// @param dashboard     The dashboard.
+    /// @param componentId   The table's component id.
+    /// @param componentName The table's name as the user sees it.
+    /// @param onRead        Given the table's extraction pipeline, or null if it extracts with none.
+    /// @param onNotRead     Given why it couldn't be read, e.g. the dashboard has no such table.
+    /// @return The event, once handled.
+    public static ApplyDashboardChangeEvent fireReadExtraction(final HasHandlers handlers,
+                                                               final DocRef dashboard,
+                                                               final String componentId,
+                                                               final String componentName,
+                                                               final Consumer<DocRef> onRead,
+                                                               final Consumer<String> onNotRead) {
+        final ApplyDashboardChangeEvent event = new ApplyDashboardChangeEvent(Operation.READ_EXTRACTION, dashboard,
+                componentId, componentName, null, null, null, onNotRead, null);
+        event.onExtractionRead = onRead;
+        handlers.fireEvent(event);
+        return event;
+    }
+
+    /// Gives a [Operation#READ_EXTRACTION] event's table's extraction pipeline.
+    ///
+    /// @param pipeline The pipeline, or null if the table extracts with none.
+    public void extractionRead(final DocRef pipeline) {
+        if (onExtractionRead != null) {
+            onExtractionRead.accept(pipeline);
+        }
     }
 
     /// Asks whether a dashboard is open, and if so whether the user can edit it.
@@ -97,22 +124,21 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
     /// @return The event, once handled.
     public static ApplyDashboardChangeEvent fireCheck(final HasHandlers handlers, final DocRef dashboard) {
         final ApplyDashboardChangeEvent event = new ApplyDashboardChangeEvent(Operation.CHECK, dashboard, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null);
         handlers.fireEvent(event);
         return event;
     }
 
     /// Asks for a change to be applied to a table on a dashboard, unsaved: the dashboard is opened if it isn't
-    /// open, and it isn't applied if the dashboard has changed since it was proposed (other than by changes the chat
-    /// applied) or can't be edited. It is applied on top of any unsaved changes, as it was proposed against the
-    /// dashboard with them.
+    /// open, and it isn't applied if the dashboard can't be edited. It is applied on top of the dashboard as it is
+    /// then, unsaved changes and changes made since it was proposed included: each of its changes finds what it
+    /// changes again (failing, all or none, if that has gone), and a query expression it replaces must be as it was.
     ///
     /// @param handlers      Where to fire it.
     /// @param dashboard     The dashboard.
     /// @param componentId   The table's component id.
     /// @param componentName The table's name as the user sees it.
     /// @param changes       The changes, in order.
-    /// @param snapshotHash  The hash of the dashboard's settings when the change was proposed.
     /// @param approver      Asked just before the change is applied (e.g. to record it on the server).
     /// @param onApplied     Called once it has been applied.
     /// @param onNotApplied  Called with why it wasn't applied, or null if the user chose not to.
@@ -123,13 +149,12 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
                                                       final String componentId,
                                                       final String componentName,
                                                       final List<TableChange> changes,
-                                                      final String snapshotHash,
                                                       final Approver approver,
                                                       final Runnable onApplied,
                                                       final Consumer<String> onNotApplied,
                                                       final String undoKey) {
         final ApplyDashboardChangeEvent event = new ApplyDashboardChangeEvent(Operation.APPLY, dashboard,
-                componentId, componentName, changes, snapshotHash, approver, onApplied, onNotApplied, undoKey);
+                componentId, componentName, changes, approver, onApplied, onNotApplied, undoKey);
         handlers.fireEvent(event);
         return event;
     }
@@ -144,7 +169,7 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
                                                         final DocRef dashboard,
                                                         final String undoKey) {
         final ApplyDashboardChangeEvent event = new ApplyDashboardChangeEvent(Operation.CAN_UNDO, dashboard, null,
-                null, null, null, null, null, null, undoKey);
+                null, null, null, null, null, undoKey);
         handlers.fireEvent(event);
         return event;
     }
@@ -160,40 +185,9 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
                                                      final DocRef dashboard,
                                                      final String undoKey) {
         final ApplyDashboardChangeEvent event = new ApplyDashboardChangeEvent(Operation.UNDO, dashboard, null,
-                null, null, null, null, null, null, undoKey);
+                null, null, null, null, null, undoKey);
         handlers.fireEvent(event);
         return event;
-    }
-
-    /// Works out what to do with a change, once its dashboard is open.
-    ///
-    /// @param editable     True if the user can edit the dashboard.
-    /// @param currentHash  The hash of the dashboard's settings now.
-    /// @param proposedHash The hash of its settings when the change was proposed.
-    /// @param appliedFrom  For each change the chat applied to the dashboard (and that wasn't undone), the hash of
-    ///                     its settings just after the change mapped to the hash just before it. May be null.
-    /// @return What to do. A change is applied to the dashboard as the user has it, unsaved changes included, as
-    /// those are what it was proposed against, or on top of changes the chat applied since it was proposed (its
-    /// changes are applied all or none, so one that clashes with them still fails, saying why); never to a
-    /// dashboard that has been changed some other way since it was proposed.
-    public static Decision decide(final boolean editable,
-                                  final String currentHash,
-                                  final String proposedHash,
-                                  final Map<String, String> appliedFrom) {
-        if (!editable) {
-            return Decision.NOT_EDITABLE;
-        }
-        // Walks back from the dashboard now through the changes the chat applied, to the one proposed against.
-        // Each step goes back one change, so there are no more steps than changes (whatever loops they make).
-        final Map<String, String> applied = NullSafe.map(appliedFrom);
-        String hash = currentHash;
-        for (int step = 0; hash != null && step <= applied.size(); step++) {
-            if (hash.equalsIgnoreCase(proposedHash)) {
-                return Decision.APPLY;
-            }
-            hash = applied.get(hash);
-        }
-        return Decision.CHANGED;
     }
 
     /// @return The event's type.
@@ -237,11 +231,6 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
     /// @return The changes, in order.
     public List<TableChange> getChanges() {
         return changes;
-    }
-
-    /// @return The hash of the dashboard's settings when the change was proposed.
-    public String getSnapshotHash() {
-        return snapshotHash;
     }
 
     /// @return What the change is known by, to undo it, or null.
@@ -325,20 +314,6 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
     // --------------------------------------------------------------------------------
 
 
-    /// What to do with a change, once its dashboard is open.
-    public enum Decision {
-        /// Refuse it: the user can't edit the dashboard.
-        NOT_EDITABLE,
-        /// Refuse it: the dashboard has changed since it was proposed.
-        CHANGED,
-        /// Apply it.
-        APPLY
-    }
-
-
-    // --------------------------------------------------------------------------------
-
-
     /// What is asked of the dashboards.
     public enum Operation {
         /// Say whether the dashboard is open and can be edited.
@@ -348,7 +323,9 @@ public class ApplyDashboardChangeEvent extends GwtEvent<ApplyDashboardChangeEven
         /// Say whether an applied change can be undone.
         CAN_UNDO,
         /// Undo an applied change.
-        UNDO
+        UNDO,
+        /// Read a table's extraction pipeline.
+        READ_EXTRACTION
     }
 
 

@@ -1,10 +1,10 @@
 # The built-in tools the model is shown
 
-Built-in tools: 47
+Built-in tools: 51
 
 ## Offered in each mode (in a chat with no MCP servers)
 
-### AGENT (47 tool(s))
+### AGENT (51 tool(s))
 ask_user
 config_properties
 current_results
@@ -25,16 +25,20 @@ get_utc_time_offset
 grep
 jq
 list_data_sources
+list_visualisations
 ls
 memory
 pipeline
+preview_extraction
 processor_tasks
 propose_code_change
 propose_dashboard
 propose_dashboard_change
 propose_documentation_change
+propose_extraction_pipeline
 propose_query
 propose_query_change
+propose_visualisation
 read_document
 read_file
 read_turn
@@ -53,7 +57,7 @@ write_file
 xpath
 xslt_lookups
 
-### ASK (43 tool(s))
+### ASK (47 tool(s))
 ask_user
 config_properties
 current_results
@@ -73,15 +77,19 @@ get_utc_time_offset
 grep
 jq
 list_data_sources
+list_visualisations
 ls
 pipeline
+preview_extraction
 processor_tasks
 propose_code_change
 propose_dashboard
 propose_dashboard_change
 propose_documentation_change
+propose_extraction_pipeline
 propose_query
 propose_query_change
+propose_visualisation
 read_document
 read_file
 read_turn
@@ -98,7 +106,7 @@ wc
 xpath
 xslt_lookups
 
-### PLAN (43 tool(s))
+### PLAN (47 tool(s))
 ask_user
 config_properties
 current_results
@@ -118,15 +126,19 @@ get_utc_time_offset
 grep
 jq
 list_data_sources
+list_visualisations
 ls
 pipeline
+preview_extraction
 processor_tasks
 propose_code_change
 propose_dashboard
 propose_dashboard_change
 propose_documentation_change
+propose_extraction_pipeline
 propose_query
 propose_query_change
+propose_visualisation
 read_document
 read_file
 read_turn
@@ -291,7 +303,7 @@ Takes a snapshot of the rows of a table of results shown in the tab the user att
 {
   "properties" : {
     "refresh" : {
-      "description" : "Optional. Run the search again, as the tab now stands, and take a new snapshot. Only with the user's yes.",
+      "description" : "Optional. Run the search again, as the tab now stands, and take a new snapshot. Only with the user's yes to running it again, for this question.",
       "type" : "boolean"
     },
     "rows" : {
@@ -950,6 +962,28 @@ Lists the data sources the user can run StroomQL queries on (views, indexes, Ela
 }
 
 ================================================================================
+## list_visualisations
+
+isReadOnly: true
+readsUntrustedContent: false
+boundsItsOutput: true
+strict: null
+metadata: { }
+offered in modes: AGENT, ASK, PLAN
+
+### Description
+
+Lists the charting libraries installed in Stroom (ECharts and the visualisations content pack's D3 ones), the chart kinds that can be generated with each (bar, line, pie, scatter, network graph) with the table columns and style settings each takes, and the Visualisation docs already in Stroom. Call it before propose_visualisation, and ask the user which library to use when more than one is installed.
+
+### Parameters
+
+{
+  "properties" : { },
+  "required" : [ ],
+  "type" : "object"
+}
+
+================================================================================
 ## ls
 
 isReadOnly: true
@@ -1069,6 +1103,64 @@ Runs data tool steps one after another, each on the file the step before wrote, 
     }
   },
   "required" : [ "steps" ],
+  "type" : "object"
+}
+
+================================================================================
+## preview_extraction
+
+isReadOnly: true
+readsUntrustedContent: true
+boundsItsOutput: true
+strict: null
+metadata: { }
+offered in modes: AGENT, ASK, PLAN
+
+### Description
+
+Tries a search extraction for a dashboard table on some of its events, before one is made, to add values from the events (not indexed) to the table: give the fields to extract, each a name, the XPath of its value from the event element (unprefixed, e.g. EventSource/User/Id or @Id), and a type (text, number or date). Stroom writes the XSLT from them; it gives each event's StreamId and EventId too. Turning extraction on fills every value in the table from it, so give every field the table's columns use (their XPaths, e.g. from the XSLT that indexes them); the result says which are missing. For a table with an extraction pipeline already, it is tried as a change to that pipeline's XSLT: if Stroom AI wrote it, give every field it is to give (it is written again from them, so fields can be removed or changed); if it was written by hand, give only the fields to add. It returns a table of the values extracted from each event, with what to check (a field the data source has too, values not found, values of the wrong type, values that differ from those the table shows now). It changes nothing. XPaths may use only plain string and number functions. It writes the XSLT to /outputs/extraction.xsl. The events are the rows of a snapshot of the table with StreamId and EventId: current_results with withEventIds first (ask the user, as it runs the search again), and give its path. Show the user the preview table, and agree the fields with them, before offering to make the extraction.
+
+### Parameters
+
+{
+  "properties" : {
+    "fields" : {
+      "description" : "The fields to extract, besides StreamId and EventId.",
+      "items" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name, as columns name it in ${...}.",
+            "type" : "string"
+          },
+          "type" : {
+            "description" : "Its type (default text).",
+            "enum" : [ "text", "number", "date" ],
+            "type" : "string"
+          },
+          "xpath" : {
+            "description" : "The XPath of its value, from the event element, unprefixed; the first value it finds is taken.",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "xpath" ],
+        "type" : "object"
+      },
+      "type" : "array"
+    },
+    "limit" : {
+      "description" : "How many events to try it on, from the first rows (default 10, at most 50).",
+      "type" : "integer"
+    },
+    "path" : {
+      "description" : "The snapshot of the table's rows with StreamId and EventId, from current_results with withEventIds.",
+      "type" : "string"
+    },
+    "table" : {
+      "description" : "The dashboard table, by its name as the user sees it.",
+      "type" : "string"
+    }
+  },
+  "required" : [ "table", "path", "fields" ],
   "type" : "object"
 }
 
@@ -1286,7 +1378,7 @@ offered in modes: AGENT, ASK, PLAN
 
 ### Description
 
-While the tab the user attached is a dashboard, proposes a change to one of its tables: group or ungroup, add_column, edit_column, move_column, hide_column, show_column, sort, or filter, applied in order; set_expression, which replaces the expression of the classic query that feeds the table (give its conditions in where, and show the user the expression, never StroomQL); add_table, which adds a table as a tab beside it, fed by the same query, that the changes after it set up by naming it as their table (e.g. a tab per event category: add_table, its columns, and a filter on the category column); add_text, which adds a Text widget below the table (or a table added before it, named as its table) showing the event of the selected row, that later set_setting changes can set up by naming it as their target; add_format_rule or remove_format_rule, for the table's conditional formatting (rows matching conditions on its columns coloured, bold, italic or hidden); rename, which renames any component and its tab; or set_setting, which changes a setting of any table, query or text component, as its Settings dialog has it. The user is shown the changes with an 'Apply to dashboard' button; nothing changes until they click it, and it is never saved. Columns and the table are named as the user sees them. Expressions are checked first; an invalid change is refused with the reason.
+While the tab the user attached is a dashboard, proposes a change to one of its tables: group or ungroup, add_column, edit_column, move_column, hide_column, show_column, sort, or filter, applied in order; set_expression, which replaces the expression of the classic query that feeds the table (give its conditions in where, and show the user the expression, never StroomQL); add_table, which adds a table as a tab beside it, fed by the same query, that the changes after it set up by naming it as their table (e.g. a tab per event category: add_table, its columns, and a filter on the category column); add_text, which adds a Text widget below the table (or a table added before it, named as its table) showing the event of the selected row, that later set_setting changes can set up by naming it as their target; add_vis, which adds a Visualisation component linked to the table (or a table added before it), below it or as a tab beside it, showing an existing Visualisation document by its UUID (e.g. one of the content pack's D3 visualisations) with settings for its controls; set_vis_settings, which changes the controls of a Visualisation component, or the Visualisation it shows; add_selection_filter, which filters a query's search or a table's rows by what the user clicks on a chart (a slice, bar, point or node); remove_selection_filter, which removes one (by its id in the dashboard file; to change one, remove it and add the new one in the same proposal); add_format_rule or remove_format_rule, for the table's conditional formatting (rows matching conditions on its columns coloured, bold, italic or hidden); rename, which renames any component and its tab; or set_setting, which changes a setting of any table, query or text component, as its Settings dialog has it. The user is shown the changes with an 'Apply to dashboard' button; nothing changes until they click it, and it is never saved. Columns and the table are named as the user sees them. Expressions are checked first; an invalid change is refused with the reason.
 
 ### Parameters
 
@@ -1299,6 +1391,10 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
           "bold" : {
             "description" : "For add_format_rule: make matching rows bold.",
             "type" : "boolean"
+          },
+          "chart" : {
+            "description" : "For add_selection_filter: the Visualisation component whose selection (what the user clicks on it) filters the target.",
+            "type" : "string"
           },
           "column" : {
             "description" : "The column, by its name as the user sees it (not for add_column, add_table or set_expression).",
@@ -1341,7 +1437,7 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
             "type" : "string"
           },
           "filter" : {
-            "description" : "For filter: the column's filter text, as its filter box takes it; empty to clear it.",
+            "description" : "For filter: the column's filter text, as its filter box takes it; empty to clear it. For remove_selection_filter: the filter's id, as the dashboard file gives it (e.g. ab12c from [id ab12c]).",
             "type" : "string"
           },
           "format" : {
@@ -1367,17 +1463,27 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
             "type" : "integer"
           },
           "match" : {
-            "description" : "For add_format_rule: whether a row must meet all the conditions (the default) or any of them.",
+            "description" : "For add_format_rule: whether a row must meet all the conditions (the default) or any of them. For add_selection_filter: whether all its terms must hold (the default) or any. With any, a clicked link's source and target terms still hold together, so one filter can match a clicked node at either end or a clicked link. A link of an undirected graph or a chord diagram matches either way round, as the chart sends it both ways. Several filters on one target match when any of them does.",
             "enum" : [ "all", "any" ],
             "type" : "string"
           },
+          "mode" : {
+            "description" : "For add_selection_filter: query filters the target's search, re-run as the selection changes, so every table it feeds narrows, the chart's own too (its fields are the query's); table filters the target table's rows and the chart stays whole (its fields are the table's columns). Ask the user which if they haven't said.",
+            "enum" : [ "query", "table" ],
+            "type" : "string"
+          },
           "name" : {
-            "description" : "For add_column: the new column's name. For edit_column: its new name. For add_table or add_text: the new component's name. For rename: the new name.",
+            "description" : "For add_column: the new column's name. For edit_column: its new name. For add_table, add_text or add_vis: the new component's name. For rename: the new name.",
             "type" : "string"
           },
           "op" : {
             "description" : "What to do.",
-            "enum" : [ "group", "ungroup", "add_column", "edit_column", "move_column", "hide_column", "show_column", "sort", "filter", "set_expression", "add_table", "add_text", "rename", "set_setting", "add_format_rule", "remove_format_rule" ],
+            "enum" : [ "group", "ungroup", "add_column", "edit_column", "move_column", "hide_column", "show_column", "sort", "filter", "set_expression", "add_table", "add_text", "add_vis", "set_vis_settings", "add_selection_filter", "remove_selection_filter", "rename", "set_setting", "add_format_rule", "remove_format_rule" ],
+            "type" : "string"
+          },
+          "placement" : {
+            "description" : "For add_vis: charts (the default) for a tab with the dashboard's charts, or at its bottom if it has none; bottom for a new pane at the bottom of the dashboard; below for a new pane below the table; tab for a tab beside it. Give one only if the user asks.",
+            "enum" : [ "charts", "bottom", "below", "tab" ],
             "type" : "string"
           },
           "position" : {
@@ -1389,8 +1495,14 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
             "type" : "integer"
           },
           "setting" : {
-            "description" : "For set_setting: the setting. Table: pageSize (rows per page); maxResults (the most rows at each group level, e.g. 1000,10 (the top level first)); showDetail (show the detail rows (events) under grouped rows, which a Text widget needs to show an event); extractValues (extract values with the extraction pipeline); extractionPipeline (the extraction pipeline (its UUID)); showValueFilters (show the row of column filters); query (the query that feeds it (a query component's name)); maxStringFieldLength (the longest text a cell shows). Query: dataSource (the data source (its name or UUID)); queryOnOpen (run the query when the dashboard opens); autoRefresh (run the query again on a timer); refreshInterval (how often to refresh, e.g. 30s, 10m or 1h). Text: table (the table whose selected row it shows (a table's name, or none for any)); pipeline (the pipeline it shows the data through (its UUID, or none for the raw data)); showAsHtml (show the data as HTML); showStepping (show the stepping button).",
+            "description" : "For set_setting: the setting. Table: pageSize (rows per page); maxResults (the most rows at each group level, e.g. 1000,10 (the top level first)); showDetail (show the detail rows (events) under grouped rows, which a Text widget needs to show an event); extractValues (extract values with the extraction pipeline); extractionPipeline (the extraction pipeline (its UUID)); showValueFilters (show the row of column filters); query (the query that feeds it (a query component's name)); maxStringFieldLength (the longest text a cell shows). Query: dataSource (the data source (its name or UUID)); queryOnOpen (run the query when the dashboard opens); autoRefresh (run the query again on a timer); refreshInterval (how often to refresh, e.g. 30s, 10m or 1h). Embedded Query: queryOnOpen (run the query when the dashboard opens); autoRefresh (run the query again on a timer); refreshInterval (how often to refresh, e.g. 30s, 10m or 1h). Text: table (the table whose selected row it shows (a table's name, or none for any)); pipeline (the pipeline it shows the data through (its UUID, or none for the raw data)); showAsHtml (show the data as HTML); showStepping (show the stepping button).",
             "type" : "string"
+          },
+          "settings" : {
+            "description" : "For add_vis or set_vis_settings: the Visualisation's settings, as an object of its control ids and their values as text, e.g. {\"category\": \"UserId\", \"value\": \"Count\"}. A field control's value is a column of the linked table. For set_vis_settings, only the controls to change; an empty value puts a control back to its default.",
+            "properties" : { },
+            "required" : [ ],
+            "type" : "object"
           },
           "style" : {
             "description" : "For add_format_rule: the colour to give matching rows.",
@@ -1398,15 +1510,37 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
             "type" : "string"
           },
           "table" : {
-            "description" : "The table the change is to, if not the component: only a table an earlier add_table in these changes adds. For add_text: the table it follows (default the component).",
+            "description" : "The table the change is to, if not the component: only a table an earlier add_table in these changes adds. For add_text: the table it follows (default the component). For add_vis: the table it is linked to (default the component).",
             "type" : "string"
           },
           "target" : {
-            "description" : "For rename or set_setting: the component (table, query or text), by its name as the user sees it; default the component.",
+            "description" : "For rename or set_setting: the component (table, query or text), by its name as the user sees it; default the component. For set_vis_settings: the Visualisation component. For add_selection_filter: the query, embedded query or table to filter; for remove_selection_filter, the one it filters.",
             "type" : "string"
+          },
+          "terms" : {
+            "description" : "For add_selection_filter: each field and the selection it must equal. A term drops out while nothing is selected. A date field or column given a date the chart selects (a time axis's x, a calendar's date, or any column the table formats as Date Time), or selection range, keeps it within the selected time: the range dragged along a time axis (or across bars of dates), or the time a clicked point stands for (e.g. its day, for floorDay() values).",
+            "items" : {
+              "properties" : {
+                "field" : {
+                  "description" : "A query field (mode query) or a column of the table (mode table).",
+                  "type" : "string"
+                },
+                "selection" : {
+                  "description" : "What the chart's selection holds to compare it with: a column id the chart maps (e.g. category, name, x, source), the table column mapped to it, or node for a network graph's node.",
+                  "type" : "string"
+                }
+              },
+              "required" : [ "field", "selection" ],
+              "type" : "object"
+            },
+            "type" : "array"
           },
           "value" : {
             "description" : "For set_setting: its value (true or false, a number, a pipeline's UUID, a data source's name or UUID, a component's name, or none where allowed).",
+            "type" : "string"
+          },
+          "visualisation" : {
+            "description" : "For add_vis: the UUID of the Visualisation document to show. For set_vis_settings: the UUID of one to switch to, if any.",
             "type" : "string"
           },
           "where" : {
@@ -1420,7 +1554,7 @@ While the tab the user attached is a dashboard, proposes a change to one of its 
       "type" : "array"
     },
     "component" : {
-      "description" : "The table the changes are for, by its name as the user sees it. Changes to other components name them as their target.",
+      "description" : "The table the changes are for, by its name as the user sees it. Changes to other components name them as their target. Or an embedded query's name, for set_setting and rename changes only.",
       "type" : "string"
     },
     "summary" : {
@@ -1482,6 +1616,64 @@ Proposes a change to the documentation of a Stroom document given its UUID: the 
     }
   },
   "required" : [ "uuid", "summary" ],
+  "type" : "object"
+}
+
+================================================================================
+## propose_extraction_pipeline
+
+isReadOnly: true
+readsUntrustedContent: true
+boundsItsOutput: true
+strict: null
+metadata: { }
+offered in modes: AGENT, ASK, PLAN
+
+### Description
+
+Offers the user a button to make a search extraction for a dashboard table, to add values from its events to it: an XSLT, which Stroom writes from the fields, and a pipeline using it. When the user clicks it and chooses the name and folder, it is written, and the table set to use it, with a column for each new field, unsaved. Nothing changes unless they do. For a table with an extraction pipeline already, it offers to change that pipeline in place, or to save a new one from the Search Extraction template: give every field, if Stroom AI wrote its XSLT; only those to add, if it was written by hand. Give the fields exactly as you last tried them with preview_extraction for this table (it is refused otherwise), once the user has seen its preview and agreed them. Tell the user about the button(s) rather than saying it was made.
+
+### Parameters
+
+{
+  "properties" : {
+    "fields" : {
+      "description" : "The fields to extract, besides StreamId and EventId, as tried.",
+      "items" : {
+        "properties" : {
+          "name" : {
+            "description" : "The field's name.",
+            "type" : "string"
+          },
+          "type" : {
+            "description" : "Its type (default text).",
+            "enum" : [ "text", "number", "date" ],
+            "type" : "string"
+          },
+          "xpath" : {
+            "description" : "The XPath of its value, from the event element.",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "xpath" ],
+        "type" : "object"
+      },
+      "type" : "array"
+    },
+    "name" : {
+      "description" : "The name to suggest for the new pipeline and its XSLT, e.g. 'Logons extraction'; the user may change it.",
+      "type" : "string"
+    },
+    "summary" : {
+      "description" : "A sentence saying what it adds to the table, shown with the button.",
+      "type" : "string"
+    },
+    "table" : {
+      "description" : "The dashboard table, by its name as the user sees it.",
+      "type" : "string"
+    }
+  },
+  "required" : [ "table", "fields", "name" ],
   "type" : "object"
 }
 
@@ -1548,6 +1740,420 @@ While the tab the user attached is a StroomQL Query, offers them an 'Apply to qu
     }
   },
   "required" : [ "query", "summary" ],
+  "type" : "object"
+}
+
+================================================================================
+## propose_visualisation
+
+isReadOnly: true
+readsUntrustedContent: true
+boundsItsOutput: true
+strict: null
+metadata: { }
+offered in modes: AGENT, ASK, PLAN
+
+### Description
+
+Plans a chart of a table on the dashboard, or of the StroomQL query, the user attached, checks the table's rows can make it, and offers it. With library echarts or d3 it offers a 'Create visualisation' button: the user names it and picks its folder (the dashboard's, by default) in Stroom's own dialog, and it is then added to the dashboard below the table (or to the query's show clause), unsaved, updating as the table does. With library content-pack it gives the change that wires the content pack's existing D3 Visualisation to the table, for you to propose. Call list_visualisations first to see which libraries are installed and each kind's inputs, and ask the user which library to use (ask_user) when more than one is. If the data can't make the chart, nothing is offered: tell the user why and suggest the fix the result gives. When the table already has a chart Stroom AI generated (e.g. the user asks for it as another kind of chart), ask the user (ask_user) whether to replace it or add a new one, unless they have said, and give replace or addNew. Before proposing a chart on a dashboard, ask the user (ask_user) how its clicks should filter the dashboard (the whole dashboard, one table, or nothing), unless they have said, and give filter: it is added with the chart. When no table has the columns the chart needs, give newTable: the chart's button adds the table with it, so don't propose the table first. You never write the chart's code or settings JSON: Stroom builds them.
+
+### Parameters
+
+{
+  "properties" : {
+    "addNew" : {
+      "description" : "Optional. True to add the chart as a new one when the table already has a chart Stroom AI generated, once the user has chosen that over replacing it.",
+      "type" : "boolean"
+    },
+    "charts" : {
+      "description" : "Echarts or d3, on a dashboard. Several charts at once, of any kinds and tables (e.g. a gauge per column, or a line per metric), up to 12, offered with one 'Create visualisations' button: the user picks one folder and each is created, named as given. Give these instead of kind and columns (and give layout).",
+      "items" : {
+        "properties" : {
+          "columns" : {
+            "description" : "The table column for each input, as the top-level columns takes them.",
+            "properties" : { },
+            "required" : [ ],
+            "type" : "object"
+          },
+          "componentName" : {
+            "description" : "Optional. Its pane's name.",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "The chart kind.",
+            "enum" : [ "bar", "line", "pie", "scatter", "graph", "heatmap", "calendar", "histogram", "sankey", "chord", "gauge", "sunburst" ],
+            "type" : "string"
+          },
+          "name" : {
+            "description" : "The new Visualisation's name, saying what it shows.",
+            "type" : "string"
+          },
+          "options" : {
+            "description" : "Optional. Option overrides as a JSON object.",
+            "type" : "string"
+          },
+          "style" : {
+            "description" : "Optional style settings, as the top-level style takes them.",
+            "properties" : { },
+            "required" : [ ],
+            "type" : "object"
+          },
+          "table" : {
+            "description" : "Optional. The table it draws, when the dashboard has several.",
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "columns", "name" ],
+        "type" : "object"
+      },
+      "type" : "array"
+    },
+    "columns" : {
+      "description" : "The table column for each of the chart kind's inputs, by input. list_visualisations gives each kind's inputs. Give the column names exactly as the table has them.",
+      "properties" : {
+        "category" : {
+          "description" : "The column for category.",
+          "type" : "string"
+        },
+        "date" : {
+          "description" : "The column for date.",
+          "type" : "string"
+        },
+        "level2" : {
+          "description" : "The column for level2.",
+          "type" : "string"
+        },
+        "level3" : {
+          "description" : "The column for level3.",
+          "type" : "string"
+        },
+        "level4" : {
+          "description" : "The column for level4.",
+          "type" : "string"
+        },
+        "level5" : {
+          "description" : "The column for level5.",
+          "type" : "string"
+        },
+        "level6" : {
+          "description" : "The column for level6.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The column for name.",
+          "type" : "string"
+        },
+        "series" : {
+          "description" : "The column for series.",
+          "type" : "string"
+        },
+        "size" : {
+          "description" : "The column for size.",
+          "type" : "string"
+        },
+        "source" : {
+          "description" : "The column for source.",
+          "type" : "string"
+        },
+        "sourceGroup" : {
+          "description" : "The column for sourceGroup.",
+          "type" : "string"
+        },
+        "target" : {
+          "description" : "The column for target.",
+          "type" : "string"
+        },
+        "targetGroup" : {
+          "description" : "The column for targetGroup.",
+          "type" : "string"
+        },
+        "value" : {
+          "description" : "The column for value.",
+          "type" : "string"
+        },
+        "weight" : {
+          "description" : "The column for weight.",
+          "type" : "string"
+        },
+        "x" : {
+          "description" : "The column for x.",
+          "type" : "string"
+        },
+        "y" : {
+          "description" : "The column for y.",
+          "type" : "string"
+        }
+      },
+      "required" : [ ],
+      "type" : "object"
+    },
+    "componentName" : {
+      "description" : "Optional. The name of the chart's pane on the dashboard; the Visualisation's name by default.",
+      "type" : "string"
+    },
+    "filter" : {
+      "description" : "Optional, echarts or d3 on a dashboard. How a click on the new chart filters the dashboard (a selection filter on a query's search or a table's rows), added with the chart by its button. As propose_dashboard_change's add_selection_filter, without chart. Before proposing a chart that can filter, ask the user (ask_user) how its clicks should: the whole dashboard (the query), one table, or nothing; give it unless they choose nothing.",
+      "properties" : {
+        "match" : {
+          "description" : "All its terms must hold (the default), or any.",
+          "enum" : [ "all", "any" ],
+          "type" : "string"
+        },
+        "mode" : {
+          "description" : "query filters the target's search; table the target table's rows.",
+          "enum" : [ "query", "table" ],
+          "type" : "string"
+        },
+        "target" : {
+          "description" : "The query, embedded query or table to filter (or the new table).",
+          "type" : "string"
+        },
+        "terms" : {
+          "items" : {
+            "properties" : {
+              "field" : {
+                "description" : "A query field (mode query) or a column of the target table (mode table).",
+                "type" : "string"
+              },
+              "selection" : {
+                "description" : "What the chart selects to compare it with: an input (e.g. category, series, x) or its column's name.",
+                "type" : "string"
+              }
+            },
+            "required" : [ "field", "selection" ],
+            "type" : "object"
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [ "mode", "target", "terms" ],
+      "type" : "object"
+    },
+    "kind" : {
+      "description" : "The chart kind: bar (one bar per category, grouped or stacked by series); line (one line per series over x; a time axis when x is a date); pie (slices of a whole; a doughnut as an option); scatter (points placed by two numbers or dates, optionally sized by a third); graph (a force-directed graph of links between things; each node is sized by its number of connections, or its links' total (nodeSize); each link is as wide as its weight, or the rows it comes from); heatmap (a grid with a cell for each x and y pair, coloured by its value); calendar (a calendar of days, each coloured by its value); histogram (how a number is spread: bars counting the rows in each range of it); sankey (flows from one thing to the next, each as wide as how much flows); chord (links between things round a circle, each as wide as its weight); gauge (a dial showing a value against its range; one per name, when a name column is mapped); sunburst (rings of a whole: the inner ring by name, each ring out splitting the one inside it by a further column).",
+      "enum" : [ "bar", "line", "pie", "scatter", "graph", "heatmap", "calendar", "histogram", "sankey", "chord", "gauge", "sunburst" ],
+      "type" : "string"
+    },
+    "layout" : {
+      "description" : "With charts: how they are arranged on the dashboard: row (side by side), column (one below another), grid (rows of up to 3) or tabs (stacked as tabs in one pane). Ask the user unless they have said.",
+      "enum" : [ "row", "column", "grid", "tabs" ],
+      "type" : "string"
+    },
+    "library" : {
+      "description" : "The charting library to draw it with: echarts or d3 to generate the chart, or content-pack to wire one of the content pack's existing D3 Visualisations to the table.",
+      "enum" : [ "echarts", "d3", "content-pack" ],
+      "type" : "string"
+    },
+    "name" : {
+      "description" : "Echarts or d3. The name to suggest for the new Visualisation, saying what it shows, e.g. 'Chat user connections'. The user confirms or changes it.",
+      "type" : "string"
+    },
+    "newTable" : {
+      "description" : "Optional, echarts or d3 on a dashboard. When no table has the columns the chart needs: a new table to chart, added beside table (fed by the same query): add_table (copy false) first, then its columns (add_column, group, sort, ... each with table set to its name). One button adds the table, the chart (and its filter) together, so don't propose the table first. Its rows aren't known until its query runs, so only its columns are checked. With replace, the chart replaced is moved to the new table. The changes are as propose_dashboard_change takes them.",
+      "items" : {
+        "description" : "A change to the dashboard. As propose_dashboard_change takes them.",
+        "properties" : { },
+        "required" : [ ],
+        "type" : "object"
+      },
+      "type" : "array"
+    },
+    "options" : {
+      "description" : "Optional, echarts or d3. Option overrides as a JSON object, for what the style settings can't do, e.g. {\"color\": [\"#5470c6\", \"#91cc75\"]}: ECharts option keys, or for d3 only color. Only plain JSON: no functions, HTML or URLs.",
+      "type" : "string"
+    },
+    "placement" : {
+      "description" : "Optional, only if the user asks. Where the chart goes on the dashboard: charts (the default) as a tab with the dashboard's charts, or at its bottom if it has none; bottom in a new pane at the bottom of the dashboard; below in a new pane below the table; tab as a tab beside the table.",
+      "enum" : [ "charts", "bottom", "below", "tab" ],
+      "type" : "string"
+    },
+    "replace" : {
+      "description" : "Optional, echarts or d3 on a dashboard. The name of the Visualisation pane whose chart (one Stroom AI generated, of the same table) the new one replaces: its Visualisation is rewritten for the new chart and renamed to name, saved at once, and it stays in its pane. Give it, or addNew, once the user has chosen.",
+      "type" : "string"
+    },
+    "style" : {
+      "description" : "Optional style settings, by setting. list_visualisations gives each kind's settings and their values. Leave out settings to keep their defaults.",
+      "properties" : {
+        "area" : {
+          "description" : "The value for area, as text.",
+          "type" : "string"
+        },
+        "autoInterval" : {
+          "description" : "The value for autoInterval, as text.",
+          "type" : "string"
+        },
+        "averageLine" : {
+          "description" : "The value for averageLine, as text.",
+          "type" : "string"
+        },
+        "bands" : {
+          "description" : "The value for bands, as text.",
+          "type" : "string"
+        },
+        "bins" : {
+          "description" : "The value for bins, as text.",
+          "type" : "string"
+        },
+        "breakOutliers" : {
+          "description" : "The value for breakOutliers, as text.",
+          "type" : "string"
+        },
+        "clusterLinks" : {
+          "description" : "The value for clusterLinks, as text.",
+          "type" : "string"
+        },
+        "colourScale" : {
+          "description" : "The value for colourScale, as text.",
+          "type" : "string"
+        },
+        "directed" : {
+          "description" : "The value for directed, as text.",
+          "type" : "string"
+        },
+        "doughnut" : {
+          "description" : "The value for doughnut, as text.",
+          "type" : "string"
+        },
+        "gaugeMax" : {
+          "description" : "The value for gaugeMax, as text.",
+          "type" : "string"
+        },
+        "gaugeMin" : {
+          "description" : "The value for gaugeMin, as text.",
+          "type" : "string"
+        },
+        "horizontal" : {
+          "description" : "The value for horizontal, as text.",
+          "type" : "string"
+        },
+        "intervalCombine" : {
+          "description" : "The value for intervalCombine, as text.",
+          "type" : "string"
+        },
+        "jitter" : {
+          "description" : "The value for jitter, as text.",
+          "type" : "string"
+        },
+        "legend" : {
+          "description" : "The value for legend, as text.",
+          "type" : "string"
+        },
+        "logScale" : {
+          "description" : "The value for logScale, as text.",
+          "type" : "string"
+        },
+        "maxGauges" : {
+          "description" : "The value for maxGauges, as text.",
+          "type" : "string"
+        },
+        "maxNodes" : {
+          "description" : "The value for maxNodes, as text.",
+          "type" : "string"
+        },
+        "maxSeries" : {
+          "description" : "The value for maxSeries, as text.",
+          "type" : "string"
+        },
+        "maxSlices" : {
+          "description" : "The value for maxSlices, as text.",
+          "type" : "string"
+        },
+        "maxValues" : {
+          "description" : "The value for maxValues, as text.",
+          "type" : "string"
+        },
+        "nodeColours" : {
+          "description" : "The value for nodeColours, as text.",
+          "type" : "string"
+        },
+        "nodeSize" : {
+          "description" : "The value for nodeSize, as text.",
+          "type" : "string"
+        },
+        "orient" : {
+          "description" : "The value for orient, as text.",
+          "type" : "string"
+        },
+        "physics" : {
+          "description" : "The value for physics, as text.",
+          "type" : "string"
+        },
+        "showLabels" : {
+          "description" : "The value for showLabels, as text.",
+          "type" : "string"
+        },
+        "smooth" : {
+          "description" : "The value for smooth, as text.",
+          "type" : "string"
+        },
+        "sort" : {
+          "description" : "The value for sort, as text.",
+          "type" : "string"
+        },
+        "stack" : {
+          "description" : "The value for stack, as text.",
+          "type" : "string"
+        },
+        "threshold" : {
+          "description" : "The value for threshold, as text.",
+          "type" : "string"
+        },
+        "thresholdLabel" : {
+          "description" : "The value for thresholdLabel, as text.",
+          "type" : "string"
+        },
+        "thumbnail" : {
+          "description" : "The value for thumbnail, as text.",
+          "type" : "string"
+        },
+        "trendLine" : {
+          "description" : "The value for trendLine, as text.",
+          "type" : "string"
+        },
+        "trendWindow" : {
+          "description" : "The value for trendWindow, as text.",
+          "type" : "string"
+        },
+        "units" : {
+          "description" : "The value for units, as text.",
+          "type" : "string"
+        },
+        "xAxisName" : {
+          "description" : "The value for xAxisName, as text.",
+          "type" : "string"
+        },
+        "yAxisName" : {
+          "description" : "The value for yAxisName, as text.",
+          "type" : "string"
+        },
+        "zoomSlider" : {
+          "description" : "The value for zoomSlider, as text.",
+          "type" : "string"
+        }
+      },
+      "required" : [ ],
+      "type" : "object"
+    },
+    "summary" : {
+      "description" : "A sentence saying what the chart shows, shown with the button.",
+      "type" : "string"
+    },
+    "table" : {
+      "description" : "Optional. The dashboard table (or embedded query) to chart, by the name the user sees, when the dashboard has several.",
+      "type" : "string"
+    },
+    "tableChanges" : {
+      "description" : "Optional, echarts or d3 on a dashboard. When the table charted needs changing for the chart (e.g. grouped by the pair a network's links join, with a count() column for their weight): its changes (group, ungroup, add_column, edit_column, sort, filter, ... without table). One button changes the table and adds the chart (or, with replace, updates it) together, so don't propose the table change first. The changed rows aren't known until its query runs again, so only its columns are checked. Not with newTable. The changes are as propose_dashboard_change takes them.",
+      "items" : {
+        "description" : "A change to the table charted. As propose_dashboard_change takes them.",
+        "properties" : { },
+        "required" : [ ],
+        "type" : "object"
+      },
+      "type" : "array"
+    }
+  },
+  "required" : [ "library", "summary" ],
   "type" : "object"
 }
 

@@ -20,15 +20,25 @@ import stroom.ai.api.AiService;
 import stroom.ai.impl.UserActionRecord.CodeChange;
 import stroom.ai.impl.UserActionRecord.DashboardChange;
 import stroom.ai.impl.UserActionRecord.Status;
+import stroom.ai.impl.extraction.ExtractionActions;
+import stroom.ai.impl.extraction.ExtractionField;
+import stroom.ai.impl.extraction.ExtractionPlan;
 import stroom.ai.impl.tools.ToolSession;
+import stroom.ai.impl.vis.VisualisationActions;
+import stroom.ai.shared.AiChangeExtraction;
 import stroom.ai.shared.AiChatMessage;
+import stroom.ai.shared.AiCreateExtraction;
+import stroom.ai.shared.AiCreateVisualisation;
 import stroom.ai.shared.AiMessageType;
 import stroom.ai.shared.AiUserActionResult;
+import stroom.ai.shared.AiWriteExtractionRequest;
+import stroom.ai.shared.AiWriteExtractionResult;
 import stroom.docref.DocRef;
 import stroom.processor.api.ProcessorFilterService;
 import stroom.util.json.JsonUtil;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.logging.LogUtil;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.diff.DiffBlock;
 import stroom.util.shared.diff.LineDiff;
@@ -42,6 +52,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -65,6 +77,13 @@ public class UserActionService {
     static final String UNDO_DASHBOARD_COMMAND = "Undo applied dashboard change";
     static final String APPLY_DOCUMENTATION_COMMAND = "Apply proposed documentation change";
     static final String UNDO_DOCUMENTATION_COMMAND = "Undo applied documentation change";
+    static final String WRITE_EXTRACTION_COMMAND = "Write proposed search extraction";
+    /// What a written extraction's card says.
+    static final String WROTE_EXTRACTION = "Written. The table now uses it, unsaved: save the dashboard to keep it.";
+    // The outcome of an extraction button offered with another for the same extraction, once the other is used.
+    static final String OTHER_EXTRACTION_USED = "Not needed: the other button for this extraction was used.";
+    static final String CHANGED_EXTRACTION = "Written. The pipeline gives the fields now; any new columns are on the "
+                                             + "table, unsaved.";
     /// Why a proposed documentation change can't be applied, as the documentation was saved since.
     static final String DOCUMENTATION_CHANGED = "The documentation has been saved with other text since this was "
                                                 + "proposed. Ask again for a change to the current documentation.";
@@ -80,6 +99,8 @@ public class UserActionService {
     private final ProcessorFilterService processorFilterService;
     private final AiAuditLog auditLog;
     private final DashboardBuilder dashboardBuilder;
+    private final VisualisationActions visualisationActions;
+    private final ExtractionActions extractionActions;
 
     @Inject
     UserActionService(final AiService aiService,
@@ -88,7 +109,9 @@ public class UserActionService {
                       final UserActionLookup lookup,
                       final ProcessorFilterService processorFilterService,
                       final AiAuditLog auditLog,
-                      final DashboardBuilder dashboardBuilder) {
+                      final DashboardBuilder dashboardBuilder,
+                      final VisualisationActions visualisationActions,
+                      final ExtractionActions extractionActions) {
         this.aiService = aiService;
         this.aiDao = aiDao;
         this.userActions = userActions;
@@ -96,6 +119,8 @@ public class UserActionService {
         this.processorFilterService = processorFilterService;
         this.auditLog = auditLog;
         this.dashboardBuilder = dashboardBuilder;
+        this.visualisationActions = visualisationActions;
+        this.extractionActions = extractionActions;
     }
 
     /// Does a user action, if it can still be done.
@@ -133,7 +158,9 @@ public class UserActionService {
             return new AiUserActionResult(false, NOT_IN_CHAT, null);
         }
         if (action.status() != Status.PENDING) {
-            return new AiUserActionResult(false, "This has already been done.", null);
+            return new AiUserActionResult(false, OTHER_EXTRACTION_USED.equals(action.outcome())
+                    ? OTHER_EXTRACTION_USED
+                    : "This has already been done.", null);
         }
         if (System.currentTimeMillis() > action.expiresMs()) {
             return new AiUserActionResult(false, "This button has expired. Ask again for an up-to-date one.", null);
@@ -154,12 +181,125 @@ public class UserActionService {
                 changeFilter(chatId, message, result, action);
             case UserActions.CREATE_QUERY -> createQuery(chatId, action);
             case UserActions.CREATE_DASHBOARD -> createDashboard(chatId, action);
+            case UserActions.CREATE_VISUALISATION -> createVisualisation(chatId, action);
+            case UserActions.CREATE_VISUALISATIONS -> createVisualisations(chatId, action);
+            case UserActions.CREATE_EXTRACTION_PIPELINE -> createExtraction(chatId, action);
+            case UserActions.CHANGE_EXTRACTION_PIPELINE -> changeExtraction(chatId, action);
             case UserActions.APPLY_CODE_CHANGE, UserActions.APPLY_QUERY_CHANGE,
                  UserActions.APPLY_DOCUMENTATION_CHANGE -> applyCodeChange(chatId, message, result, action, rejected);
             case UserActions.APPLY_DASHBOARD_CHANGE -> applyDashboardChange(chatId, message, result, action);
             // Only shown, for the cluster admin to run. Stroom never runs these.
             default -> new AiUserActionResult(false, "Stroom does not run this action.", null);
         };
+    }
+
+    /// Writes the search extraction a `create_extraction_pipeline` button proposed (its XSLT and pipeline), with the
+    /// name and folder the user chose, or the change to a table's extraction pipeline a `change_extraction_pipeline`
+    /// button proposed (its XSLT, in place), once the user has chosen the name and folder, or written the change
+    /// they were shown, as the user. Nothing else is written: the hash of what was prepared when the button was
+    /// clicked must be that of what would be written now. The
+    /// button is claimed first, so it writes once; if the write fails, it can be used again. The browser then sets
+    /// the table up, unsaved.
+    ///
+    /// @param chatId    The chat, which the user must own.
+    /// @param messageId The tool result message the action is in.
+    /// @param actionId  The action's id.
+    /// @param request   The name and folder the user chose, and the hash of what was prepared.
+    /// @return What happened: the new pipeline and the table's changes, or why nothing was written.
+    public AiWriteExtractionResult writeExtraction(final int chatId,
+                                                   final int messageId,
+                                                   final String actionId,
+                                                   final AiWriteExtractionRequest request) {
+        aiService.verifyOwnership(chatId);
+        final AiChatMessage message = findMessage(chatId, messageId);
+        final ToolResultRecord result = message == null
+                ? null
+                : read(message.getMessage());
+        final UserActionRecord action = result == null
+                ? null
+                : find(result, actionId);
+        if (action == null || !(UserActions.CREATE_EXTRACTION_PIPELINE.equals(action.action())
+                                || UserActions.CHANGE_EXTRACTION_PIPELINE.equals(action.action()))) {
+            return AiWriteExtractionResult.failed(NOT_IN_CHAT);
+        }
+        final boolean change = UserActions.CHANGE_EXTRACTION_PIPELINE.equals(action.action());
+        if (action.status() != Status.PENDING) {
+            return AiWriteExtractionResult.failed(OTHER_EXTRACTION_USED.equals(action.outcome())
+                    ? OTHER_EXTRACTION_USED
+                    : "This has already been done.");
+        }
+        if (System.currentTimeMillis() > action.expiresMs()) {
+            return AiWriteExtractionResult.failed("This button has expired. Ask again for an up-to-date one.");
+        }
+        final String target = "the extraction of " + describeDoc(action);
+        if (action.doc() == null || lookup.find(action.doc()).isEmpty()) {
+            final String problem = "The dashboard no longer exists, or you cannot see it.";
+            auditLog.processed(ToolSession.chat(chatId), action.doc(), WRITE_EXTRACTION_COMMAND, target, problem,
+                    false);
+            return AiWriteExtractionResult.failed(problem);
+        }
+        final ExtractionPlan plan;
+        try {
+            plan = ExtractionPlan.fromJson(action.request());
+        } catch (final IllegalArgumentException e) {
+            return AiWriteExtractionResult.failed(e.getMessage());
+        }
+        // Claimed before anything is written, so a second click writes nothing; the other button offered for the
+        // same extraction (a change in place, or a new pipeline) with it, so only one is used.
+        final String claimed = update(message, otherExtractionsUsed(result, action), action.withStatus(Status.DONE,
+                change
+                        ? CHANGED_EXTRACTION
+                        : WROTE_EXTRACTION));
+        if (claimed == null) {
+            return AiWriteExtractionResult.failed("This has already been done.");
+        }
+        final ExtractionActions.Written written;
+        try {
+            written = change
+                    ? extractionActions.writeChange(action.doc(), plan, NullSafe.get(request,
+                    AiWriteExtractionRequest::getContentHash), ToolSession.chat(chatId))
+                    : extractionActions.write(action.doc(), plan, request, ToolSession.chat(chatId));
+        } catch (final RuntimeException e) {
+            final String problem = e instanceof IllegalStateException
+                    ? e.getMessage()
+                    : "The extraction couldn't be written: " + NullSafe.nonBlankStringElse(e.getMessage(),
+                            e.getClass().getSimpleName());
+            if (!(e instanceof IllegalStateException)) {
+                LOGGER.error(() -> LogUtil.message("Unable to write the extraction of {}", target), e);
+            }
+            // So the button can be used again.
+            release(chatId, messageId, actionId, claimed, message.getMessage());
+            auditLog.processed(ToolSession.chat(chatId), action.doc(), WRITE_EXTRACTION_COMMAND, target, problem,
+                    false);
+            return AiWriteExtractionResult.failed(problem);
+        }
+        final String fields = String.join(", ", plan.fields().stream().map(ExtractionField::name).toList());
+        if (change) {
+            auditLog.processed(ToolSession.chat(chatId), written.xslt(), WRITE_EXTRACTION_COMMAND, target,
+                    "Changed XSLT '" + written.xslt().getName() + "' of pipeline '" + written.pipeline().getName()
+                    + "' in place, with " + fields, true);
+            aiService.storeMessage(chatId, AiMessageType.STEER_MESSAGE, "(With a button in the chat) I confirmed "
+                                                                         + "the change: Stroom changed XSLT '"
+                                                                         + written.xslt().getName() + "' of pipeline '"
+                                                                         + written.pipeline().getName()
+                                                                         + "' in place, with " + fields
+                                                                         + ", and added any new columns to table '"
+                                                                         + plan.component() + "', unsaved.");
+            return new AiWriteExtractionResult(true, CHANGED_EXTRACTION, written.pipeline(), written.tableChanges());
+        }
+        auditLog.processed(ToolSession.chat(chatId), written.xslt(), WRITE_EXTRACTION_COMMAND, target,
+                "Created XSLT '" + written.xslt().getName() + "', extracting " + fields, true);
+        auditLog.processed(ToolSession.chat(chatId), written.pipeline(), WRITE_EXTRACTION_COMMAND, target,
+                "Created pipeline '" + written.pipeline().getName() + "' using XSLT '" + written.xslt().getName()
+                + "'", true);
+        // So the model knows on its next turn (or now, if it is working).
+        aiService.storeMessage(chatId, AiMessageType.STEER_MESSAGE, "(With a button in the chat) I created the "
+                                                                     + "extraction: Stroom wrote XSLT and pipeline '"
+                                                                     + written.pipeline().getName() + "' ("
+                                                                     + written.pipeline().getUuid() + "), "
+                                                                     + "extracting " + fields + ", and set table '"
+                                                                     + plan.component() + "' to use it, unsaved.");
+        return new AiWriteExtractionResult(true, WROTE_EXTRACTION, written.pipeline(), written.tableChanges());
     }
 
     /// Records that the user undid a proposed code change they had applied to a stepping element's editor with a
@@ -259,6 +399,104 @@ public class UserActionService {
         auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(),
                 "Opened the New Dashboard dialog", true);
         return AiUserActionResult.createDashboard(action.name(), built.config());
+    }
+
+    /// Lets the browser open Stroom's New Visualisation dialog with the suggested name in the dashboard's (or
+    /// query's) folder, giving it the Visualisation's settings, built again from the plan now, and puts the ECharts
+    /// adapter in place if it isn't. The user creates the Visualisation in the dialog, which checks their
+    /// permission to create it in the folder they choose; the browser then adds it to the dashboard (or the
+    /// query's `show` clause), unsaved. As it creates nothing the user sees, the button can be used again.
+    /// A chart replacing one Stroom AI generated has its Visualisation rewritten and renamed here instead, if the
+    /// user may edit it, and the browser shows it in the same vis component; using the button again writes the
+    /// same chart again.
+    private AiUserActionResult createVisualisation(final int chatId, final UserActionRecord action) {
+        if (action.request() == null || action.doc() == null || lookup.find(action.doc()).isEmpty()) {
+            final String problem = "The dashboard or query no longer exists, or you can't see it.";
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), problem, false);
+            return new AiUserActionResult(false, problem, null);
+        }
+        final AiCreateVisualisation create;
+        try {
+            create = visualisationActions.prepare(action.doc(), action.name(), action.request());
+        } catch (final IllegalStateException e) {
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), e.getMessage(), false);
+            return new AiUserActionResult(false, e.getMessage(), null);
+        }
+        auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(),
+                create.getReplaced() != null
+                        ? "Rewrote Visualisation '" + create.getReplaced().getName() + "' for the new chart"
+                        : "Opened the New Visualisation dialog", true);
+        return AiUserActionResult.createVisualisation(create);
+    }
+
+    /// Prepares what a proposed search extraction would write, for the browser to have written once the user chooses
+    /// its name and folder. Nothing is written here (see [#writeExtraction]), so the button can be used again (e.g.
+    /// if the user cancels the New dialog).
+    private AiUserActionResult createExtraction(final int chatId, final UserActionRecord action) {
+        if (action.request() == null || action.doc() == null || lookup.find(action.doc()).isEmpty()) {
+            final String problem = "The dashboard no longer exists, or you can't see it.";
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), problem, false);
+            return new AiUserActionResult(false, problem, null);
+        }
+        final AiCreateExtraction create;
+        try {
+            create = extractionActions.prepare(action.doc(), action.name(), ExtractionPlan.fromJson(action.request()),
+                    ToolSession.chat(chatId));
+        } catch (final IllegalArgumentException | IllegalStateException e) {
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), e.getMessage(), false);
+            return new AiUserActionResult(false, e.getMessage(), null);
+        }
+        auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(),
+                "Prepared what would be written, for the user to name", true);
+        return AiUserActionResult.createExtraction(create);
+    }
+
+    /// Shows the user a change to a dashboard table's extraction pipeline in place, to confirm: its XSLT changed, as a
+    /// diff, and the other documents that use it. Nothing is written until they confirm it (see [#writeExtraction]),
+    /// so the button stays pending.
+    private AiUserActionResult changeExtraction(final int chatId, final UserActionRecord action) {
+        if (action.request() == null || action.doc() == null || lookup.find(action.doc()).isEmpty()) {
+            final String problem = "The dashboard no longer exists, or you can't see it.";
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), problem, false);
+            return new AiUserActionResult(false, problem, null);
+        }
+        final AiChangeExtraction changeExtraction;
+        try {
+            changeExtraction = extractionActions.prepareChange(action.doc(), ExtractionPlan.fromJson(
+                    action.request()), ToolSession.chat(chatId));
+        } catch (final IllegalArgumentException | IllegalStateException e) {
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), e.getMessage(), false);
+            return new AiUserActionResult(false, e.getMessage(), null);
+        }
+        auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(),
+                "Showed the change that would be written, to confirm", true);
+        return AiUserActionResult.changeExtraction(changeExtraction);
+    }
+
+    /// Lets the browser create several planned charts: each one's Visualisation settings, built again from its plan
+    /// now, with the ECharts adapter put in place if it isn't. The browser asks the user for one folder, creates a
+    /// Visualisation for each there (checking their permission to create in it), and adds them to the dashboard,
+    /// unsaved. As it creates nothing the user sees, the button can be used again.
+    private AiUserActionResult createVisualisations(final int chatId, final UserActionRecord action) {
+        if (action.request() == null || action.doc() == null || lookup.find(action.doc()).isEmpty()) {
+            final String problem = "The dashboard no longer exists, or you can't see it.";
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), problem, false);
+            return new AiUserActionResult(false, problem, null);
+        }
+        final List<AiCreateVisualisation> creates = new ArrayList<>();
+        try {
+            for (final Object item : JsonUtil.readValue(action.request(), List.class)) {
+                final Map<?, ?> chart = (Map<?, ?>) item;
+                creates.add(visualisationActions.prepare(action.doc(), String.valueOf(chart.get("name")),
+                        String.valueOf(chart.get("plan"))));
+            }
+        } catch (final IllegalStateException | ClassCastException e) {
+            auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(), e.getMessage(), false);
+            return new AiUserActionResult(false, e.getMessage(), null);
+        }
+        auditLog.userAction(ToolSession.chat(chatId), action.action(), action.label(),
+                "Asked where to create " + creates.size() + " Visualisations", true);
+        return AiUserActionResult.createVisualisations(creates);
     }
 
     /// Lets the browser apply a proposed code change to a stepping element's editor, unsaved, if the user may edit
@@ -388,8 +626,8 @@ public class UserActionService {
     }
 
     /// Lets the browser apply a proposed change to a dashboard table, unsaved, if the user may edit the dashboard
-    /// (as changing it by hand needs). The browser has already checked the dashboard hasn't changed since the
-    /// proposal and, if it had unsaved changes, saved them with the dashboard's own Save (logged by that Save).
+    /// (as changing it by hand needs). The browser applies it on top of the dashboard as it then is, changes made
+    /// since the proposal included, refusing only what it can't find again or a query expression changed since.
     /// The button is claimed first, so it applies once. Nothing is saved here or after.
     private AiUserActionResult applyDashboardChange(final int chatId,
                                                     final AiChatMessage message,
@@ -412,6 +650,20 @@ public class UserActionService {
                                    + ", so the change can't be applied.";
             auditLog.processed(ToolSession.chat(chatId), action.doc(), APPLY_DASHBOARD_COMMAND, target, problem, false);
             return new AiUserActionResult(false, problem, null);
+        }
+        // Charts generated before a setting the change uses was added are given it first, as the browser's dashboard
+        // reads the Visualisation's settings for the controls it may set. What they show is kept; this is saved.
+        for (final DocRef chart : NullSafe.list(change.charts())) {
+            final String problem = visualisationActions.updateSettings(chart);
+            auditLog.processed(ToolSession.chat(chatId), chart, APPLY_DASHBOARD_COMMAND,
+                    "Visualisation '" + chart.getName() + "' for " + target,
+                    problem == null
+                            ? "Gave it the settings added to Stroom since it was generated, saved"
+                            : problem,
+                    problem == null);
+            if (problem != null) {
+                return new AiUserActionResult(false, problem, null);
+            }
         }
         if (update(message, result, action.withStatus(Status.DONE, APPLIED_DASHBOARD)) == null) {
             return new AiUserActionResult(false, "This has already been done.", null);
@@ -583,11 +835,65 @@ public class UserActionService {
     /// Writes the result with the action changed, if the message has not changed since it was read.
     ///
     /// @return The message's new text, or null if it had changed.
+    // Gives back a button claimed for something that then wasn't done: the message as it was, or, if it has changed
+    // since it was claimed, the button made pending again in it as it is now.
+    private void release(final int chatId,
+                         final int messageId,
+                         final String actionId,
+                         final String claimed,
+                         final String original) {
+        if (aiDao.compareAndSetMessageText(messageId, claimed, original)) {
+            return;
+        }
+        final AiChatMessage now = findMessage(chatId, messageId);
+        final ToolResultRecord result = now == null
+                ? null
+                : read(now.getMessage());
+        final UserActionRecord action = result == null
+                ? null
+                : find(result, actionId);
+        if (action == null || update(now, otherExtractionsPending(result), action.withStatus(Status.PENDING, null))
+                              == null) {
+            LOGGER.warn("Unable to make user action '{}' of message {} pending again, after it wasn't done", actionId,
+                    messageId);
+        }
+    }
+
     private String update(final AiChatMessage message, final ToolResultRecord result, final UserActionRecord action) {
         final String text = JsonUtil.writeValueAsString(replace(result, action), false);
         return aiDao.compareAndSetMessageText(message.getId(), message.getMessage(), text)
                 ? text
                 : null;
+    }
+
+    // A tool result with the other pending extraction buttons for the same extraction as one being used marked as not
+    // needed.
+    private static ToolResultRecord otherExtractionsUsed(final ToolResultRecord result,
+                                                         final UserActionRecord action) {
+        ToolResultRecord marked = result;
+        for (final UserActionRecord other : NullSafe.list(result.userActions())) {
+            if (!other.id().equals(action.id()) && isExtraction(other) && other.status() == Status.PENDING
+                && Objects.equals(other.request(), action.request())) {
+                marked = replace(marked, other.withStatus(Status.DONE, OTHER_EXTRACTION_USED));
+            }
+        }
+        return marked;
+    }
+
+    // A tool result with the extraction buttons marked as not needed made pending again.
+    private static ToolResultRecord otherExtractionsPending(final ToolResultRecord result) {
+        ToolResultRecord pending = result;
+        for (final UserActionRecord other : NullSafe.list(result.userActions())) {
+            if (isExtraction(other) && OTHER_EXTRACTION_USED.equals(other.outcome())) {
+                pending = replace(pending, other.withStatus(Status.PENDING, null));
+            }
+        }
+        return pending;
+    }
+
+    private static boolean isExtraction(final UserActionRecord action) {
+        return UserActions.CREATE_EXTRACTION_PIPELINE.equals(action.action())
+               || UserActions.CHANGE_EXTRACTION_PIPELINE.equals(action.action());
     }
 
     private static ToolResultRecord replace(final ToolResultRecord result, final UserActionRecord action) {

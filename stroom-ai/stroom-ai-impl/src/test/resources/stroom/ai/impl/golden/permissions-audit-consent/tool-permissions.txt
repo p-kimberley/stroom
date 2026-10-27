@@ -25,6 +25,15 @@ Needs: View Data
 - nothing: REFUSED or limited: Error: You don't have permission to view data, so events can't be fetched.
 - admin: runs (the same as with everything)
 
+## preview_extraction {"table":"Users","path":"/outputs/a.csv","fields":[{"name":"Org","xpath":"Org"}]}
+Needs: Stepping, View Data, View (document)
+- everything: runs: The dashboard has no table 'Users' whose search is known (an embedded query's StroomQL makes its results, so it has no extraction). It has no tables.
+- without Stepping: REFUSED or limited: You don't have the Stepping permission, so an extraction can't be tried on events. Ask an administrator for it.
+- without View Data: REFUSED or limited: You don't have permission to view data, so an extraction can't be tried on events.
+- without View (document): REFUSED or limited: You don't have permission to view this document.
+- nothing: REFUSED or limited: You don't have the Stepping permission, so an extraction can't be tried on events. Ask an administrator for it.
+- admin: runs (the same as with everything)
+
 ## stream_meta {"feeds":["TEST-FEED"],"parts":true}
 Needs: View Data
 - everything: runs: Found 0 stream(s). Wrote 0 row(s) to /outputs/stream_meta.csv; use the table tool on it to filter, group or sort. Attribute values: 0 from the database, 0 from the stream store (0 stream(s) read).
@@ -184,7 +193,14 @@ Needs: View (document)
 
 ## propose_dashboard_change {"component":"table-1","changes":[{"op":"hide_column","column":"UserId"}],"summary":"Hide the user."}
 Needs: View (document)
-- everything: runs: The dashboard has no table 'table-1'. Its tables are: .
+- everything: runs: The dashboard has no table or embedded query 'table-1'. Its tables and embedded queries are: .
+- without View (document): REFUSED or limited: You don't have permission to view this document.
+- nothing: REFUSED or limited: You don't have permission to view this document.
+- admin: runs (the same as with everything)
+
+## propose_extraction_pipeline {"table":"Users","name":"Users extraction","fields":[{"name":"Org","xpath":"Org"}]}
+Needs: View (document)
+- everything: runs: Nothing was offered: the dashboard has no table 'Users' whose search is known (an embedded query's StroomQL makes its results, so it has no extraction).
 - without View (document): REFUSED or limited: You don't have permission to view this document.
 - nothing: REFUSED or limited: You don't have permission to view this document.
 - admin: runs (the same as with everything)
@@ -219,9 +235,11 @@ Needs: View (document)
 - get_utc_time_offset: same
 - grep: same
 - jq: same
+- list_visualisations: same
 - ls: same
 - memory: same
 - pipeline: same
+- propose_visualisation: same
 - read_file: same
 - read_turn: same
 - run_stroomql: same (its data source is checked by QueryService when the search runs, mocked here)

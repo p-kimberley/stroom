@@ -18,12 +18,22 @@ package stroom.ai.impl;
 
 import stroom.ai.api.AiService;
 import stroom.ai.impl.UserActionRecord.Status;
+import stroom.ai.impl.extraction.ExtractionActions;
+import stroom.ai.impl.extraction.ExtractionField;
+import stroom.ai.impl.extraction.ExtractionPlan;
 import stroom.ai.impl.tools.ToolSession;
+import stroom.ai.impl.vis.VisualisationActions;
+import stroom.ai.shared.AiChangeExtraction;
 import stroom.ai.shared.AiChatMessage;
+import stroom.ai.shared.AiCreateExtraction;
+import stroom.ai.shared.AiCreateVisualisation;
 import stroom.ai.shared.AiMessageType;
 import stroom.ai.shared.AiUserActionResult;
+import stroom.ai.shared.AiWriteExtractionRequest;
+import stroom.ai.shared.AiWriteExtractionResult;
 import stroom.dashboard.shared.DashboardConfig;
 import stroom.docref.DocRef;
+import stroom.explorer.shared.PermissionInheritance;
 import stroom.processor.api.ProcessorFilterService;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.security.api.exception.AuthenticationException;
@@ -34,6 +44,7 @@ import stroom.util.shared.diff.LineDiffResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.util.List;
@@ -43,6 +54,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class TestUserActionService {
 
@@ -59,8 +71,10 @@ class TestUserActionService {
     private final ProcessorFilterService processorFilterService = Mockito.mock(ProcessorFilterService.class);
     private final AiAuditLog auditLog = Mockito.mock(AiAuditLog.class);
     private final DashboardBuilder dashboardBuilder = Mockito.mock(DashboardBuilder.class);
+    private final VisualisationActions visualisationActions = Mockito.mock(VisualisationActions.class);
+    private final ExtractionActions extractionActions = Mockito.mock(ExtractionActions.class);
     private final UserActionService service = new UserActionService(aiService, aiDao, new UserActions(lookup),
-            lookup, processorFilterService, auditLog, dashboardBuilder);
+            lookup, processorFilterService, auditLog, dashboardBuilder, visualisationActions, extractionActions);
 
     @BeforeEach
     void setUp() {
@@ -394,6 +408,268 @@ class TestUserActionService {
     }
 
     @Test
+    void aDashboardChangeGivesTheChartsItNamesTheirCurrentSettingsFirst() {
+        final DocRef chart = new DocRef("Visualisation", "6d1c2f0a-1b2c-4d3e-8f90-a1b2c3d4e5f6", "People");
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(lookup.canEdit(DASHBOARD)).thenReturn(true);
+        storeResult(dashboardChange(List.of(chart)));
+
+        assertThat(service.doUserAction(CHAT, MESSAGE, "dash-1").isDone()).isTrue();
+
+        Mockito.verify(visualisationActions).updateSettings(chart);
+        Mockito.verify(auditLog).processed(Mockito.eq(ToolSession.chat(CHAT)), Mockito.eq(chart),
+                Mockito.eq(UserActionService.APPLY_DASHBOARD_COMMAND), Mockito.contains("Visualisation 'People'"),
+                Mockito.contains("saved"), Mockito.eq(true));
+    }
+
+    @Test
+    void aDashboardChangeIsNotAppliedIfItsChartCantBeGivenItsSettings() {
+        final DocRef chart = new DocRef("Visualisation", "6d1c2f0a-1b2c-4d3e-8f90-a1b2c3d4e5f6", "People");
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(lookup.canEdit(DASHBOARD)).thenReturn(true);
+        Mockito.when(visualisationActions.updateSettings(chart)).thenReturn("needs Edit permission on it");
+        storeResult(dashboardChange(List.of(chart)));
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "dash-1");
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).isEqualTo("needs Edit permission on it");
+        Mockito.verify(aiDao, Mockito.never()).compareAndSetMessageText(Mockito.anyInt(), Mockito.any(),
+                Mockito.any());
+        Mockito.verify(aiService, Mockito.never()).storeMessage(Mockito.anyInt(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    void anExtractionsButtonShowsWhatWouldBeWrittenAndWritesNothing() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        final AiCreateExtraction create = new AiCreateExtraction("Logons extraction", null, DASHBOARD, "table-1",
+                "Events", "a child of the template", "<xsl:stylesheet/>", List.of("UserId"), List.of(), "x", "p",
+                null, "hash");
+        Mockito.when(extractionActions.prepare(Mockito.eq(DASHBOARD), Mockito.eq("Logons extraction"),
+                Mockito.any(), Mockito.eq(ToolSession.chat(CHAT)))).thenReturn(create);
+        storeResult(extraction());
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "extract-1");
+
+        assertThat(result.isDone()).isTrue();
+        assertThat(result.getCreateExtraction()).isSameAs(create);
+        // Nothing is written, and the button is still to be used.
+        Mockito.verify(aiDao, Mockito.never()).compareAndSetMessageText(Mockito.anyInt(), Mockito.any(),
+                Mockito.any());
+        Mockito.verify(extractionActions, Mockito.never()).write(Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any());
+    }
+
+    @Test
+    void aConfirmedExtractionIsWrittenOnceAndRecorded() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        final DocRef pipeline = new DocRef("Pipeline", "p1", "Logons extraction");
+        final DocRef xslt = new DocRef("XSLT", "x1", "Logons extraction");
+        final AiWriteExtractionRequest request = new AiWriteExtractionRequest("Logons extraction",
+                new DocRef("Folder", "f1", "Reports"), PermissionInheritance.DESTINATION, "hash");
+        Mockito.when(extractionActions.write(Mockito.eq(DASHBOARD), Mockito.any(), Mockito.eq(request), Mockito.any()))
+                .thenReturn(new ExtractionActions.Written(pipeline, xslt, "[]"));
+        final String stored = storeResult(extraction());
+
+        final AiWriteExtractionResult result = service.writeExtraction(CHAT, MESSAGE, "extract-1", request);
+
+        assertThat(result.isDone()).isTrue();
+        assertThat(result.getPipeline()).isEqualTo(pipeline);
+        assertThat(result.getTableChanges()).isEqualTo("[]");
+        // Claimed before it was written.
+        final ArgumentCaptor<String> written = ArgumentCaptor.forClass(String.class);
+        final InOrder order = Mockito.inOrder(aiDao, extractionActions);
+        order.verify(aiDao).compareAndSetMessageText(Mockito.eq(MESSAGE), Mockito.eq(stored), written.capture());
+        order.verify(extractionActions).write(Mockito.eq(DASHBOARD), Mockito.any(), Mockito.eq(request),
+                Mockito.eq(ToolSession.chat(CHAT)));
+        assertThat(JsonUtil.readValue(written.getValue(), ToolResultRecord.class).userActions())
+                .singleElement()
+                .extracting(UserActionRecord::status)
+                .isEqualTo(Status.DONE);
+        Mockito.verify(auditLog).processed(Mockito.eq(ToolSession.chat(CHAT)), Mockito.eq(pipeline),
+                Mockito.eq(UserActionService.WRITE_EXTRACTION_COMMAND), Mockito.anyString(),
+                Mockito.contains("Created pipeline 'Logons extraction'"), Mockito.eq(true));
+        Mockito.verify(aiService).storeMessage(Mockito.eq(CHAT), Mockito.eq(AiMessageType.STEER_MESSAGE),
+                Mockito.contains("I created the extraction"));
+    }
+
+    @Test
+    void anExtractionThatCantBeWrittenLeavesTheButtonToUseAgain() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(extractionActions.write(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenThrow(new IllegalStateException("What would be written has changed since you were shown it"));
+        final String stored = storeResult(extraction());
+
+        final AiWriteExtractionResult result = service.writeExtraction(CHAT, MESSAGE, "extract-1",
+                new AiWriteExtractionRequest("Logons extraction", null, null, "old"));
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).contains("has changed since you were shown it");
+        // Claimed, then given back.
+        final ArgumentCaptor<String> before = ArgumentCaptor.forClass(String.class);
+        final ArgumentCaptor<String> after = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(aiDao, Mockito.times(2)).compareAndSetMessageText(Mockito.eq(MESSAGE), before.capture(),
+                after.capture());
+        assertThat(after.getAllValues().get(1)).isEqualTo(stored);
+        Mockito.verify(aiService, Mockito.never()).storeMessage(Mockito.anyInt(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    void anyFailureToWriteAnExtractionLeavesTheButtonToUseAgain() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(extractionActions.write(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenThrow(new NullPointerException("folder"));
+        final String stored = storeResult(extraction());
+
+        final AiWriteExtractionResult result = service.writeExtraction(CHAT, MESSAGE, "extract-1",
+                new AiWriteExtractionRequest("Logons extraction", null, null, "hash"));
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).isEqualTo("The extraction couldn't be written: folder");
+        final ArgumentCaptor<String> after = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(aiDao, Mockito.times(2)).compareAndSetMessageText(Mockito.eq(MESSAGE), Mockito.any(),
+                after.capture());
+        assertThat(after.getAllValues().get(1)).isEqualTo(stored);
+        Mockito.verify(auditLog).processed(Mockito.eq(ToolSession.chat(CHAT)), Mockito.eq(DASHBOARD),
+                Mockito.eq(UserActionService.WRITE_EXTRACTION_COMMAND), Mockito.anyString(),
+                Mockito.eq("The extraction couldn't be written: folder"), Mockito.eq(false));
+    }
+
+    @Test
+    void aButtonChangedSinceItWasClaimedIsStillMadePendingAgain() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(extractionActions.write(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenThrow(new IllegalStateException("No"));
+        // Claimed; the message then changes, so it can't simply be put back; it is made pending in it as it is.
+        Mockito.when(aiDao.compareAndSetMessageText(Mockito.anyInt(), Mockito.anyString(), Mockito.anyString()))
+                .thenReturn(true, false, true);
+        storeResult(extraction());
+
+        service.writeExtraction(CHAT, MESSAGE, "extract-1", new AiWriteExtractionRequest("x", null, null, "h"));
+
+        final ArgumentCaptor<String> after = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(aiDao, Mockito.times(3)).compareAndSetMessageText(Mockito.eq(MESSAGE), Mockito.any(),
+                after.capture());
+        assertThat(JsonUtil.readValue(after.getAllValues().get(2), ToolResultRecord.class).userActions())
+                .singleElement()
+                .extracting(UserActionRecord::status)
+                .isEqualTo(Status.PENDING);
+    }
+
+    @Test
+    void anExpiredExtractionsButtonWritesNothing() {
+        final UserActionRecord action = extraction();
+        storeResult(new UserActionRecord(action.id(), action.action(), action.label(), null, null, null,
+                action.doc(), action.request(), List.of(), 1L, Status.PENDING, null, action.name(), null, null));
+
+        assertThat(service.writeExtraction(CHAT, MESSAGE, "extract-1", new AiWriteExtractionRequest("x", null,
+                null, "h")).getMessage()).contains("has expired");
+        Mockito.verifyNoInteractions(extractionActions);
+    }
+
+    @Test
+    void aChangeToAnExtractionPipelineIsShownThenWrittenInPlaceOnce() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        final DocRef pipeline = new DocRef("Pipeline", "p1", "Logons extraction");
+        final DocRef xslt = new DocRef("XSLT", "x1", "Logons extraction");
+        final AiChangeExtraction shown = new AiChangeExtraction(DASHBOARD, "table-1", "Events", pipeline, xslt,
+                "<a/>", "<b/>", "Written again", List.of(), List.of(), "hash");
+        Mockito.when(extractionActions.prepareChange(Mockito.eq(DASHBOARD), Mockito.any(), Mockito.any()))
+                .thenReturn(shown);
+        Mockito.when(extractionActions.writeChange(Mockito.eq(DASHBOARD), Mockito.any(), Mockito.eq("hash"),
+                Mockito.any()))
+                .thenReturn(new ExtractionActions.Written(pipeline, xslt, "[]"));
+        final String stored = storeResult(change());
+
+        // Shown: nothing written.
+        assertThat(service.doUserAction(CHAT, MESSAGE, "change-1").getChangeExtraction()).isSameAs(shown);
+        Mockito.verify(aiDao, Mockito.never()).compareAndSetMessageText(Mockito.anyInt(), Mockito.any(),
+                Mockito.any());
+
+        final AiWriteExtractionResult result = service.writeExtraction(CHAT, MESSAGE, "change-1",
+                new AiWriteExtractionRequest(null, null, null, "hash"));
+
+        assertThat(result.isDone()).isTrue();
+        assertThat(result.getMessage()).isEqualTo(UserActionService.CHANGED_EXTRACTION);
+        final ArgumentCaptor<String> written = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(aiDao).compareAndSetMessageText(Mockito.eq(MESSAGE), Mockito.eq(stored), written.capture());
+        assertThat(JsonUtil.readValue(written.getValue(), ToolResultRecord.class).userActions())
+                .singleElement()
+                .extracting(UserActionRecord::status)
+                .isEqualTo(Status.DONE);
+        Mockito.verify(extractionActions, Mockito.never()).write(Mockito.any(), Mockito.any(), Mockito.any(),
+                Mockito.any());
+        Mockito.verify(auditLog).processed(Mockito.eq(ToolSession.chat(CHAT)), Mockito.eq(xslt),
+                Mockito.eq(UserActionService.WRITE_EXTRACTION_COMMAND), Mockito.anyString(),
+                Mockito.contains("Changed XSLT 'Logons extraction' of pipeline 'Logons extraction' in place"),
+                Mockito.eq(true));
+        Mockito.verify(aiService).storeMessage(Mockito.eq(CHAT), Mockito.eq(AiMessageType.STEER_MESSAGE),
+                Mockito.contains("I confirmed the change"));
+    }
+
+    @Test
+    void usingOneOfAnExtractionsTwoButtonsMakesTheOtherUnusable() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        final DocRef pipeline = new DocRef("Pipeline", "p2", "New");
+        Mockito.when(extractionActions.write(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(new ExtractionActions.Written(pipeline, new DocRef("XSLT", "x2", "New"), "[]"));
+        // Offered together for the same extraction: change in place, or a new child.
+        final UserActionRecord change = change();
+        final UserActionRecord create = new UserActionRecord("create-1", UserActions.CREATE_EXTRACTION_PIPELINE,
+                "Create", null, null, null, DASHBOARD, change.request(), List.of(), Long.MAX_VALUE, Status.PENDING,
+                null, "New", null, null);
+        final String json = JsonUtil.writeValueAsString(new ToolResultRecord("c1", "propose_extraction_pipeline",
+                false, "offered", null, 7, 1, List.of(change, create)), false);
+        Mockito.when(aiDao.getMessagesSince(CHAT, MESSAGE - 1)).thenReturn(List.of(
+                new AiChatMessage(MESSAGE, CHAT, 0L, AiMessageType.TOOL_RESULT, null, json, 1, null)));
+
+        assertThat(service.writeExtraction(CHAT, MESSAGE, "create-1", new AiWriteExtractionRequest("New", null,
+                null, "h")).isDone()).isTrue();
+
+        final ArgumentCaptor<String> written = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(aiDao).compareAndSetMessageText(Mockito.eq(MESSAGE), Mockito.eq(json), written.capture());
+        assertThat(JsonUtil.readValue(written.getValue(), ToolResultRecord.class).userActions())
+                .extracting(UserActionRecord::id, UserActionRecord::status, UserActionRecord::outcome)
+                .containsExactly(
+                        tuple("change-1", Status.DONE,
+                                UserActionService.OTHER_EXTRACTION_USED),
+                        tuple("create-1", Status.DONE,
+                                UserActionService.WROTE_EXTRACTION));
+
+        // Its sibling, clicked now, says why it can't be used.
+        Mockito.when(aiDao.getMessagesSince(CHAT, MESSAGE - 1)).thenReturn(List.of(
+                new AiChatMessage(MESSAGE, CHAT, 0L, AiMessageType.TOOL_RESULT, null, written.getValue(), 1, null)));
+        assertThat(service.doUserAction(CHAT, MESSAGE, "change-1").getMessage())
+                .isEqualTo(UserActionService.OTHER_EXTRACTION_USED);
+        Mockito.verify(extractionActions, Mockito.never()).prepareChange(Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    void aChangeToAnXsltChangedSinceIsntShown() {
+        Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
+        Mockito.when(extractionActions.prepareChange(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenThrow(new IllegalStateException("XSLT 'X' has changed since this was proposed"));
+        storeResult(change());
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "change-1");
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).contains("has changed since this was proposed");
+    }
+
+    @Test
+    void onlyAnExtractionsButtonWritesOne() {
+        storeResult(dashboardChange());
+
+        assertThat(service.writeExtraction(CHAT, MESSAGE, "dash-1", new AiWriteExtractionRequest("x", null, null,
+                "h")).isDone()).isFalse();
+        storeResult(extraction().withStatus(Status.DONE, "Written"));
+        assertThat(service.writeExtraction(CHAT, MESSAGE, "extract-1", new AiWriteExtractionRequest("x", null,
+                null, "h")).getMessage()).isEqualTo("This has already been done.");
+        Mockito.verifyNoInteractions(extractionActions);
+    }
+
+    @Test
     void aDashboardChangeIsAppliedOnce() {
         Mockito.when(lookup.find(DASHBOARD)).thenReturn(Optional.of(DASHBOARD));
         Mockito.when(lookup.canEdit(DASHBOARD)).thenReturn(true);
@@ -634,6 +910,67 @@ class TestUserActionService {
                 .isInstanceOf(AuthenticationException.class);
     }
 
+    @Test
+    void createVisualisationGivesTheBrowserWhatToCreate() {
+        final DocRef dashboard = new DocRef("Dashboard", "d", "Chats");
+        Mockito.when(lookup.find(dashboard)).thenReturn(Optional.of(dashboard));
+        final AiCreateVisualisation create = new AiCreateVisualisation("Chat user connections", null,
+                "visualisations.EChartsGeneric", new DocRef("Script", "s", "ECharts Generic"), "{}", "Generated",
+                dashboard, "table-1", "Messages", "Chat user connections", "{}", "below", "abc", null, null, null,
+                null, null, null);
+        Mockito.when(visualisationActions.prepare(dashboard, "Chat user connections", "{\"kind\":\"graph\"}"))
+                .thenReturn(create);
+        storeResult(createVisualisation(dashboard));
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "v1");
+
+        assertThat(result.isDone()).isTrue();
+        assertThat(result.getCreateVisualisation()).isSameAs(create);
+        // The button can be used again (e.g. after the dialog was cancelled), so the result isn't changed.
+        Mockito.verify(aiDao, Mockito.never()).compareAndSetMessageText(Mockito.anyInt(), Mockito.anyString(),
+                Mockito.anyString());
+        Mockito.verify(auditLog).userAction(Mockito.eq(ToolSession.chat(CHAT)),
+                Mockito.eq(UserActions.CREATE_VISUALISATION), Mockito.anyString(),
+                Mockito.eq("Opened the New Visualisation dialog"), Mockito.eq(true));
+    }
+
+    @Test
+    void createVisualisationSaysWhyItCantBeMadeNow() {
+        final DocRef dashboard = new DocRef("Dashboard", "d", "Chats");
+        Mockito.when(lookup.find(dashboard)).thenReturn(Optional.of(dashboard));
+        Mockito.when(visualisationActions.prepare(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenThrow(new IllegalStateException("ECharts is no longer installed as a Script doc"));
+        storeResult(createVisualisation(dashboard));
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "v1");
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).isEqualTo("ECharts is no longer installed as a Script doc");
+        assertThat(result.getCreateVisualisation()).isNull();
+        Mockito.verify(auditLog).userAction(Mockito.eq(ToolSession.chat(CHAT)),
+                Mockito.eq(UserActions.CREATE_VISUALISATION), Mockito.anyString(),
+                Mockito.contains("no longer installed"), Mockito.eq(false));
+    }
+
+    @Test
+    void createVisualisationIsRefusedOnceTheDashboardIsGone() {
+        final DocRef dashboard = new DocRef("Dashboard", "d", "Chats");
+        Mockito.when(lookup.find(dashboard)).thenReturn(Optional.empty());
+        storeResult(createVisualisation(dashboard));
+
+        final AiUserActionResult result = service.doUserAction(CHAT, MESSAGE, "v1");
+
+        assertThat(result.isDone()).isFalse();
+        assertThat(result.getMessage()).contains("no longer exists");
+        Mockito.verifyNoInteractions(visualisationActions);
+    }
+
+    private static UserActionRecord createVisualisation(final DocRef dashboard) {
+        return new UserActionRecord("v1", UserActions.CREATE_VISUALISATION,
+                "Create visualisation 'Chat user connections'", null, null, null, dashboard,
+                "{\"kind\":\"graph\"}", List.of(), Long.MAX_VALUE, Status.PENDING, null, "Chat user connections");
+    }
+
     private static UserActionRecord createDashboard(final String query) {
         return new UserActionRecord("d1", UserActions.CREATE_DASHBOARD, "Create dashboard 'Windows users'", null,
                 null, null, new DocRef("View", "v", "V"), query, List.of(), Long.MAX_VALUE, Status.PENDING, null,
@@ -653,6 +990,24 @@ class TestUserActionService {
         return new UserActionRecord("enable-31", UserActions.ENABLE_PROCESSOR_FILTER,
                 "Enable processor filter 31 on pipeline 'Acme-Events'", null, null, 31, PIPELINE, null, List.of(),
                 expiresMs, status, null);
+    }
+
+    private static UserActionRecord extraction() {
+        final ExtractionPlan plan = new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1),
+                List.of(new ExtractionField("UserId", "EventSource/User/Id", null)), List.of());
+        return new UserActionRecord("extract-1", UserActions.CREATE_EXTRACTION_PIPELINE,
+                "Create extraction pipeline 'Logons extraction'", null, null, null, DASHBOARD, plan.toJson(),
+                List.of(), Long.MAX_VALUE, Status.PENDING, null, "Logons extraction", null, null);
+    }
+
+    private static UserActionRecord change() {
+        final ExtractionPlan plan = new ExtractionPlan("Events", "table-1", new ExtractionPlan.Sample(7, 1),
+                List.of(new ExtractionField("UserId", "EventSource/User/Id", null)), List.of(),
+                new ExtractionPlan.Existing(new DocRef("Pipeline", "p1", "Logons extraction"), "xsltFilter",
+                        new DocRef("XSLT", "x1", "Logons extraction"), "0".repeat(64)));
+        return new UserActionRecord("change-1", UserActions.CHANGE_EXTRACTION_PIPELINE,
+                "Change extraction pipeline 'Logons extraction'", null, null, null, DASHBOARD, plan.toJson(),
+                List.of(), Long.MAX_VALUE, Status.PENDING, null, "Logons extraction", null, null);
     }
 
     private static UserActionRecord createQuery(final String query) {
@@ -683,12 +1038,16 @@ class TestUserActionService {
     }
 
     private static UserActionRecord dashboardChange() {
+        return dashboardChange(null);
+    }
+
+    private static UserActionRecord dashboardChange(final List<DocRef> charts) {
         return new UserActionRecord("dash-1", UserActions.APPLY_DASHBOARD_CHANGE,
                 "Change to table 'Events' on dashboard 'Logons': 1 change(s)", null, null, null, DASHBOARD, null,
                 List.of(), Long.MAX_VALUE, Status.PENDING, null, null, null,
                 new UserActionRecord.DashboardChange("Events", "table-1", "abc", true,
                         List.of(Map.of("op", "group", "column", "EventType", "level", 1)),
-                        List.of("Group by 'EventType' (level 1)")));
+                        List.of("Group by 'EventType' (level 1)"), charts));
     }
 
     private static ProcessorFilter filter(final boolean enabled) {

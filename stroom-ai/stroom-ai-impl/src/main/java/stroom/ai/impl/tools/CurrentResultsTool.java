@@ -193,7 +193,8 @@ class CurrentResultsTool extends AbstractWorkspaceTool {
                         .addIntegerProperty(ROWS_ARG, "Optional. Only the first n rows, when the user asks about "
                                                       + "a scope like that.")
                         .addBooleanProperty(REFRESH_ARG, "Optional. Run the search again, as the tab now stands, "
-                                                         + "and take a new snapshot. Only with the user's yes.")
+                                                         + "and take a new snapshot. Only with the user's yes to "
+                                                         + "running it again, for this question.")
                         .addBooleanProperty(WITH_EVENT_IDS_ARG, "Optional. Take each row's StreamId and EventId, "
                                                                 + "one row per event, for the events behind the "
                                                                 + "table.")
@@ -826,7 +827,22 @@ class CurrentResultsTool extends AbstractWorkspaceTool {
         }
     }
 
-    private Optional<ResultsMeta> readMeta(final SessionWorkspace workspace, final String base) {
+    /// What a snapshot of a table's rows was taken of, if it is one this tool took: kept beside it in the read-only
+    /// `/tabs/` area, which only Stroom writes, so it can be trusted to say which dashboard and table it is of.
+    ///
+    /// @param workspace The chat's workspace.
+    /// @param snapshot  A workspace file.
+    /// @return What it was taken of; empty if it isn't a snapshot this tool took.
+    static Optional<ResultsMeta> snapshotOf(final SessionWorkspace workspace, final WorkspacePath snapshot) {
+        final String path = snapshot.path();
+        if (snapshot.area() != WorkspacePath.Area.TABS || !path.endsWith(".md")) {
+            return Optional.empty();
+        }
+        return readMeta(workspace, path.substring(0, path.length() - ".md".length()))
+                .filter(meta -> path.equals(meta.path()));
+    }
+
+    private static Optional<ResultsMeta> readMeta(final SessionWorkspace workspace, final String base) {
         final WorkspacePath path = WorkspacePath.parse(base + ".json");
         if (workspace.find(path).isEmpty()) {
             return Optional.empty();

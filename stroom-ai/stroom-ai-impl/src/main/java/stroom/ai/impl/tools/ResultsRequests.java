@@ -197,6 +197,66 @@ final class ResultsRequests {
                 .build());
     }
 
+    /// @param context A table's search request.
+    /// @return The type of each column's format (e.g. NUMBER, DATE_TIME), by column name, for a dashboard table;
+    /// none for a query, whose columns' formats aren't in its request.
+    static Map<String, String> columnFormats(final AskStroomAiContext context) {
+        final Map<String, String> formats = new LinkedHashMap<>();
+        for (final Column column : columns(context)) {
+            if (column.getName() != null) {
+                formats.put(column.getName(), column.getFormat() != null && column.getFormat().getType() != null
+                        ? column.getFormat().getType().name()
+                        : "GENERAL");
+            }
+        }
+        return formats;
+    }
+
+    /// The expressions of a dashboard table's columns, by column name.
+    ///
+    /// @param context The table's search request.
+    /// @return Each column's expression, by name; none for a query's table or a column without one.
+    static Map<String, String> columnExpressions(final AskStroomAiContext context) {
+        final Map<String, String> expressions = new LinkedHashMap<>();
+        for (final Column column : columns(context)) {
+            if (column.getName() != null && column.getExpression() != null) {
+                expressions.put(column.getName(), column.getExpression());
+            }
+        }
+        return expressions;
+    }
+
+    /// The group levels of a dashboard table's columns, by column name.
+    ///
+    /// @param context The table's search request.
+    /// @return Each grouped column's level, from 0 for the top level, by name; none for a query's table.
+    static Map<String, Integer> columnGroups(final AskStroomAiContext context) {
+        final Map<String, Integer> groups = new LinkedHashMap<>();
+        for (final Column column : columns(context)) {
+            if (column.getName() != null && column.getGroup() != null) {
+                groups.put(column.getName(), column.getGroup());
+            }
+        }
+        return groups;
+    }
+
+    /// The settings of a dashboard table, e.g. whether it extracts values and with which pipeline.
+    ///
+    /// @param context A table's search request.
+    /// @return Its settings, or null for a query's table.
+    static TableSettings tableSettings(final AskStroomAiContext context) {
+        if (!(context instanceof final DashboardTableContext dashboard) || dashboard.getSearchRequest() == null) {
+            return null;
+        }
+        return NullSafe.list(dashboard.getSearchRequest().getComponentResultRequests()).stream()
+                .filter(TableResultRequest.class::isInstance)
+                .map(TableResultRequest.class::cast)
+                .map(TableResultRequest::getTableSettings)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
     // The columns of a dashboard table's search request, or none for a query.
     private static List<Column> columns(final AskStroomAiContext context) {
         if (!(context instanceof final DashboardTableContext dashboard) || dashboard.getSearchRequest() == null) {

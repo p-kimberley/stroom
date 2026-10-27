@@ -19,6 +19,7 @@ package stroom.dashboard.client.main;
 import stroom.ai.shared.AiTabSearch;
 import stroom.ai.shared.AiTabSnapshotPart;
 import stroom.content.client.event.ContentTabSelectionChangeEvent;
+import stroom.dashboard.client.embeddedquery.EmbeddedQueryPresenter;
 import stroom.dashboard.client.query.QueryPresenter;
 import stroom.dashboard.client.table.TablePresenter;
 import stroom.dashboard.shared.ComponentConfig;
@@ -45,9 +46,7 @@ import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import javax.inject.Provider;
 
@@ -118,23 +117,7 @@ public class DashboardSuperPresenter
         return null;
     }
 
-    /// @return A hash of the dashboard as edited (its description, as the AI chat is given it), to tell whether it
-    /// has changed since the chat proposed a change to it.
-    public String aiDashboardHash() {
-        return AiTabSnapshotPart.hashText(dashboardPresenter.getDescription());
-    }
-
-    /// @return For each change the AI chat applied here and that hasn't been undone, the hash of the dashboard just
-    /// after it mapped to the hash just before it, so a change proposed before those can still be applied on top of
-    /// them (see [stroom.dashboard.client.event.ApplyDashboardChangeEvent#decide(boolean, String, String, Map)]).
-    public Map<String, String> aiAppliedChangeHashes() {
-        final Map<String, String> hashes = new HashMap<>();
-        dashboardPresenter.getAppliedChangeDescriptions().forEach((after, before) ->
-                hashes.put(AiTabSnapshotPart.hashText(after), AiTabSnapshotPart.hashText(before)));
-        return hashes;
-    }
-
-    // Each table's search requests, for the AI chat to take snapshots of their rows.
+    // Each table's search requests, and each embedded query's, for the AI chat to take snapshots of their rows.
     private List<AiTabSearch> aiTabSearches() {
         final Components components = dashboardPresenter.getComponents();
         final List<AiTabSearch> searches = new ArrayList<>();
@@ -156,6 +139,8 @@ public class DashboardSuperPresenter
                         tablePresenter.getColumnNames(),
                         tablePresenter.getTotalRows(),
                         tablePresenter.isSearching()));
+            } else if (component instanceof final EmbeddedQueryPresenter embeddedQuery) {
+                NullSafe.consume(embeddedQuery.aiTabSearch(), searches::add);
             }
         }
         return searches;

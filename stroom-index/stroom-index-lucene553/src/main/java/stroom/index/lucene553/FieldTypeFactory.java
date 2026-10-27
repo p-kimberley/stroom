@@ -24,7 +24,7 @@ import org.apache.lucene553.index.IndexOptions;
 
 final class FieldTypeFactory {
 
-    private static final int DEFAULT_PRECISION_STEP = 4;
+    static final int DEFAULT_PRECISION_STEP = 4;
 
     private FieldTypeFactory() {
         // Utility.

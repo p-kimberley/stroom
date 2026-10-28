@@ -16,7 +16,10 @@
 
 package stroom.suggestions.impl;
 
+import stroom.docref.DocRef;
+import stroom.query.shared.FetchFieldValuesRequest;
 import stroom.query.shared.FetchSuggestionsRequest;
+import stroom.query.shared.FieldValues;
 import stroom.query.shared.Suggestions;
 import stroom.security.api.SecurityContext;
 import stroom.suggestions.api.SuggestionsQueryHandler;
@@ -29,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Optional;
 
 @Singleton
 @SuppressWarnings("unused")
@@ -49,20 +53,28 @@ public class SuggestionsServiceImpl implements SuggestionsService {
 
     @Override
     public Suggestions fetch(final FetchSuggestionsRequest request) throws RuntimeException {
-        final String dataSourceType = request.getDataSource().getType();
+        return securityContext.secureResult(() -> getHandler(request.getDataSource())
+                .map(handler -> handler.getSuggestions(request))
+                .orElse(Suggestions.EMPTY));
+    }
 
-        return securityContext.secureResult(() -> {
-            if (dataSourceType != null) {
-                if (providerMap.containsKey(dataSourceType)) {
-                    final SuggestionsQueryHandler queryHandler = providerMap.get(dataSourceType).get();
-                    return queryHandler.getSuggestions(request);
-                } else {
-                    LOGGER.debug("Suggestions provider not registered for type: {}", dataSourceType);
-                    return Suggestions.EMPTY;
-                }
-            } else {
-                throw new RuntimeException("Data source type not defined");
-            }
-        });
+    @Override
+    public FieldValues fetchFieldValues(final FetchFieldValuesRequest request) {
+        return securityContext.secureResult(() -> getHandler(request.getDataSource())
+                .map(handler -> handler.getFieldValues(request))
+                .orElse(FieldValues.EMPTY));
+    }
+
+    private Optional<SuggestionsQueryHandler> getHandler(final DocRef dataSource) {
+        final String dataSourceType = dataSource.getType();
+        if (dataSourceType == null) {
+            throw new RuntimeException("Data source type not defined");
+        }
+        final Provider<SuggestionsQueryHandler> provider = providerMap.get(dataSourceType);
+        if (provider == null) {
+            LOGGER.debug("Suggestions provider not registered for type: {}", dataSourceType);
+            return Optional.empty();
+        }
+        return Optional.of(provider.get());
     }
 }

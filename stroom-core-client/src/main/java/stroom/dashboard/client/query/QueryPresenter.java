@@ -70,6 +70,7 @@ import stroom.task.client.TaskMonitorFactory;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.util.shared.ErrorMessage;
 import stroom.util.shared.ErrorMessages;
+import stroom.util.shared.NullSafe;
 import stroom.util.shared.Severity;
 import stroom.widget.button.client.ButtonView;
 import stroom.widget.button.client.InlineSvgButton;
@@ -428,6 +429,9 @@ public class QueryPresenter
         // We only want queryable fields.
         fieldSelectionBoxModel.setQueryable(true);
         expressionPresenter.init(restFactory, dataSourceRef, fieldSelectionBoxModel);
+        expressionPresenter.setTimeRangeSupplier(() -> NullSafe.get(
+                getDashboardContext(),
+                DashboardContext::getResolvedTimeRange));
 
         if (!Objects.equals(getQuerySettings().getDataSource(), dataSourceRef)) {
             setSettings(getQuerySettings()

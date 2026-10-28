@@ -257,8 +257,16 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                         final FieldType elasticFieldType =
                                 ElasticNativeTypes.fromNativeType(fullName, nativeType);
 
+                        final boolean supportsTopValues = ElasticTopValues.getAggregationField(
+                                fieldName,
+                                nativeType,
+                                name -> getNativeType(name, fieldMappings)) != null;
                         return toDataSourceField(
-                                elasticFieldType, nativeType, fieldName, fieldIsIndexed(effectiveFieldMeta));
+                                elasticFieldType,
+                                nativeType,
+                                fieldName,
+                                fieldIsIndexed(effectiveFieldMeta),
+                                supportsTopValues);
                     } catch (final UnsupportedTypeException e) {
                         LOGGER.debug(e::getMessage, e);
                         return null;
@@ -277,7 +285,8 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
     private QueryField toDataSourceField(final FieldType elasticIndexFieldType,
                                          final String nativeType,
                                          final String fieldName,
-                                         final Boolean isIndexed)
+                                         final Boolean isIndexed,
+                                         final boolean supportsTopValues)
             throws IllegalArgumentException {
         final ConditionSet conditionSet = getConditionSet(elasticIndexFieldType, nativeType);
         return QueryField
@@ -287,7 +296,24 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                 .conditionSet(conditionSet)
                 .queryable(isIndexed && !FieldType.NESTED.equals(elasticIndexFieldType))
                 .queryOptionSet(ElasticQueryOptionSets.get(nativeType))
+                .supportsTopValues(supportsTopValues
+                        ? Boolean.TRUE
+                        : null)
                 .build();
+    }
+
+    /**
+     * Returns the mapping type of a field, resolving aliases, or null if there is no such field.
+     */
+    private String getNativeType(final String fieldName, final Map<String, FieldMapping> fieldMappings) {
+        final FieldMapping fieldMeta = fieldMappings.get(fieldName);
+        if (fieldMeta == null) {
+            return null;
+        }
+        final FieldMapping effectiveFieldMeta = resolveEffectiveFieldMapping(fieldName, fieldMeta, fieldMappings);
+        return effectiveFieldMeta == null
+                ? null
+                : getFieldTypeFromMapping(fieldName, effectiveFieldMeta);
     }
 
     /**

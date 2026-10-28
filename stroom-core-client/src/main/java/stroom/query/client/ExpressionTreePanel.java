@@ -22,7 +22,9 @@ import stroom.docref.DocRef;
 import stroom.explorer.client.presenter.DocSelectionBoxPresenter;
 import stroom.pipeline.structure.client.view.Box;
 import stroom.pipeline.structure.client.view.TreePanel;
+import stroom.query.api.TimeRange;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.FieldValuePickerPresenter;
 import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.ui.config.client.UiConfigCache;
@@ -47,6 +49,7 @@ import com.google.gwt.view.client.SelectionModel;
 import com.google.inject.Provider;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public class ExpressionTreePanel extends TreePanel<Item> {
 
@@ -63,11 +66,17 @@ public class ExpressionTreePanel extends TreePanel<Item> {
     public ExpressionTreePanel(final Provider<DocSelectionBoxPresenter> docRefProvider,
                                final Provider<UserRefSelectionBoxPresenter> userRefProvider,
                                final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
+                               final Provider<FieldValuePickerPresenter> fieldValuePickerPresenterProvider,
                                final UiConfigCache uiConfigCache,
                                final boolean utc) {
 
         operatorEditor = new OperatorEditor();
-        termEditor = new TermEditor(docRefProvider, userRefProvider, queryOptionsPresenterProvider, uiConfigCache);
+        termEditor = new TermEditor(
+                docRefProvider,
+                userRefProvider,
+                queryOptionsPresenterProvider,
+                fieldValuePickerPresenterProvider,
+                uiConfigCache);
         termEditor.setUtc(utc);
 
         final FlowPanel panel = new FlowPanel();
@@ -172,6 +181,13 @@ public class ExpressionTreePanel extends TreePanel<Item> {
                      final DocRef dataSource,
                      final FieldSelectionListModel fieldSelectionListModel) {
         termEditor.init(restFactory, dataSource, fieldSelectionListModel);
+    }
+
+    /**
+     * Sets where the value picker gets the time range to count values in.
+     */
+    public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
+        termEditor.setTimeRangeSupplier(timeRangeSupplier);
     }
 
     public void write() {

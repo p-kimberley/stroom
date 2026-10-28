@@ -41,7 +41,8 @@ import java.util.stream.Collectors;
         "docRefType",
         "queryable",
         "conditionSet",
-        "queryOptionSet"
+        "queryOptionSet",
+        "supportsTopValues"
 })
 @JsonInclude(Include.NON_NULL)
 public class QueryField implements Field, HasDisplayValue {
@@ -65,6 +66,8 @@ public class QueryField implements Field, HasDisplayValue {
     private final Boolean queryable;
     @JsonProperty
     private final QueryOptionSet queryOptionSet;
+    @JsonProperty
+    private final Boolean supportsTopValues;
 
     @JsonCreator
     public QueryField(@Deprecated @JsonProperty("type") final String type,
@@ -74,7 +77,8 @@ public class QueryField implements Field, HasDisplayValue {
                       @JsonProperty("conditionSet") final ConditionSet conditionSet,
                       @JsonProperty("docRefType") final String docRefType,
                       @JsonProperty("queryable") final Boolean queryable,
-                      @JsonProperty("queryOptionSet") final QueryOptionSet queryOptionSet) {
+                      @JsonProperty("queryOptionSet") final QueryOptionSet queryOptionSet,
+                      @JsonProperty("supportsTopValues") final Boolean supportsTopValues) {
         // Don't use NullSafe as this breaks some tests
         this.fldName = fldName != null
                 ? fldName
@@ -84,6 +88,7 @@ public class QueryField implements Field, HasDisplayValue {
         this.docRefType = docRefType;
         this.queryable = queryable;
         this.queryOptionSet = queryOptionSet;
+        this.supportsTopValues = supportsTopValues;
     }
 
     private FieldType convertLegacyType(final FieldType fieldType, final String type) {
@@ -370,6 +375,16 @@ public class QueryField implements Field, HasDisplayValue {
         return queryOptionSet;
     }
 
+    /// @return True if the data source can list the most common values of this field, or null if not.
+    public Boolean getSupportsTopValues() {
+        return supportsTopValues;
+    }
+
+    /// @return True if the data source can list the most common values of this field for the value picker.
+    public boolean supportsTopValues() {
+        return Boolean.TRUE.equals(supportsTopValues);
+    }
+
     @JsonIgnore
     public boolean isNumeric() {
         return getFldType().isNumeric();
@@ -435,6 +450,7 @@ public class QueryField implements Field, HasDisplayValue {
         private String docRefType;
         private Boolean queryable;
         private QueryOptionSet queryOptionSet;
+        private Boolean supportsTopValues;
 
         private Builder() {
         }
@@ -446,6 +462,7 @@ public class QueryField implements Field, HasDisplayValue {
             this.docRefType = queryField.docRefType;
             this.queryable = queryField.queryable;
             this.queryOptionSet = queryField.queryOptionSet;
+            this.supportsTopValues = queryField.supportsTopValues;
         }
 
         public Builder fldName(final String fldName) {
@@ -480,6 +497,13 @@ public class QueryField implements Field, HasDisplayValue {
             return this;
         }
 
+        /// @param supportsTopValues True if the data source can list the most common values of the field.
+        /// @return This builder.
+        public Builder supportsTopValues(final Boolean supportsTopValues) {
+            this.supportsTopValues = supportsTopValues;
+            return this;
+        }
+
         public QueryField build() {
             if (conditionSet == null && fldType != null) {
                 conditionSet = ConditionSet.getDefault(fldType);
@@ -492,7 +516,8 @@ public class QueryField implements Field, HasDisplayValue {
                     conditionSet,
                     docRefType,
                     queryable,
-                    queryOptionSet);
+                    queryOptionSet,
+                    supportsTopValues);
         }
     }
 }

@@ -16,49 +16,71 @@
 
 package stroom.search.elastic.suggest;
 
-import stroom.query.api.datasource.FieldType;
-import stroom.query.api.datasource.QueryField;
-import stroom.query.shared.FetchSuggestionsRequest;
-import stroom.query.shared.Suggestions;
+import stroom.ai.api.AiService;
+import stroom.dictionary.api.WordListProvider;
+import stroom.docref.DocRef;
+import stroom.query.api.DateTimeSettings;
+import stroom.query.api.ExpressionOperator;
+import stroom.query.api.ExpressionOperator.Op;
+import stroom.query.api.ExpressionTerm;
+import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.TimeRange;
+import stroom.query.api.datasource.IndexField;
+import stroom.query.common.v2.IndexFieldCache;
+import stroom.query.shared.FetchFieldValuesRequest;
+import stroom.query.shared.FieldValueCount;
+import stroom.query.shared.FieldValues;
 import stroom.search.elastic.ElasticClientCache;
 import stroom.search.elastic.ElasticClusterStore;
-import stroom.search.elastic.ElasticIndexStore;
+import stroom.search.elastic.ElasticIndexCache;
+import stroom.search.elastic.search.ElasticTopValues;
+import stroom.search.elastic.search.SearchExpressionQueryBuilder;
 import stroom.search.elastic.shared.ElasticClusterDoc;
 import stroom.search.elastic.shared.ElasticIndexDoc;
+import stroom.search.elastic.shared.ElasticIndexField;
 import stroom.task.api.ExecutorProvider;
 import stroom.task.api.TaskContextFactory;
 import stroom.task.api.ThreadPoolImpl;
 import stroom.task.shared.ThreadPool;
 import stroom.util.logging.LambdaLogger;
 import stroom.util.logging.LambdaLoggerFactory;
+import stroom.util.logging.LogUtil;
+import stroom.util.shared.NullSafe;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.SuggestMode;
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregate;
+import co.elastic.clients.elasticsearch._types.query_dsl.MatchAllQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
-import co.elastic.clients.elasticsearch.core.search.FieldSuggester;
-import co.elastic.clients.elasticsearch.core.search.Suggestion;
-import co.elastic.clients.elasticsearch.core.search.TermSuggestOption;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.inject.Singleton;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
+/// Lists the most common values of an Elasticsearch field with a `terms` aggregation, for the value picker of
+/// an expression term. The values are counted across the documents in the dashboard's time range, or across
+/// all documents if the index has no time field or there is no time range.
 @Singleton
 public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQueryHandler {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(ElasticSuggestionsQueryHandlerImpl.class);
     private static final ThreadPool THREAD_POOL = new ThreadPoolImpl("Elastic Suggestions Query Handler");
+    private static final String AGGREGATION_NAME = "values";
 
     private final Provider<ElasticClientCache> elasticClientCacheProvider;
     private final Provider<ElasticClusterStore> elasticClusterStoreProvider;
-    private final Provider<ElasticIndexStore> elasticIndexStoreProvider;
+    private final Provider<ElasticIndexCache> elasticIndexCacheProvider;
+    private final Provider<IndexFieldCache> indexFieldCacheProvider;
+    private final Provider<WordListProvider> wordListProviderProvider;
+    private final Provider<AiService> aiServiceProvider;
     private final Provider<ElasticSuggestConfig> elasticSuggestConfigProvider;
     private final Provider<TaskContextFactory> taskContextFactoryProvider;
     private final Executor executor;
@@ -66,84 +88,215 @@ public class ElasticSuggestionsQueryHandlerImpl implements ElasticSuggestionsQue
     @Inject
     public ElasticSuggestionsQueryHandlerImpl(final Provider<ElasticClientCache> elasticClientCacheProvider,
                                               final Provider<ElasticClusterStore> elasticClusterStoreProvider,
-                                              final Provider<ElasticIndexStore> elasticIndexStoreProvider,
+                                              final Provider<ElasticIndexCache> elasticIndexCacheProvider,
+                                              final Provider<IndexFieldCache> indexFieldCacheProvider,
+                                              final Provider<WordListProvider> wordListProviderProvider,
+                                              final Provider<AiService> aiServiceProvider,
                                               final Provider<ElasticSuggestConfig> elasticSuggestConfigProvider,
                                               final Provider<TaskContextFactory> taskContextFactoryProvider,
                                               final ExecutorProvider executorProvider) {
         this.elasticClientCacheProvider = elasticClientCacheProvider;
         this.elasticClusterStoreProvider = elasticClusterStoreProvider;
-        this.elasticIndexStoreProvider = elasticIndexStoreProvider;
+        this.elasticIndexCacheProvider = elasticIndexCacheProvider;
+        this.indexFieldCacheProvider = indexFieldCacheProvider;
+        this.wordListProviderProvider = wordListProviderProvider;
+        this.aiServiceProvider = aiServiceProvider;
         this.elasticSuggestConfigProvider = elasticSuggestConfigProvider;
         this.taskContextFactoryProvider = taskContextFactoryProvider;
         this.executor = executorProvider.get(THREAD_POOL);
     }
 
     @Override
-    public Suggestions getSuggestions(final FetchSuggestionsRequest request) {
-        final ElasticIndexDoc elasticIndex = elasticIndexStoreProvider.get().readDocument(request.getDataSource());
-        final ElasticClusterDoc elasticCluster = elasticClusterStoreProvider.get()
-                .readDocument(elasticIndex.getClusterRef());
+    public FieldValues getFieldValues(final FetchFieldValuesRequest request) {
+        final ElasticSuggestConfig config = elasticSuggestConfigProvider.get();
+        if (!Boolean.TRUE.equals(config.getEnabled())) {
+            return FieldValues.EMPTY;
+        }
 
-        final CompletableFuture<Suggestions> future = CompletableFuture.supplyAsync(
+        // Reading the index through the cache checks the user has permission to search it
+        final DocRef dataSource = request.getDataSource();
+        final ElasticIndexDoc index = elasticIndexCacheProvider.get().get(dataSource);
+        final String fieldName = request.getField().getFldName();
+        final ElasticIndexField indexField = getElasticIndexField(dataSource, fieldName);
+        if (indexField == null) {
+            return FieldValues.EMPTY;
+        }
+        final String aggregationField = ElasticTopValues.getAggregationField(
+                fieldName,
+                indexField.getNativeType(),
+                name -> NullSafe.get(getElasticIndexField(dataSource, name), ElasticIndexField::getNativeType));
+        if (aggregationField == null) {
+            LOGGER.debug("Field '{}' of type '{}' can't list its values", fieldName, indexField.getNativeType());
+            return FieldValues.EMPTY;
+        }
+
+        final String filterRegex = getFilterRegex(request, aggregationField, dataSource);
+        final ScopeQuery scopeQuery = getScopeQuery(index, request);
+        final ElasticClusterDoc elasticCluster = elasticClusterStoreProvider.get()
+                .readDocument(index.getClusterRef());
+
+        final CompletableFuture<FieldValues> future = CompletableFuture.supplyAsync(
                 taskContextFactoryProvider.get().contextResult(
-                        "Query suggestions for Elasticsearch index '" + elasticIndex.getName() + "'",
-                        taskContext ->
-                                elasticClientCacheProvider.get().contextResult(elasticCluster.getConnection(),
-                                        elasticClient ->
-                                                querySuggestions(request, elasticIndex, elasticClient)
-                                )
-                ), executor);
+                        "Fetch field values for Elasticsearch index '" + index.getName() + "'",
+                        taskContext -> elasticClientCacheProvider.get().contextResult(
+                                elasticCluster.getConnection(),
+                                elasticClient -> queryFieldValues(
+                                        elasticClient,
+                                        index,
+                                        aggregationField,
+                                        filterRegex,
+                                        scopeQuery,
+                                        config.getEffectiveTopValuesCount()))),
+                executor);
 
         try {
             return future.get();
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();
-            LOGGER.error(() -> "Thread interrupted");
-            return Suggestions.EMPTY;
+            LOGGER.debug("Thread interrupted");
+            return FieldValues.EMPTY;
         } catch (final ExecutionException e) {
-            throw new RuntimeException("Error getting Elasticsearch term suggestions: " + e.getMessage(), e);
+            throw new RuntimeException(LogUtil.message("Error fetching values of field '{}': {}",
+                    fieldName, NullSafe.getOrElse(e.getCause(), Throwable::getMessage, e.getMessage())), e);
         }
     }
 
-    private Suggestions querySuggestions(final FetchSuggestionsRequest request,
-                                         final ElasticIndexDoc elasticIndex,
-                                         final ElasticsearchClient elasticClient) {
-        final QueryField field = request.getField();
-        final String query = request.getText();
+    private ElasticIndexField getElasticIndexField(final DocRef dataSource, final String fieldName) {
+        final IndexField indexField = indexFieldCacheProvider.get().get(dataSource, fieldName);
+        return indexField instanceof final ElasticIndexField elasticIndexField
+                ? elasticIndexField
+                : null;
+    }
 
-        try {
-            if (!elasticSuggestConfigProvider.get().getEnabled() || query == null || query.isEmpty()) {
-                return Suggestions.EMPTY;
-            }
-            if (!(FieldType.TEXT.equals(field.getFldType()) || FieldType.KEYWORD.equals(field.getFldType()))) {
-                // Only generate suggestions for text and keyword fields
-                return Suggestions.EMPTY;
-            }
-            final SearchRequest searchRequest = SearchRequest.of(s -> s
-                    .index(elasticIndex.getIndexName())
-                    .suggest(suggest -> suggest
-                            .suggesters("suggest", FieldSuggester.of(suggester -> suggester
-                                    .text(query)
-                                    .term(t -> t
-                                            .field(field.getFldName())
-                                            .suggestMode(SuggestMode.Always)
-                                            .minWordLength(3)
-                                    )
-                            ))
-                    )
-            );
-
-            final SearchResponse<Void> searchResponse = elasticClient.search(searchRequest, Void.class);
-            final Map<String, List<Suggestion<Void>>> suggestResponse = searchResponse.suggest();
-            final List<Suggestion<Void>> termSuggestion = suggestResponse.get("suggest");
-
-            return new Suggestions(termSuggestion.getFirst().term().options().stream()
-                    .map(TermSuggestOption::text)
-                    .toList());
-        } catch (final IOException | RuntimeException e) {
-            LOGGER.error(() -> "Failed to retrieve search suggestions for field: " + field.getFldName() +
-                               ". " + e.getMessage(), e);
-            return Suggestions.EMPTY;
+    /// @return A regular expression the values must match, or null to list all values. Only fields holding
+    /// strings can be filtered.
+    private String getFilterRegex(final FetchFieldValuesRequest request,
+                                  final String aggregationField,
+                                  final DocRef dataSource) {
+        if (NullSafe.isBlankString(request.getFilter())) {
+            return null;
         }
+        final String nativeType = NullSafe.get(
+                getElasticIndexField(dataSource, aggregationField),
+                ElasticIndexField::getNativeType);
+        if (!ElasticTopValues.isFilterable(nativeType)) {
+            return null;
+        }
+        return ElasticTopValues.toContainsRegex(request.getFilter().trim(), request.caseInsensitive());
+    }
+
+    /// Creates the query selecting the documents to count values across: those in the time range, if the index
+    /// has its time field and there is a time range, otherwise all documents.
+    private ScopeQuery getScopeQuery(final ElasticIndexDoc index, final FetchFieldValuesRequest request) {
+        final String timeField = index.getTimeField();
+        final TimeRange timeRange = request.getTimeRange();
+        final String from = NullSafe.get(timeRange, TimeRange::getFrom);
+        final String to = NullSafe.get(timeRange, TimeRange::getTo);
+        final boolean hasTimeField = NullSafe.isNonBlankString(timeField)
+                                     && getElasticIndexField(request.getDataSource(), timeField) != null;
+        if (!hasTimeField || (NullSafe.isBlankString(from) && NullSafe.isBlankString(to))) {
+            return new ScopeQuery(MatchAllQuery.of(q -> q)._toQuery(), true);
+        }
+
+        final ExpressionOperator.Builder expression = ExpressionOperator.builder().op(Op.AND);
+        if (NullSafe.isNonBlankString(from)) {
+            expression.addTerm(ExpressionTerm.builder()
+                    .field(timeField)
+                    .condition(Condition.GREATER_THAN_OR_EQUAL_TO)
+                    .value(from)
+                    .build());
+        }
+        if (NullSafe.isNonBlankString(to)) {
+            expression.addTerm(ExpressionTerm.builder()
+                    .field(timeField)
+                    .condition(Condition.LESS_THAN)
+                    .value(to)
+                    .build());
+        }
+
+        final SearchExpressionQueryBuilder builder = new SearchExpressionQueryBuilder(
+                aiServiceProvider,
+                index,
+                indexFieldCacheProvider.get(),
+                wordListProviderProvider.get(),
+                getDateTimeSettings(request));
+        return new ScopeQuery(builder.buildQuery(expression.build()).getQuery(), false);
+    }
+
+    /// @return The request's date time settings with a reference time, so that relative times such as
+    /// `now() - 1d` can be resolved.
+    private static DateTimeSettings getDateTimeSettings(final FetchFieldValuesRequest request) {
+        final DateTimeSettings dateTimeSettings = request.getDateTimeSettings();
+        if (dateTimeSettings == null) {
+            return DateTimeSettings.builder().referenceTime(System.currentTimeMillis()).build();
+        } else if (dateTimeSettings.getReferenceTime() == null) {
+            return dateTimeSettings.copy().referenceTime(System.currentTimeMillis()).build();
+        }
+        return dateTimeSettings;
+    }
+
+    private FieldValues queryFieldValues(final ElasticsearchClient elasticClient,
+                                         final ElasticIndexDoc index,
+                                         final String aggregationField,
+                                         final String filterRegex,
+                                         final ScopeQuery scopeQuery,
+                                         final int count) {
+        final SearchRequest searchRequest = SearchRequest.of(s -> s
+                .index(index.getIndexName())
+                .size(0)
+                .trackTotalHits(t -> t.enabled(true))
+                .query(scopeQuery.query())
+                .aggregations(AGGREGATION_NAME, a -> a
+                        .terms(t -> {
+                            t.field(aggregationField).size(count);
+                            if (filterRegex != null) {
+                                t.include(i -> i.regexp(filterRegex));
+                            }
+                            return t;
+                        })));
+        LOGGER.debug(() -> "Field values request: " + searchRequest);
+
+        final SearchResponse<Void> response;
+        try {
+            response = elasticClient.search(searchRequest, Void.class);
+        } catch (final IOException e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
+
+        final long totalCount = NullSafe.getOrElse(response.hits().total(), total -> total.value(), 0L);
+        final Aggregate aggregate = response.aggregations().get(AGGREGATION_NAME);
+        return new FieldValues(getValueCounts(aggregate), totalCount, scopeQuery.allTime());
+    }
+
+    private static List<FieldValueCount> getValueCounts(final Aggregate aggregate) {
+        if (aggregate == null) {
+            return Collections.emptyList();
+        } else if (aggregate.isSterms()) {
+            return aggregate.sterms().buckets().array().stream()
+                    .map(bucket -> new FieldValueCount(bucket.key().stringValue(), bucket.docCount()))
+                    .toList();
+        } else if (aggregate.isLterms()) {
+            // Booleans are aggregated as 0 or 1, with `true` or `false` as the key's string form
+            return aggregate.lterms().buckets().array().stream()
+                    .map(bucket -> new FieldValueCount(
+                            Objects.requireNonNullElse(bucket.keyAsString(), String.valueOf(bucket.key())),
+                            bucket.docCount()))
+                    .toList();
+        } else {
+            LOGGER.debug("Unexpected aggregation type: {}", aggregate._kind());
+            return Collections.emptyList();
+        }
+    }
+
+
+    // --------------------------------------------------------------------------------
+
+
+    /// A query selecting the documents to count values across.
+    ///
+    /// @param query   The query.
+    /// @param allTime True if the query selects documents from all time rather than a time range.
+    private record ScopeQuery(Query query, boolean allTime) {
+
     }
 }

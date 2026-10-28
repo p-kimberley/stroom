@@ -22,6 +22,8 @@ import stroom.query.client.ExpressionTreePresenter.ExpressionTreeView;
 import stroom.query.client.ExpressionTreeViewImpl;
 import stroom.query.client.QueryPlugin;
 import stroom.query.client.ResultStorePlugin;
+import stroom.query.client.presenter.FieldValuePickerPresenter;
+import stroom.query.client.presenter.FieldValuePickerPresenter.FieldValuePickerView;
 import stroom.query.client.presenter.QueryDocPresenter;
 import stroom.query.client.presenter.QueryEditPresenter;
 import stroom.query.client.presenter.QueryEditPresenter.QueryEditView;
@@ -43,6 +45,7 @@ import stroom.query.client.presenter.ResultStoreSettingsPresenter;
 import stroom.query.client.presenter.ResultStoreSettingsPresenter.ResultStoreSettingsView;
 import stroom.query.client.presenter.TextPresenter;
 import stroom.query.client.presenter.TextPresenter.TextView;
+import stroom.query.client.view.FieldValuePickerViewImpl;
 import stroom.query.client.view.QueryEditViewImpl;
 import stroom.query.client.view.QueryHelpViewImpl;
 import stroom.query.client.view.QueryOptionsViewImpl;
@@ -105,6 +108,10 @@ public class QueryModule extends PluginModule {
                 QueryOptionsPresenter.class,
                 QueryOptionsView.class,
                 QueryOptionsViewImpl.class);
+        bindPresenterWidget(
+                FieldValuePickerPresenter.class,
+                FieldValuePickerView.class,
+                FieldValuePickerViewImpl.class);
 
         bindPresenterWidget(
                 ResultStorePresenter.class,

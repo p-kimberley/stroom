@@ -23,6 +23,7 @@ import stroom.explorer.client.presenter.DocSelectionBoxPresenter;
 import stroom.pipeline.structure.client.view.Box;
 import stroom.pipeline.structure.client.view.TreePanel;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.widget.htree.client.BracketConnectorRenderer;
@@ -61,11 +62,12 @@ public class ExpressionTreePanel extends TreePanel<Item> {
 
     public ExpressionTreePanel(final Provider<DocSelectionBoxPresenter> docRefProvider,
                                final Provider<UserRefSelectionBoxPresenter> userRefProvider,
+                               final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
                                final UiConfigCache uiConfigCache,
                                final boolean utc) {
 
         operatorEditor = new OperatorEditor();
-        termEditor = new TermEditor(docRefProvider, userRefProvider, uiConfigCache);
+        termEditor = new TermEditor(docRefProvider, userRefProvider, queryOptionsPresenterProvider, uiConfigCache);
         termEditor.setUtc(utc);
 
         final FlowPanel panel = new FlowPanel();

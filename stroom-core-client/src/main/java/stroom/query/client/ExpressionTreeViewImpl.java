@@ -23,6 +23,7 @@ import stroom.pipeline.structure.client.view.DraggableTreePanel;
 import stroom.preferences.client.UserPreferencesManager;
 import stroom.query.client.ExpressionTreePresenter.ExpressionTreeView;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.widget.contextmenu.client.event.ContextMenuEvent.Handler;
@@ -47,16 +48,19 @@ public class ExpressionTreeViewImpl
     @Inject
     public ExpressionTreeViewImpl(final Provider<DocSelectionBoxPresenter> docRefProvider,
                                   final Provider<UserRefSelectionBoxPresenter> userRefProvider,
+                                  final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
                                   final UserPreferencesManager userPreferencesManager,
                                   final UiConfigCache uiConfigCache) {
         treePanel = new ExpressionTreePanel(
                 docRefProvider,
                 userRefProvider,
+                queryOptionsPresenterProvider,
                 uiConfigCache,
                 userPreferencesManager.isUtc());
         final ExpressionTreePanel subTreePanel = new ExpressionTreePanel(
                 docRefProvider,
                 userRefProvider,
+                queryOptionsPresenterProvider,
                 uiConfigCache,
                 userPreferencesManager.isUtc());
 

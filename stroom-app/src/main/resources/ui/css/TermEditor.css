@@ -94,6 +94,11 @@
 	border: none;
 }
 
+.termEditor-button {
+    flex-shrink: 0;
+    margin-left: 2px;
+}
+
 .termEditor-label {
     display: flex;
     margin: 0px;

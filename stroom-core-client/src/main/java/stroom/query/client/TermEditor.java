@@ -26,15 +26,20 @@ import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.api.datasource.ConditionSet;
 import stroom.query.api.datasource.FieldType;
 import stroom.query.api.datasource.QueryField;
+import stroom.query.api.datasource.QueryOptionSet;
+import stroom.query.api.datasource.QueryOptionUtil;
 import stroom.query.client.presenter.FieldInfoSelectionItem;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.security.shared.DocumentPermission;
+import stroom.svg.client.SvgPresets;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.ui.config.shared.ExtendedUiConfig;
 import stroom.util.shared.NullSafe;
 import stroom.util.shared.StringUtil;
 import stroom.util.shared.UserRef;
+import stroom.widget.button.client.SvgButton;
 import stroom.widget.customdatebox.client.MyDateBox;
 import stroom.widget.dropdowntree.client.view.QuickFilterTooltipUtil;
 
@@ -61,6 +66,8 @@ public class TermEditor extends Composite {
     private static final String DROPDOWN_CLASS_NAME = "dropdown";
     private static final String WIDE_CLASS_NAME = "wide";
     private static final String NARROW_CLASS_NAME = "narrow";
+    // Highlights the options button when the term has options other than the defaults
+    private static final String ON_CLASS_NAME = "on";
 
     private final FlowPanel layout;
     private final BaseSelectionBox<QueryField, FieldInfoSelectionItem> fieldListBox;
@@ -75,6 +82,8 @@ public class TermEditor extends Composite {
     private final Widget docRefWidget;
     private final Widget userRefWidget;
     private final Label fieldTypeLabel;
+    private final SvgButton optionsButton;
+    private final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider;
     private final DocSelectionBoxPresenter docSelectionBoxPresenter;
     private final UserRefSelectionBoxPresenter userRefSelectionBoxPresenter;
     private final List<Widget> activeWidgets = new ArrayList<>();
@@ -90,7 +99,9 @@ public class TermEditor extends Composite {
 
     public TermEditor(final Provider<DocSelectionBoxPresenter> docRefProvider,
                       final Provider<UserRefSelectionBoxPresenter> userRefProvider,
+                      final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
                       final UiConfigCache uiConfigCache) {
+        this.queryOptionsPresenterProvider = queryOptionsPresenterProvider;
         final DocSelectionBoxPresenter docRefPresenter = docRefProvider.get();
         docRefPresenter.setRequiredPermissions(DocumentPermission.USE);
         docRefPresenter.getWidget().getElement().getStyle().setMargin(0, Unit.PX);
@@ -134,6 +145,7 @@ public class TermEditor extends Composite {
         dateTo.setVisible(false);
 
         fieldTypeLabel = createFieldTypeLabel();
+        optionsButton = createOptionsButton();
 
         final FlowPanel inner = new FlowPanel();
         inner.setStyleName("termEditor-inner");
@@ -148,6 +160,7 @@ public class TermEditor extends Composite {
         inner.add(dateTo);
         inner.add(docRefWidget);
         inner.add(userRefWidget);
+        inner.add(optionsButton);
 
         layout = new FlowPanel();
         layout.add(inner);
@@ -308,6 +321,7 @@ public class TermEditor extends Composite {
         conditionListBox.setValue(selected);
         NullSafe.consume(selected, Condition::getDescription, conditionListBox::setTitle);
         changeCondition(field, selected);
+        updateOptionsButton(field);
 
         if (NullSafe.nonNull(field, QueryField::getFldType)) {
             fieldTypeLabel.setText(field.getFldType().getShortTypeName());
@@ -532,10 +546,15 @@ public class TermEditor extends Composite {
         registerHandler(fieldListBox.addValueChangeHandler(event -> {
             if (!reading) {
                 write(term);
+                // Keep only the options that the new field supports
+                term.setOptions(QueryOptionUtil.normalise(
+                        NullSafe.get(event.getValue(), QueryField::getQueryOptionSet),
+                        term.getOptions()));
                 changeField(event.getValue(), conditionListBox.getValue(), true);
                 fireDirty();
             }
         }));
+        registerHandler(optionsButton.addClickHandler(event -> showOptions()));
         registerHandler(conditionListBox.addValueChangeHandler(event -> {
             if (!reading) {
                 write(term);
@@ -543,6 +562,33 @@ public class TermEditor extends Composite {
                 fireDirty();
             }
         }));
+    }
+
+    private void showOptions() {
+        final QueryField field = fieldListBox.getValue();
+        if (field != null && field.getQueryOptionSet() != null) {
+            queryOptionsPresenterProvider.get().show(field, term.getOptions(), options -> {
+                term.setOptions(options);
+                updateOptionsButton(field);
+                fireDirty();
+            });
+        }
+    }
+
+    /**
+     * Shows the options button only for fields whose data source supports field-level query options, and
+     * highlights it when the term has options other than the defaults.
+     */
+    private void updateOptionsButton(final QueryField field) {
+        final QueryOptionSet queryOptionSet = NullSafe.get(field, QueryField::getQueryOptionSet);
+        optionsButton.setVisible(queryOptionSet != null);
+        if (queryOptionSet != null && QueryOptionUtil.hasNonDefaultOptions(queryOptionSet, term.getOptions())) {
+            optionsButton.getElement().addClassName(ON_CLASS_NAME);
+            optionsButton.setTitle("Query options (changed from the defaults)");
+        } else {
+            optionsButton.getElement().removeClassName(ON_CLASS_NAME);
+            optionsButton.setTitle("Query options");
+        }
     }
 
     private void unbind() {
@@ -602,6 +648,14 @@ public class TermEditor extends Composite {
         final Label label = new Label(text, false);
         label.addStyleName("termEditor-label");
         return label;
+    }
+
+    private SvgButton createOptionsButton() {
+        final SvgButton button = SvgButton.create(SvgPresets.SETTINGS);
+        button.addStyleName("termEditor-button");
+        button.setTitle("Query options");
+        button.setVisible(false);
+        return button;
     }
 
     private Label createFieldTypeLabel() {

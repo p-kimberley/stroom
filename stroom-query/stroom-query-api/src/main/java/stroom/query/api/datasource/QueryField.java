@@ -40,7 +40,8 @@ import java.util.stream.Collectors;
         "fldType",
         "docRefType",
         "queryable",
-        "conditionSet"
+        "conditionSet",
+        "queryOptionSet"
 })
 @JsonInclude(Include.NON_NULL)
 public class QueryField implements Field, HasDisplayValue {
@@ -62,6 +63,8 @@ public class QueryField implements Field, HasDisplayValue {
     private final String docRefType;
     @JsonProperty
     private final Boolean queryable;
+    @JsonProperty
+    private final QueryOptionSet queryOptionSet;
 
     @JsonCreator
     public QueryField(@Deprecated @JsonProperty("type") final String type,
@@ -70,7 +73,8 @@ public class QueryField implements Field, HasDisplayValue {
                       @JsonProperty("fldType") final FieldType fldType,
                       @JsonProperty("conditionSet") final ConditionSet conditionSet,
                       @JsonProperty("docRefType") final String docRefType,
-                      @JsonProperty("queryable") final Boolean queryable) {
+                      @JsonProperty("queryable") final Boolean queryable,
+                      @JsonProperty("queryOptionSet") final QueryOptionSet queryOptionSet) {
         // Don't use NullSafe as this breaks some tests
         this.fldName = fldName != null
                 ? fldName
@@ -79,6 +83,7 @@ public class QueryField implements Field, HasDisplayValue {
         this.conditionSet = conditionSet;
         this.docRefType = docRefType;
         this.queryable = queryable;
+        this.queryOptionSet = queryOptionSet;
     }
 
     private FieldType convertLegacyType(final FieldType fieldType, final String type) {
@@ -359,6 +364,12 @@ public class QueryField implements Field, HasDisplayValue {
         return queryable != null && queryable;
     }
 
+    /// @return The field-level query options the data source supports for this field, or null if it
+    /// supports none.
+    public QueryOptionSet getQueryOptionSet() {
+        return queryOptionSet;
+    }
+
     @JsonIgnore
     public boolean isNumeric() {
         return getFldType().isNumeric();
@@ -423,6 +434,7 @@ public class QueryField implements Field, HasDisplayValue {
         private ConditionSet conditionSet;
         private String docRefType;
         private Boolean queryable;
+        private QueryOptionSet queryOptionSet;
 
         private Builder() {
         }
@@ -433,6 +445,7 @@ public class QueryField implements Field, HasDisplayValue {
             this.conditionSet = queryField.conditionSet;
             this.docRefType = queryField.docRefType;
             this.queryable = queryField.queryable;
+            this.queryOptionSet = queryField.queryOptionSet;
         }
 
         public Builder fldName(final String fldName) {
@@ -460,6 +473,13 @@ public class QueryField implements Field, HasDisplayValue {
             return this;
         }
 
+        /// @param queryOptionSet The field-level query options the data source supports for the field.
+        /// @return This builder.
+        public Builder queryOptionSet(final QueryOptionSet queryOptionSet) {
+            this.queryOptionSet = queryOptionSet;
+            return this;
+        }
+
         public QueryField build() {
             if (conditionSet == null && fldType != null) {
                 conditionSet = ConditionSet.getDefault(fldType);
@@ -471,7 +491,8 @@ public class QueryField implements Field, HasDisplayValue {
                     fldType,
                     conditionSet,
                     docRefType,
-                    queryable);
+                    queryable,
+                    queryOptionSet);
         }
     }
 }

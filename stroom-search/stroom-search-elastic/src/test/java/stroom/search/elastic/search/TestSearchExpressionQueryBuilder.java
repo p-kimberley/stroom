@@ -27,13 +27,18 @@ import stroom.query.api.ExpressionTerm;
 import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.api.datasource.FieldType;
 import stroom.query.api.datasource.IndexField;
+import stroom.query.api.datasource.QueryOptionSet;
 import stroom.query.common.v2.MockIndexFieldCache;
 import stroom.search.elastic.shared.ElasticIndexDoc;
 import stroom.search.elastic.shared.ElasticIndexField;
 
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.FuzzyQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.MatchPhraseQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.MatchQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.NestedQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.QueryStringQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
@@ -341,7 +346,7 @@ class TestSearchExpressionQueryBuilder {
     // --------------------------------------------------------------------------------
 
     @ParameterizedTest
-    @ValueSource(strings = {TEXT_FIELD, BOOLEAN_FIELD, WILDCARD_FIELD})
+    @ValueSource(strings = {TEXT_FIELD, BOOLEAN_FIELD})
     void testFullTextFieldEquals(final String field) {
         final Query query = buildSingleTerm(field, Condition.EQUALS, "some value*");
 
@@ -349,32 +354,30 @@ class TestSearchExpressionQueryBuilder {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {TEXT_FIELD, BOOLEAN_FIELD, WILDCARD_FIELD})
+    @ValueSource(strings = {TEXT_FIELD, BOOLEAN_FIELD})
     void testFullTextFieldNotEquals(final String field) {
         final Query query = buildSingleTerm(field, Condition.NOT_EQUALS, "true");
 
         assertQueryString(assertNegated(query), field, "true");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {TEXT_FIELD, WILDCARD_FIELD})
-    void testFullTextFieldInSingleValue(final String field) {
-        final Query query = buildSingleTerm(field, Condition.IN, "alpha");
+    @Test
+    void testFullTextFieldInSingleValue() {
+        final Query query = buildSingleTerm(TEXT_FIELD, Condition.IN, "alpha");
 
-        assertQueryString(query, field, "alpha");
+        assertQueryString(query, TEXT_FIELD, "alpha");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {TEXT_FIELD, WILDCARD_FIELD})
-    void testFullTextFieldInMultipleValues(final String field) {
-        final Query query = buildSingleTerm(field, Condition.IN, "alpha, beta ,,gamma");
+    @Test
+    void testFullTextFieldInMultipleValues() {
+        final Query query = buildSingleTerm(TEXT_FIELD, Condition.IN, "alpha, beta ,,gamma");
 
         assertThat(query.isBool()).isTrue();
         final List<Query> should = query.bool().should();
         assertThat(should).hasSize(3);
-        assertQueryString(should.get(0), field, "alpha");
-        assertQueryString(should.get(1), field, "beta");
-        assertQueryString(should.get(2), field, "gamma");
+        assertQueryString(should.get(0), TEXT_FIELD, "alpha");
+        assertQueryString(should.get(1), TEXT_FIELD, "beta");
+        assertQueryString(should.get(2), TEXT_FIELD, "gamma");
     }
 
     @ParameterizedTest
@@ -385,6 +388,7 @@ class TestSearchExpressionQueryBuilder {
         assertThat(query.isRegexp()).isTrue();
         assertThat(query.regexp().field()).isEqualTo(field);
         assertThat(query.regexp().value()).isEqualTo("ab+c.*");
+        assertThat(query.regexp().caseInsensitive()).isNull();
     }
 
     @Test
@@ -397,45 +401,53 @@ class TestSearchExpressionQueryBuilder {
         assertQueryString(lines.get(1), TEXT_FIELD, "two words");
     }
 
-    @Test
-    void testKeywordFieldEqualsExactMatch() {
-        assertTerm(buildSingleTerm(KEYWORD_FIELD, Condition.EQUALS, "abc"), KEYWORD_FIELD, "abc");
+    // A `wildcard` mapping type is matched with term-level queries, the same as `keyword`
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFieldEqualsExactMatch(final String field) {
+        assertTerm(buildSingleTerm(field, Condition.EQUALS, "abc"), field, "abc");
     }
 
-    @Test
-    void testKeywordFieldEqualsQuotedValueStripsQuotes() {
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFieldEqualsQuotedValueStripsQuotes(final String field) {
         // Quoting allows wildcard characters to be matched literally
-        assertTerm(buildSingleTerm(KEYWORD_FIELD, Condition.EQUALS, "\"a*b\""), KEYWORD_FIELD, "a*b");
+        assertTerm(buildSingleTerm(field, Condition.EQUALS, "\"a*b\""), field, "a*b");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"ab*", "a?c", "*bc"})
     void testKeywordFieldEqualsWildcard(final String value) {
+        // Wildcards are case-sensitive unless the case-insensitive option is set
         assertWildcard(buildSingleTerm(KEYWORD_FIELD, Condition.EQUALS, value), KEYWORD_FIELD, value);
+        assertWildcard(buildSingleTerm(WILDCARD_FIELD, Condition.EQUALS, value), WILDCARD_FIELD, value);
     }
 
-    @Test
-    void testKeywordFieldNotEquals() {
-        final Query query = buildSingleTerm(KEYWORD_FIELD, Condition.NOT_EQUALS, "abc");
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFieldNotEquals(final String field) {
+        final Query query = buildSingleTerm(field, Condition.NOT_EQUALS, "abc");
 
-        assertTerm(assertNegated(query), KEYWORD_FIELD, "abc");
+        assertTerm(assertNegated(query), field, "abc");
     }
 
-    @Test
-    void testKeywordFieldInSingleValue() {
-        assertTerm(buildSingleTerm(KEYWORD_FIELD, Condition.IN, "abc"), KEYWORD_FIELD, "abc");
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFieldInSingleValue(final String field) {
+        assertTerm(buildSingleTerm(field, Condition.IN, "abc"), field, "abc");
     }
 
-    @Test
-    void testKeywordFieldInMultipleValues() {
-        final Query query = buildSingleTerm(KEYWORD_FIELD, Condition.IN, "abc, d*f, \"g?h\"");
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFieldInMultipleValues(final String field) {
+        final Query query = buildSingleTerm(field, Condition.IN, "abc, d*f, \"g?h\"");
 
         assertThat(query.isBool()).isTrue();
         final List<Query> should = query.bool().should();
         assertThat(should).hasSize(3);
-        assertTerm(should.get(0), KEYWORD_FIELD, "abc");
-        assertWildcard(should.get(1), KEYWORD_FIELD, "d*f");
-        assertTerm(should.get(2), KEYWORD_FIELD, "g?h");
+        assertTerm(should.get(0), field, "abc");
+        assertWildcard(should.get(1), field, "d*f");
+        assertTerm(should.get(2), field, "g?h");
     }
 
     @Test
@@ -463,6 +475,193 @@ class TestSearchExpressionQueryBuilder {
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageStartingWith("Unsupported condition '" + condition.getDisplayValue() + "' for ")
                 .hasMessageEndingWith(" field type");
+    }
+
+    // --------------------------------------------------------------------------------
+    // Field-level query options
+    // --------------------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordCaseInsensitive_exactValue(final String field) {
+        final Query query = buildSingleTerm(termWithOptions(field, Condition.EQUALS, "Admin",
+                Map.of(QueryOptionSet.CASE_INSENSITIVE, "true")));
+
+        assertTerm(query, field, "Admin");
+        assertThat(query.term().caseInsensitive()).isTrue();
+    }
+
+    @Test
+    void testKeywordCaseInsensitive_wildcard() {
+        final Query query = buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.EQUALS, "Admin*",
+                Map.of(QueryOptionSet.CASE_INSENSITIVE, "true")));
+
+        assertThat(query.isWildcard()).isTrue();
+        assertThat(query.wildcard().value()).isEqualTo("Admin*");
+        assertThat(query.wildcard().caseInsensitive()).isTrue();
+    }
+
+    @Test
+    void testKeywordCaseInsensitive_regex() {
+        final Query query = buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.MATCHES_REGEX, "Adm.n",
+                Map.of(QueryOptionSet.CASE_INSENSITIVE, "true")));
+
+        assertThat(query.isRegexp()).isTrue();
+        assertThat(query.regexp().caseInsensitive()).isTrue();
+    }
+
+    @Test
+    void testKeywordCaseInsensitive_inAndNotEquals() {
+        final Map<String, String> options = Map.of(QueryOptionSet.CASE_INSENSITIVE, "true");
+
+        final Query in = buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.IN, "Alice, B*", options));
+        final List<Query> should = in.bool().should();
+        assertThat(should.get(0).term().caseInsensitive()).isTrue();
+        assertThat(should.get(1).wildcard().caseInsensitive()).isTrue();
+
+        final Query notEquals = assertNegated(buildSingleTerm(
+                termWithOptions(KEYWORD_FIELD, Condition.NOT_EQUALS, "Alice", options)));
+        assertThat(notEquals.term().caseInsensitive()).isTrue();
+    }
+
+    @Test
+    void testKeywordCaseInsensitive_dictionary() {
+        when(wordListProvider.getWords(DICTIONARY_REF)).thenReturn(new String[]{"Alice", "B*"});
+
+        final List<Query> lines = assertDictionaryLines(buildSingleTerm(dictionaryTerm(KEYWORD_FIELD).copy()
+                .options(Map.of(QueryOptionSet.CASE_INSENSITIVE, "true"))
+                .build()), 2);
+
+        assertThat(lines.get(0).term().caseInsensitive()).isTrue();
+        assertThat(lines.get(1).wildcard().caseInsensitive()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {KEYWORD_FIELD, WILDCARD_FIELD})
+    void testKeywordFuzzy(final String field) {
+        final Query query = buildSingleTerm(termWithOptions(field, Condition.EQUALS, "svchost.exe", Map.of(
+                QueryOptionSet.FUZZINESS, "2",
+                QueryOptionSet.FUZZY_PREFIX_LENGTH, "1",
+                QueryOptionSet.FUZZY_TRANSPOSITIONS, "false")));
+
+        assertThat(query.isFuzzy()).as("Is a fuzzy query").isTrue();
+        final FuzzyQuery fuzzy = query.fuzzy();
+        assertThat(fuzzy.field()).isEqualTo(field);
+        assertThat(fuzzy.value()._get()).isEqualTo("svchost.exe");
+        assertThat(fuzzy.fuzziness()).isEqualTo("2");
+        assertThat(fuzzy.prefixLength()).isEqualTo(1);
+        assertThat(fuzzy.transpositions()).isFalse();
+    }
+
+    @Test
+    void testKeywordFuzzy_quotedValueIsFuzzy() {
+        final Query query = buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.EQUALS, "\"a*b\"",
+                Map.of(QueryOptionSet.FUZZINESS, QueryOptionSet.FUZZINESS_AUTO)));
+
+        assertThat(query.isFuzzy()).isTrue();
+        assertThat(query.fuzzy().value()._get()).isEqualTo("a*b");
+        assertThat(query.fuzzy().fuzziness()).isEqualTo(QueryOptionSet.FUZZINESS_AUTO);
+    }
+
+    @Test
+    void testKeywordFuzzy_notAppliedToWildcardOrRegex() {
+        final Map<String, String> options = Map.of(QueryOptionSet.FUZZINESS, "1");
+
+        assertWildcard(buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.EQUALS, "ab*", options)),
+                KEYWORD_FIELD, "ab*");
+        assertThat(buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.MATCHES_REGEX, "ab.", options))
+                .isRegexp()).isTrue();
+    }
+
+    @Test
+    void testKeywordFuzzy_bothStoredFuzzyWins() {
+        // The dialog prevents setting both, but if stored they resolve to fuzzy, which is case-sensitive
+        final Query query = buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.EQUALS, "abc", Map.of(
+                QueryOptionSet.CASE_INSENSITIVE, "true",
+                QueryOptionSet.FUZZINESS, "1")));
+
+        assertThat(query.isFuzzy()).isTrue();
+    }
+
+    @Test
+    void testTextMatchAllWords() {
+        final Query query = buildSingleTerm(termWithOptions(TEXT_FIELD, Condition.EQUALS, "failed login",
+                Map.of(QueryOptionSet.DEFAULT_OPERATOR, QueryOptionSet.OPERATOR_AND)));
+
+        assertQueryString(query, TEXT_FIELD, "failed login");
+        assertThat(query.queryString().defaultOperator()).isEqualTo(Operator.And);
+    }
+
+    @Test
+    void testTextDefaultOperatorUnsetByDefault() {
+        assertThat(buildSingleTerm(TEXT_FIELD, Condition.EQUALS, "failed login").queryString().defaultOperator())
+                .isNull();
+    }
+
+    @Test
+    void testTextPhrase() {
+        final Query query = buildSingleTerm(termWithOptions(TEXT_FIELD, Condition.EQUALS, "net user /add", Map.of(
+                QueryOptionSet.MATCH_MODE, QueryOptionSet.MATCH_MODE_PHRASE,
+                QueryOptionSet.PHRASE_SLOP, "2",
+                // Ignored in phrase mode
+                QueryOptionSet.FUZZINESS, "1")));
+
+        assertThat(query.isMatchPhrase()).as("Is a match_phrase query").isTrue();
+        final MatchPhraseQuery phrase = query.matchPhrase();
+        assertThat(phrase.field()).isEqualTo(TEXT_FIELD);
+        assertThat(phrase.query()).isEqualTo("net user /add");
+        assertThat(phrase.slop()).isEqualTo(2);
+    }
+
+    @Test
+    void testTextFuzzy() {
+        final Query query = buildSingleTerm(termWithOptions(TEXT_FIELD, Condition.EQUALS, "pasword reset", Map.of(
+                QueryOptionSet.FUZZINESS, QueryOptionSet.FUZZINESS_AUTO,
+                QueryOptionSet.FUZZY_PREFIX_LENGTH, "2",
+                QueryOptionSet.FUZZY_MAX_EXPANSIONS, "20",
+                QueryOptionSet.DEFAULT_OPERATOR, QueryOptionSet.OPERATOR_AND)));
+
+        assertThat(query.isMatch()).as("Is a match query").isTrue();
+        final MatchQuery match = query.match();
+        assertThat(match.field()).isEqualTo(TEXT_FIELD);
+        assertThat(match.query()._get()).isEqualTo("pasword reset");
+        assertThat(match.fuzziness()).isEqualTo(QueryOptionSet.FUZZINESS_AUTO);
+        assertThat(match.prefixLength()).isEqualTo(2);
+        assertThat(match.maxExpansions()).isEqualTo(20);
+        assertThat(match.operator()).isEqualTo(Operator.And);
+    }
+
+    @Test
+    void testTextFuzzy_notAppliedToWildcard() {
+        final Query query = buildSingleTerm(termWithOptions(TEXT_FIELD, Condition.EQUALS, "pass*",
+                Map.of(QueryOptionSet.FUZZINESS, "1")));
+
+        assertQueryString(query, TEXT_FIELD, "pass*");
+    }
+
+    @Test
+    void testTextOptions_dictionary() {
+        when(wordListProvider.getWords(DICTIONARY_REF)).thenReturn(new String[]{"failed login"});
+
+        final List<Query> lines = assertDictionaryLines(buildSingleTerm(dictionaryTerm(TEXT_FIELD).copy()
+                .options(Map.of(QueryOptionSet.MATCH_MODE, QueryOptionSet.MATCH_MODE_PHRASE))
+                .build()), 1);
+
+        assertThat(lines.getFirst().isMatchPhrase()).isTrue();
+    }
+
+    @Test
+    void testOptionsIgnoredForUnsupportedFieldsAndUnknownIds() {
+        // Text options don't apply to keyword fields, and keyword options don't apply to text fields
+        assertTerm(buildSingleTerm(termWithOptions(KEYWORD_FIELD, Condition.EQUALS, "abc", Map.of(
+                        QueryOptionSet.MATCH_MODE, QueryOptionSet.MATCH_MODE_PHRASE,
+                        "unknown", "x"))),
+                KEYWORD_FIELD, "abc");
+        final Query text = buildSingleTerm(termWithOptions(TEXT_FIELD, Condition.MATCHES_REGEX, "ab.",
+                Map.of(QueryOptionSet.CASE_INSENSITIVE, "true")));
+        assertThat(text.regexp().caseInsensitive()).isNull();
+        assertTerm(buildSingleTerm(termWithOptions(LONG_FIELD, Condition.EQUALS, "5",
+                Map.of(QueryOptionSet.CASE_INSENSITIVE, "true"))), LONG_FIELD, 5L);
     }
 
     // --------------------------------------------------------------------------------
@@ -1392,6 +1591,13 @@ class TestSearchExpressionQueryBuilder {
         return ExpressionTerm.builder().field(field).condition(condition).value(value).build();
     }
 
+    private static ExpressionTerm termWithOptions(final String field,
+                                                  final Condition condition,
+                                                  final String value,
+                                                  final Map<String, String> options) {
+        return ExpressionTerm.builder().field(field).condition(condition).value(value).options(options).build();
+    }
+
     private static ExpressionTerm dictionaryTerm(final String field) {
         return ExpressionTerm.builder()
                 .field(field)
@@ -1433,7 +1639,7 @@ class TestSearchExpressionQueryBuilder {
         final WildcardQuery wildcard = query.wildcard();
         assertThat(wildcard.field()).isEqualTo(field);
         assertThat(wildcard.value()).isEqualTo(expectedValue);
-        assertThat(wildcard.caseInsensitive()).isTrue();
+        assertThat(wildcard.caseInsensitive()).as("Wildcards are case-sensitive by default").isNull();
     }
 
     private static void assertQueryString(final Query query, final String field, final String expectedValue) {

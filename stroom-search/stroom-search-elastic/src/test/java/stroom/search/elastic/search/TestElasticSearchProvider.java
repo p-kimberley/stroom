@@ -21,6 +21,7 @@ import stroom.query.api.ExpressionTerm.Condition;
 import stroom.query.api.datasource.ConditionSet;
 import stroom.query.api.datasource.FieldType;
 import stroom.query.api.datasource.QueryField;
+import stroom.query.api.datasource.QueryOptionSet;
 import stroom.search.elastic.ElasticClientCache;
 import stroom.search.elastic.ElasticClusterStore;
 import stroom.search.elastic.ElasticIndexStore;
@@ -446,6 +447,31 @@ class TestElasticSearchProvider {
                         tuple("Message.keyword", FieldType.KEYWORD, true));
         assertThat(elasticSearchProvider.getDataSourceFields(createIndex()).getFirst().getConditionSet())
                 .isEqualTo(ConditionSet.ELASTIC_TEXT);
+    }
+
+    @Test
+    void testGetDataSourceFields_queryOptionSets() throws IOException {
+        givenMapping("""
+                {
+                  "Constant": { "type": "constant_keyword", "value": "foo" },
+                  "Count": { "type": "long" },
+                  "Message": { "type": "match_only_text" },
+                  "Name": { "type": "keyword" },
+                  "Pattern": { "type": "wildcard" },
+                  "Title": { "type": "text" },
+                  "Version": { "type": "version" }
+                }""");
+
+        assertThat(elasticSearchProvider.getDataSourceFields(createIndex()))
+                .extracting(QueryField::getFldName, QueryField::getQueryOptionSet)
+                .containsExactlyInAnyOrder(
+                        tuple("Constant", null),
+                        tuple("Count", null),
+                        tuple("Message", QueryOptionSet.ELASTIC_TEXT),
+                        tuple("Name", QueryOptionSet.ELASTIC_KEYWORD),
+                        tuple("Pattern", QueryOptionSet.ELASTIC_KEYWORD),
+                        tuple("Title", QueryOptionSet.ELASTIC_TEXT),
+                        tuple("Version", null));
     }
 
     @Test

@@ -286,6 +286,7 @@ public class ElasticSearchProvider implements SearchProvider, ElasticIndexServic
                 .fldType(elasticIndexFieldType)
                 .conditionSet(conditionSet)
                 .queryable(isIndexed && !FieldType.NESTED.equals(elasticIndexFieldType))
+                .queryOptionSet(ElasticQueryOptionSets.get(nativeType))
                 .build();
     }
 

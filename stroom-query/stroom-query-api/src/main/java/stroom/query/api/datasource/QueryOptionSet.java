@@ -169,7 +169,8 @@ public enum QueryOptionSet {
                 .id(MATCH_MODE)
                 .displayName("Match mode")
                 .description("Standard matches the words in any order. Phrase matches them in the order " +
-                             "given, e.g. for log messages or command lines.")
+                             "given, e.g. for log messages or command lines. Wildcards are not supported " +
+                             "in phrase mode.")
                 .choiceType(MATCH_MODE_STANDARD)
                 .addChoice(MATCH_MODE_STANDARD, "Standard")
                 .addChoice(MATCH_MODE_PHRASE, "Phrase")

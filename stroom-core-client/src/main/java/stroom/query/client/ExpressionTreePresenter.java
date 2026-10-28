@@ -22,6 +22,7 @@ import stroom.data.client.event.HasDataSelectionHandlers;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
 import stroom.query.api.ExpressionOperator;
+import stroom.query.api.TimeRange;
 import stroom.query.client.presenter.FieldSelectionListModel;
 import stroom.widget.contextmenu.client.event.ContextMenuEvent.Handler;
 import stroom.widget.contextmenu.client.event.HasContextMenuHandlers;
@@ -38,6 +39,7 @@ import com.gwtplatform.mvp.client.View;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 public class ExpressionTreePresenter extends MyPresenterWidget<ExpressionTreePresenter.ExpressionTreeView>
         implements HasDataSelectionHandlers<Item>,
@@ -78,6 +80,14 @@ public class ExpressionTreePresenter extends MyPresenterWidget<ExpressionTreePre
                      final DocRef dataSource,
                      final FieldSelectionListModel fieldSelectionListModel) {
         getView().init(restFactory, dataSource, fieldSelectionListModel);
+    }
+
+    /// Sets where the value picker of the term editor gets the time range to count values in, e.g. the
+    /// dashboard's time range. Without one, values are counted across all time.
+    ///
+    /// @param timeRangeSupplier Supplies the current time range, or null.
+    public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
+        getView().setTimeRangeSupplier(timeRangeSupplier);
     }
 
     public void read(final ExpressionOperator root) {
@@ -302,6 +312,8 @@ public class ExpressionTreePresenter extends MyPresenterWidget<ExpressionTreePre
         void init(RestFactory restFactory,
                   DocRef dataSource,
                   FieldSelectionListModel fieldSelectionListModel);
+
+        void setTimeRangeSupplier(Supplier<TimeRange> timeRangeSupplier);
 
         void write();
 

@@ -30,6 +30,7 @@ import com.google.gwt.user.client.ui.MultiWordSuggestOracle.MultiWordSuggestion;
 import com.google.gwt.user.client.ui.SuggestOracle;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,6 +87,12 @@ public class AsyncSuggestOracle extends SuggestOracle {
                 list.add("False");
             }
             returnSuggestions(request, callback, list);
+            return;
+        }
+
+        if (field != null && field.supportsTopValues()) {
+            // The field's value picker lists its most common values instead
+            returnSuggestions(request, callback, Collections.emptyList());
             return;
         }
 

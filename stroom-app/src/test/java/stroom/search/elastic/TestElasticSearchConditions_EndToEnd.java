@@ -287,7 +287,7 @@ class TestElasticSearchConditions_EndToEnd extends AbstractCoreIntegrationTest {
         cases.add(match(field, Condition.EQUALS, "?herry", "3"));
         cases.add(match(field, Condition.NOT_EQUALS, "apple", "2", "3", "4", "5"));
         cases.add(match(field, Condition.IN, "apple,banana", "1", "2"));
-        cases.add(dictionary(field, List.of("banana", "cher*"), "2", "3"));
+        cases.add(dictionary(field, List.of("banana", "Cher*"), "2", "3"));
         cases.add(match(field, Condition.MATCHES_REGEX, "ban.*", "2"));
         cases.add(match(field, Condition.MATCHES_REGEX, "cherry"));
         cases.addAll(existence(field));

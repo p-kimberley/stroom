@@ -475,6 +475,38 @@ class TestElasticSearchProvider {
     }
 
     @Test
+    void testGetDataSourceFields_supportsTopValues() throws IOException {
+        givenMapping("""
+                {
+                  "Count": { "type": "long" },
+                  "Flag": { "type": "boolean" },
+                  "Ip": { "type": "ip" },
+                  "Message": {
+                    "type": "text",
+                    "fields": {
+                      "keyword": { "type": "keyword" }
+                    }
+                  },
+                  "Name": { "type": "keyword" },
+                  "Pattern": { "type": "wildcard" },
+                  "Ratio": { "type": "double" },
+                  "Time": { "type": "date" },
+                  "Title": { "type": "text" },
+                  "Users": {
+                    "type": "nested",
+                    "properties": {
+                      "Name": { "type": "keyword" }
+                    }
+                  }
+                }""");
+
+        assertThat(elasticSearchProvider.getDataSourceFields(createIndex()))
+                .filteredOn(QueryField::supportsTopValues)
+                .extracting(QueryField::getFldName)
+                .containsExactlyInAnyOrder("Count", "Flag", "Ip", "Message", "Message.keyword", "Name", "Pattern");
+    }
+
+    @Test
     void testGetDataSourceFields_passthroughDroppedChildrenKept() throws IOException {
         givenMapping("""
                 {

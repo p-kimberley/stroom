@@ -23,6 +23,7 @@ import stroom.explorer.shared.ExplorerConstants;
 import stroom.item.client.BaseSelectionBox;
 import stroom.item.client.SelectionBox;
 import stroom.query.api.ExpressionTerm.Condition;
+import stroom.query.api.TimeRange;
 import stroom.query.api.datasource.ConditionSet;
 import stroom.query.api.datasource.FieldType;
 import stroom.query.api.datasource.QueryField;
@@ -30,10 +31,13 @@ import stroom.query.api.datasource.QueryOptionSet;
 import stroom.query.api.datasource.QueryOptionUtil;
 import stroom.query.client.presenter.FieldInfoSelectionItem;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.FieldValuePickerPresenter;
 import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.security.shared.DocumentPermission;
+import stroom.svg.client.Preset;
 import stroom.svg.client.SvgPresets;
+import stroom.svg.shared.SvgImage;
 import stroom.ui.config.client.UiConfigCache;
 import stroom.ui.config.shared.ExtendedUiConfig;
 import stroom.util.shared.NullSafe;
@@ -59,6 +63,7 @@ import com.google.web.bindery.event.shared.HandlerRegistration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public class TermEditor extends Composite {
 
@@ -83,7 +88,9 @@ public class TermEditor extends Composite {
     private final Widget userRefWidget;
     private final Label fieldTypeLabel;
     private final SvgButton optionsButton;
+    private final SvgButton valuesButton;
     private final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider;
+    private final Provider<FieldValuePickerPresenter> fieldValuePickerPresenterProvider;
     private final DocSelectionBoxPresenter docSelectionBoxPresenter;
     private final UserRefSelectionBoxPresenter userRefSelectionBoxPresenter;
     private final List<Widget> activeWidgets = new ArrayList<>();
@@ -96,12 +103,17 @@ public class TermEditor extends Composite {
 
     private final AsyncSuggestOracle suggestOracle;
     private FieldSelectionListModel fieldSelectionListModel;
+    private RestFactory restFactory;
+    private DocRef dataSource;
+    private Supplier<TimeRange> timeRangeSupplier;
 
     public TermEditor(final Provider<DocSelectionBoxPresenter> docRefProvider,
                       final Provider<UserRefSelectionBoxPresenter> userRefProvider,
                       final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
+                      final Provider<FieldValuePickerPresenter> fieldValuePickerPresenterProvider,
                       final UiConfigCache uiConfigCache) {
         this.queryOptionsPresenterProvider = queryOptionsPresenterProvider;
+        this.fieldValuePickerPresenterProvider = fieldValuePickerPresenterProvider;
         final DocSelectionBoxPresenter docRefPresenter = docRefProvider.get();
         docRefPresenter.setRequiredPermissions(DocumentPermission.USE);
         docRefPresenter.getWidget().getElement().getStyle().setMargin(0, Unit.PX);
@@ -146,6 +158,7 @@ public class TermEditor extends Composite {
 
         fieldTypeLabel = createFieldTypeLabel();
         optionsButton = createOptionsButton();
+        valuesButton = createValuesButton();
 
         final FlowPanel inner = new FlowPanel();
         inner.setStyleName("termEditor-inner");
@@ -160,6 +173,7 @@ public class TermEditor extends Composite {
         inner.add(dateTo);
         inner.add(docRefWidget);
         inner.add(userRefWidget);
+        inner.add(valuesButton);
         inner.add(optionsButton);
 
         layout = new FlowPanel();
@@ -182,9 +196,19 @@ public class TermEditor extends Composite {
                      final FieldSelectionListModel fieldSelectionListModel) {
         suggestOracle.setRestFactory(restFactory);
         suggestOracle.setDataSource(dataSource);
+        this.restFactory = restFactory;
+        this.dataSource = dataSource;
 
         this.fieldSelectionListModel = fieldSelectionListModel;
         fieldListBox.setModel(fieldSelectionListModel);
+    }
+
+    /**
+     * Sets where the value picker gets the time range to count values in, e.g. the dashboard's time range.
+     * Without one, values are counted across all time.
+     */
+    public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
+        this.timeRangeSupplier = timeRangeSupplier;
     }
 
     public void startEdit(final Term term) {
@@ -391,6 +415,20 @@ public class TermEditor extends Composite {
                     break;
             }
         }
+        updateValuesButton(selectedField, condition);
+    }
+
+    /**
+     * Shows the value picker button for fields whose data source can list their most common values, when the
+     * condition takes values from the text box.
+     */
+    private void updateValuesButton(final QueryField field, final Condition condition) {
+        final boolean supported = field != null
+                                  && field.supportsTopValues()
+                                  && (Condition.EQUALS.equals(condition)
+                                      || Condition.NOT_EQUALS.equals(condition)
+                                      || Condition.IN.equals(condition));
+        valuesButton.setVisible(supported);
     }
 
     private void enterTextOrDateMode(final FieldType indexFieldType) {
@@ -555,6 +593,7 @@ public class TermEditor extends Composite {
             }
         }));
         registerHandler(optionsButton.addClickHandler(event -> showOptions()));
+        registerHandler(valuesButton.addClickHandler(event -> showValuePicker()));
         registerHandler(conditionListBox.addValueChangeHandler(event -> {
             if (!reading) {
                 write(term);
@@ -573,6 +612,41 @@ public class TermEditor extends Composite {
                 fireDirty();
             });
         }
+    }
+
+    private void showValuePicker() {
+        final QueryField field = fieldListBox.getValue();
+        if (field != null && restFactory != null && dataSource != null) {
+            final boolean caseInsensitive = QueryOptionUtil.getBoolean(
+                    QueryOptionUtil.resolve(field.getQueryOptionSet(), term.getOptions()),
+                    QueryOptionSet.CASE_INSENSITIVE);
+            fieldValuePickerPresenterProvider.get().show(
+                    valuesButton.getElement(),
+                    restFactory,
+                    dataSource,
+                    field,
+                    caseInsensitive,
+                    NullSafe.get(timeRangeSupplier, Supplier::get),
+                    this::insertValue);
+        }
+    }
+
+    /**
+     * Puts a picked value in the value box, replacing its text for `=` and `!=`, or adding to the list for `in`.
+     * A value containing spaces or wildcard characters is quoted so that it is matched as it is.
+     */
+    private void insertValue(final String pickedValue) {
+        final String quoted = pickedValue.contains(" ") || pickedValue.contains("*") || pickedValue.contains("?")
+                ? "\"" + pickedValue + "\""
+                : pickedValue;
+        final String currentText = StringUtil.trimWhitespace(value.getText());
+        if (Condition.IN.equals(conditionListBox.getValue()) && NullSafe.isNonBlankString(currentText)) {
+            value.setText(currentText + Condition.IN_CONDITION_DELIMITER + " " + quoted);
+        } else {
+            value.setText(quoted);
+        }
+        value.setFocus(true);
+        fireDirty();
     }
 
     /**
@@ -654,6 +728,14 @@ public class TermEditor extends Composite {
         final SvgButton button = SvgButton.create(SvgPresets.SETTINGS);
         button.addStyleName("termEditor-button");
         button.setTitle("Query options");
+        button.setVisible(false);
+        return button;
+    }
+
+    private SvgButton createValuesButton() {
+        final SvgButton button = SvgButton.create(
+                new Preset(SvgImage.VALUE_FILTER, "Pick from the most common values", true));
+        button.addStyleName("termEditor-button");
         button.setVisible(false);
         return button;
     }

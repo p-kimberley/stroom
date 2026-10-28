@@ -21,8 +21,10 @@ import stroom.docref.DocRef;
 import stroom.explorer.client.presenter.DocSelectionBoxPresenter;
 import stroom.pipeline.structure.client.view.DraggableTreePanel;
 import stroom.preferences.client.UserPreferencesManager;
+import stroom.query.api.TimeRange;
 import stroom.query.client.ExpressionTreePresenter.ExpressionTreeView;
 import stroom.query.client.presenter.FieldSelectionListModel;
+import stroom.query.client.presenter.FieldValuePickerPresenter;
 import stroom.query.client.presenter.QueryOptionsPresenter;
 import stroom.security.client.presenter.UserRefSelectionBoxPresenter;
 import stroom.ui.config.client.UiConfigCache;
@@ -37,6 +39,8 @@ import com.google.inject.Provider;
 import com.google.web.bindery.event.shared.HandlerRegistration;
 import com.gwtplatform.mvp.client.ViewWithUiHandlers;
 
+import java.util.function.Supplier;
+
 public class ExpressionTreeViewImpl
         extends ViewWithUiHandlers<ExpressionUiHandlers>
         implements ExpressionTreeView {
@@ -49,18 +53,21 @@ public class ExpressionTreeViewImpl
     public ExpressionTreeViewImpl(final Provider<DocSelectionBoxPresenter> docRefProvider,
                                   final Provider<UserRefSelectionBoxPresenter> userRefProvider,
                                   final Provider<QueryOptionsPresenter> queryOptionsPresenterProvider,
+                                  final Provider<FieldValuePickerPresenter> fieldValuePickerPresenterProvider,
                                   final UserPreferencesManager userPreferencesManager,
                                   final UiConfigCache uiConfigCache) {
         treePanel = new ExpressionTreePanel(
                 docRefProvider,
                 userRefProvider,
                 queryOptionsPresenterProvider,
+                fieldValuePickerPresenterProvider,
                 uiConfigCache,
                 userPreferencesManager.isUtc());
         final ExpressionTreePanel subTreePanel = new ExpressionTreePanel(
                 docRefProvider,
                 userRefProvider,
                 queryOptionsPresenterProvider,
+                fieldValuePickerPresenterProvider,
                 uiConfigCache,
                 userPreferencesManager.isUtc());
 
@@ -125,6 +132,11 @@ public class ExpressionTreeViewImpl
                      final DocRef dataSource,
                      final FieldSelectionListModel fieldSelectionListModel) {
         treePanel.init(restFactory, dataSource, fieldSelectionListModel);
+    }
+
+    @Override
+    public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
+        treePanel.setTimeRangeSupplier(timeRangeSupplier);
     }
 
     @Override

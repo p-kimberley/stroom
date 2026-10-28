@@ -146,7 +146,7 @@ class TestElasticFieldValues_EndToEnd extends AbstractCoreIntegrationTest {
     @Test
     void testBoolean() {
         assertThat(fetch("Boolean", FieldType.BOOLEAN, null, false, null).getValues())
-                .containsExactlyInAnyOrder(new FieldValueCount("true", 2), new FieldValueCount("false", 2));
+                .containsExactlyInAnyOrder(new FieldValueCount("true", 2L), new FieldValueCount("false", 2L));
     }
 
     @Test

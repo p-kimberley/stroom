@@ -16,6 +16,12 @@
 
 package stroom.query.api.datasource;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -24,36 +30,74 @@ import java.util.Objects;
 /// Describes one field-level query option that a data source supports for a field, e.g. whether
 /// a keyword field is matched case-insensitively. Definitions are grouped into a {@link QueryOptionSet}
 /// and the options dialog is built from them.
+@JsonPropertyOrder({
+        "id",
+        "displayName",
+        "description",
+        "type",
+        "choices",
+        "defaultValue",
+        "minValue",
+        "maxValue",
+        "rules"
+})
+@JsonInclude(Include.NON_NULL)
 public final class QueryOptionDefinition {
 
+    @JsonProperty
     private final String id;
+    @JsonProperty
     private final String displayName;
+    @JsonProperty
     private final String description;
+    @JsonProperty
     private final QueryOptionType type;
+    @JsonProperty
     private final List<QueryOptionChoice> choices;
+    @JsonProperty
     private final String defaultValue;
+    @JsonProperty
     private final Integer minValue;
+    @JsonProperty
     private final Integer maxValue;
+    @JsonProperty
     private final List<QueryOptionRule> rules;
 
-    private QueryOptionDefinition(final String id,
-                                  final String displayName,
-                                  final String description,
-                                  final QueryOptionType type,
-                                  final List<QueryOptionChoice> choices,
-                                  final String defaultValue,
-                                  final Integer minValue,
-                                  final Integer maxValue,
-                                  final List<QueryOptionRule> rules) {
-        this.id = Objects.requireNonNull(id);
-        this.displayName = Objects.requireNonNull(displayName);
+    /// Creates a definition. Use {@link #builder()} to create one in code, as the builder checks the default
+    /// value is valid.
+    ///
+    /// @param id           The id the option's value is stored under.
+    /// @param displayName  The label shown for the option.
+    /// @param description  A longer description of what the option does, or null.
+    /// @param type         The kind of value the option holds.
+    /// @param choices      The allowed values of a {@link QueryOptionType#CHOICE} option, or null.
+    /// @param defaultValue The value the option has when it is not set or is disabled.
+    /// @param minValue     The lowest allowed value of a {@link QueryOptionType#INTEGER} option, or null.
+    /// @param maxValue     The highest allowed value of a {@link QueryOptionType#INTEGER} option, or null.
+    /// @param rules        The rules that disable the option, or null.
+    @JsonCreator
+    public QueryOptionDefinition(@JsonProperty("id") final String id,
+                                 @JsonProperty("displayName") final String displayName,
+                                 @JsonProperty("description") final String description,
+                                 @JsonProperty("type") final QueryOptionType type,
+                                 @JsonProperty("choices") final List<QueryOptionChoice> choices,
+                                 @JsonProperty("defaultValue") final String defaultValue,
+                                 @JsonProperty("minValue") final Integer minValue,
+                                 @JsonProperty("maxValue") final Integer maxValue,
+                                 @JsonProperty("rules") final List<QueryOptionRule> rules) {
+        this.id = id;
+        this.displayName = displayName;
         this.description = description;
-        this.type = Objects.requireNonNull(type);
-        this.choices = Collections.unmodifiableList(new ArrayList<>(choices));
-        this.defaultValue = Objects.requireNonNull(defaultValue);
+        this.type = type;
+        this.choices = choices == null
+                ? Collections.emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(choices));
+        this.defaultValue = defaultValue;
         this.minValue = minValue;
         this.maxValue = maxValue;
-        this.rules = Collections.unmodifiableList(new ArrayList<>(rules));
+        this.rules = rules == null
+                ? Collections.emptyList()
+                : Collections.unmodifiableList(new ArrayList<>(rules));
     }
 
     /// @return A new builder.
@@ -111,12 +155,12 @@ public final class QueryOptionDefinition {
     /// @param value The value to check.
     /// @return True if the value is valid.
     public boolean isValid(final String value) {
-        if (value == null) {
+        if (value == null || type == null) {
             return false;
         }
         return switch (type) {
             case BOOLEAN -> "true".equals(value) || "false".equals(value);
-            case CHOICE -> choices.stream().anyMatch(choice -> choice.getValue().equals(value));
+            case CHOICE -> choices.stream().anyMatch(choice -> value.equals(choice.getValue()));
             case INTEGER -> isValidInteger(value);
         };
     }
@@ -255,6 +299,9 @@ public final class QueryOptionDefinition {
 
         /// @return The definition.
         public QueryOptionDefinition build() {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(displayName, "displayName");
+            Objects.requireNonNull(type, "type");
             final QueryOptionDefinition definition = new QueryOptionDefinition(
                     id,
                     displayName,

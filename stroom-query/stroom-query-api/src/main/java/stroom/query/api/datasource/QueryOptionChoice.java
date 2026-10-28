@@ -18,19 +18,31 @@ package stroom.query.api.datasource;
 
 import stroom.docref.HasDisplayValue;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import java.util.Objects;
 
 /// One of the allowed values of a {@link QueryOptionType#CHOICE} query option.
+@JsonPropertyOrder({"value", "displayValue"})
+@JsonInclude(Include.NON_NULL)
 public final class QueryOptionChoice implements HasDisplayValue {
 
+    @JsonProperty
     private final String value;
+    @JsonProperty
     private final String displayValue;
 
     /// @param value        The value stored in the expression term.
     /// @param displayValue The text shown to the user for this value.
-    public QueryOptionChoice(final String value, final String displayValue) {
-        this.value = Objects.requireNonNull(value);
-        this.displayValue = Objects.requireNonNull(displayValue);
+    @JsonCreator
+    public QueryOptionChoice(@JsonProperty("value") final String value,
+                             @JsonProperty("displayValue") final String displayValue) {
+        this.value = value;
+        this.displayValue = displayValue;
     }
 
     /// @return The value stored in the expression term.

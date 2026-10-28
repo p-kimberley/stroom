@@ -58,6 +58,7 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
     private DocRef dataSource;
     private QueryField field;
     private boolean caseInsensitive;
+    private boolean allowCommas;
     private TimeRange timeRange;
     private Consumer<String> valueConsumer;
     private Timer filterTimer;
@@ -79,7 +80,9 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
     /// @param restFactory     Used to fetch the values.
     /// @param dataSource      The data source to fetch values from.
     /// @param field           The field to list values of.
-    /// @param caseInsensitive Whether the filter ignores case, following the term's case-insensitive option.
+    /// @param caseInsensitive Whether the filter ignores case.
+    /// @param allowCommas     Whether values containing a comma can be picked. They can't for an `in` term, whose
+    ///                        values are separated by commas.
     /// @param timeRange       The time range to count values in, or null for all time.
     /// @param valueConsumer   Receives the value the user picks.
     public void show(final Element target,
@@ -87,12 +90,14 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
                      final DocRef dataSource,
                      final QueryField field,
                      final boolean caseInsensitive,
+                     final boolean allowCommas,
                      final TimeRange timeRange,
                      final Consumer<String> valueConsumer) {
         this.restFactory = restFactory;
         this.dataSource = dataSource;
         this.field = field;
         this.caseInsensitive = caseInsensitive;
+        this.allowCommas = allowCommas;
         this.timeRange = timeRange;
         this.valueConsumer = valueConsumer;
 
@@ -168,7 +173,7 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
             final String scope = fieldValues.isAllTime()
                     ? "All time"
                     : NullSafe.getOrElse(timeRange, TimeRange::getName, "Time range");
-            getView().setValues(fieldValues, scope);
+            getView().setValues(fieldValues, scope, allowCommas);
         }
     }
 
@@ -194,7 +199,9 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
         ///
         /// @param fieldValues The values and the number of documents they were counted across.
         /// @param scope       A description of the documents counted, e.g. the time range name.
-        void setValues(FieldValues fieldValues, String scope);
+        /// @param allowCommas Whether values containing a comma can be picked. Those that can't are shown
+        ///                    disabled.
+        void setValues(FieldValues fieldValues, String scope, boolean allowCommas);
 
         /// Shows a message, e.g. that values are loading, in place of the values.
         ///

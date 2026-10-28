@@ -33,7 +33,7 @@ import java.util.Objects;
 public class FieldValues {
 
     /// No values, e.g. because the data source can't provide them.
-    public static final FieldValues EMPTY = new FieldValues(Collections.emptyList(), 0, false);
+    public static final FieldValues EMPTY = new FieldValues(Collections.emptyList(), 0L, false);
 
     @JsonProperty
     private final List<FieldValueCount> values;
@@ -47,13 +47,15 @@ public class FieldValues {
     /// @param allTime    True if the values were counted across all time rather than a time range.
     @JsonCreator
     public FieldValues(@JsonProperty("values") final List<FieldValueCount> values,
-                       @JsonProperty("totalCount") final long totalCount,
-                       @JsonProperty("allTime") final boolean allTime) {
+                       @JsonProperty("totalCount") final Long totalCount,
+                       @JsonProperty("allTime") final Boolean allTime) {
         this.values = values == null
                 ? Collections.emptyList()
                 : values;
-        this.totalCount = totalCount;
-        this.allTime = allTime;
+        this.totalCount = totalCount == null
+                ? 0
+                : totalCount;
+        this.allTime = Boolean.TRUE.equals(allTime);
     }
 
     /// @return The most common values, most common first.

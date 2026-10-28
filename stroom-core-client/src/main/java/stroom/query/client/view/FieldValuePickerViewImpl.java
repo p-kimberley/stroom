@@ -31,12 +31,12 @@ import com.google.gwt.user.client.ui.Widget;
 import com.google.inject.Inject;
 import com.gwtplatform.mvp.client.ViewImpl;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 public class FieldValuePickerViewImpl extends ViewImpl implements FieldValuePickerView {
 
     private static final NumberFormat PERCENT_FORMAT = NumberFormat.getFormat("0.0");
+    private static final String COMMA = ",";
 
     private final FlowPanel panel;
     private final TextBox filterBox;
@@ -89,16 +89,17 @@ public class FieldValuePickerViewImpl extends ViewImpl implements FieldValuePick
     }
 
     @Override
-    public void setValues(final FieldValues fieldValues, final String scope) {
+    public void setValues(final FieldValues fieldValues, final String scope, final boolean allowCommas) {
         valuesPanel.clear();
-        final List<FieldValueCount> values = fieldValues.getValues();
-        firstValue = values.isEmpty()
-                ? null
-                : values.get(0).getValue();
+        firstValue = null;
         scopeLabel.setText(scope + " - " + fieldValues.getTotalCount() + " documents");
 
-        for (final FieldValueCount valueCount : values) {
-            valuesPanel.add(createRow(valueCount, fieldValues.getTotalCount()));
+        for (final FieldValueCount valueCount : fieldValues.getValues()) {
+            final boolean pickable = allowCommas || !valueCount.getValue().contains(COMMA);
+            if (pickable && firstValue == null) {
+                firstValue = valueCount.getValue();
+            }
+            valuesPanel.add(createRow(valueCount, fieldValues.getTotalCount(), pickable));
         }
     }
 
@@ -123,14 +124,16 @@ public class FieldValuePickerViewImpl extends ViewImpl implements FieldValuePick
         return panel;
     }
 
-    private Widget createRow(final FieldValueCount valueCount, final long totalCount) {
+    private Widget createRow(final FieldValueCount valueCount, final long totalCount, final boolean pickable) {
         final double percent = totalCount > 0
                 ? Math.min(100, valueCount.getCount() * 100D / totalCount)
                 : 0;
 
         final Label valueLabel = new Label(valueCount.getValue(), false);
         valueLabel.setStyleName("fieldValuePicker-value");
-        valueLabel.setTitle(valueCount.getValue() + " (" + valueCount.getCount() + " documents)");
+        valueLabel.setTitle(pickable
+                ? valueCount.getValue() + " (" + valueCount.getCount() + " documents)"
+                : "Values containing a comma can't be used with 'in'");
 
         final FlowPanel barFill = new FlowPanel();
         barFill.setStyleName("fieldValuePicker-barFill");
@@ -147,11 +150,15 @@ public class FieldValuePickerViewImpl extends ViewImpl implements FieldValuePick
         row.add(valueLabel);
         row.add(bar);
         row.add(percentLabel);
-        row.addDomHandler(event -> {
-            if (pickHandler != null) {
-                pickHandler.accept(valueCount.getValue());
-            }
-        }, ClickEvent.getType());
+        if (pickable) {
+            row.addDomHandler(event -> {
+                if (pickHandler != null) {
+                    pickHandler.accept(valueCount.getValue());
+                }
+            }, ClickEvent.getType());
+        } else {
+            row.addStyleName("fieldValuePicker-row--disabled");
+        }
         return row;
     }
 }

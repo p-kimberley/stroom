@@ -29,6 +29,7 @@ import stroom.search.elastic.shared.ElasticClusterDoc;
 import stroom.search.elastic.shared.ElasticConnectionConfig;
 import stroom.search.elastic.shared.ElasticIndexDoc;
 import stroom.search.elastic.shared.ElasticIndexField;
+import stroom.search.elastic.suggest.ElasticSuggestConfig;
 import stroom.security.api.SecurityContext;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -100,7 +101,8 @@ class TestElasticSearchProvider {
                 securityContext,
                 null,
                 null,
-                null);
+                null,
+                ElasticSuggestConfig::new);
     }
 
     @Test
@@ -504,6 +506,33 @@ class TestElasticSearchProvider {
                 .filteredOn(QueryField::supportsTopValues)
                 .extracting(QueryField::getFldName)
                 .containsExactlyInAnyOrder("Count", "Flag", "Ip", "Message", "Message.keyword", "Name", "Pattern");
+    }
+
+    @Test
+    void testGetDataSourceFields_noTopValuesWhenValuePickerDisabled() throws IOException {
+        givenMapping("""
+                {
+                  "Name": { "type": "keyword" }
+                }""");
+        final ElasticSearchProvider provider = new ElasticSearchProvider(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                elasticClientCache,
+                elasticClusterStore,
+                elasticIndexStore,
+                securityContext,
+                null,
+                null,
+                null,
+                () -> new ElasticSuggestConfig(false, null));
+
+        assertThat(provider.getDataSourceFields(createIndex()))
+                .extracting(QueryField::supportsTopValues)
+                .containsExactly(false);
     }
 
     @Test

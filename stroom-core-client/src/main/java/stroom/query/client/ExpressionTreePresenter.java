@@ -156,6 +156,7 @@ public class ExpressionTreePresenter extends MyPresenterWidget<ExpressionTreePre
             newTerm.setCondition(term.getCondition());
             newTerm.setValue(term.getValue());
             newTerm.setDocRef(term.getDocRef());
+            newTerm.setOptions(term.getOptions());
             newTerm.setEnabled(term.isEnabled());
             tree.addChild(parent, newTerm);
         }

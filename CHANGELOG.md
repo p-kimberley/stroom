@@ -12,6 +12,60 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 DO NOT ADD CHANGES HERE - ADD THEM USING log_change.sh
 ~~~
 
+* Dependency : Change docker images to force `brotli-libs>=1.2.1-r0`.
+
+* Dependency : Uplift `com.hubspot.jinjava` from 2.8.2 to 2.8.4.
+
+* Dependency : Uplift docker image base from `eclipse-temurin:25.0.3_9-jdk-alpine-3.23` to `eclipse-temurin:25.0.4.1_1-jdk-alpine-3.24`.
+
+* Bug **#5835** : Stop logging an ERROR on every run of the Table Builder analytic job for each rule with an empty or broken query. A WARN is now only logged if such a rule is preventing an existing store from being deleted.
+
+* Bug **#5819** : Replace the Lucene 8.11.4 `lucene-analyzers-common` dependency with `lucene-analysis-common:10.3.2` so that it matches the version of Lucene core.
+
+* Build : Split up java CI build to reduce memory use and to make checkstyle fail fast.
+
+* Dependency : Add missing jackson annotation dependencies.
+
+* Bug : Fix pooled byte buffer resource closure.
+
+* Bug **#5597** : Fix `TypeError: Cannot read properties of null` error when an embedded query with a visualisation returns no rows.
+
+
+## [v7.14-beta.8] - 2026-10-16
+
+* Feature : Add `random-integer(upperbound)` XSLT function.
+
+* Refactor : Refactor `meta-stream` and `meta-stream-for-id` into two classes. Refactor `manifest` and `manifest-for-id` into two classes.
+
+* Bug **#5843** : Fix NPE when fetching explorer tree nodes with debug logging enabled.
+
+* Feature **#5833** : Add XSLT function `send-email()` to send an email using the SMTP server configured in `stroom.analytics.emailConfig`.
+
+* Bug **#5597** : Fix `TypeError: Cannot read properties of null` error when an embedded query with a visualisation returns no rows.
+
+* Bug **#5853** : Fix error saying SQS has not been configured when it has.
+
+* Bug : Fix the OK and Cancel buttons being permanently disabled when OK is clicked on the Lucene index New Field dialog with a blank name.
+
+
+## [v7.14-beta.7] - 2026-10-14
+
+* Feature **#5834** : Enterprise Floor Mapping
+
+* Build : Bumps org.yaml:snakeyaml from 2.6 to 2.7 in the build script.
+
+* Dependency : Bumps poi from 5.4.1 to 5.5.1.
+
+* Dependency : Bumps software.amazon.awssdk.crt:aws-crt from 0.47.0 to 0.48.5.
+
+* Dependency : Bumps jakarta.xml.bind:jakarta.xml.bind-api from 4.0.2 to 4.0.5.
+
+* Dependency : Uplift lucene from 10.3.2 to 10.5.1.
+
+* Bug : Fix pooled byte buffer resource closure.
+
+* Bug : Fix more issues with failure handling during S3 event consumption.
+
 
 ## [v7.14-beta.6] - 2026-10-13
 
@@ -2665,7 +2719,9 @@ DO NOT ADD CHANGES HERE - ADD THEM USING log_change.sh
 * Issue **#3830** : Add S3 data storage option.
 
 
-[Unreleased]: https://github.com/gchq/stroom/compare/v7.14-beta.6...HEAD
+[Unreleased]: https://github.com/gchq/stroom/compare/v7.14-beta.8...HEAD
+[v7.14-beta.8]: https://github.com/gchq/stroom/compare/v7.14-beta.7...v7.14-beta.8
+[v7.14-beta.7]: https://github.com/gchq/stroom/compare/v7.14-beta.6...v7.14-beta.7
 [v7.14-beta.6]: https://github.com/gchq/stroom/compare/v7.14-beta.5...v7.14-beta.6
 [v7.14-beta.5]: https://github.com/gchq/stroom/compare/v7.14-beta.4...v7.14-beta.5
 [v7.14-beta.4]: https://github.com/gchq/stroom/compare/v7.14-beta.3...v7.14-beta.4

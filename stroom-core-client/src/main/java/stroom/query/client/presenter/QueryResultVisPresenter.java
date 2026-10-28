@@ -18,8 +18,11 @@ package stroom.query.client.presenter;
 
 import stroom.dashboard.client.table.ComponentSelection;
 import stroom.dashboard.client.table.HasComponentSelection;
+import stroom.dashboard.client.vis.VisContextFactory;
 import stroom.dashboard.client.vis.VisFrame;
+import stroom.dashboard.client.vis.VisRenderReportEvent;
 import stroom.dashboard.client.vis.VisSelectionModel;
+import stroom.dashboard.client.vis.VisToolbar;
 import stroom.data.pager.client.RefreshButton;
 import stroom.dispatch.client.RestFactory;
 import stroom.docref.DocRef;
@@ -35,6 +38,8 @@ import stroom.script.client.ScriptCache;
 import stroom.script.shared.FetchLinkedScriptRequest;
 import stroom.script.shared.ScriptDoc;
 import stroom.script.shared.ScriptResource;
+import stroom.security.client.api.ClientSecurityContext;
+import stroom.security.shared.AppPermission;
 import stroom.ui.config.shared.Theme;
 import stroom.util.client.JSONUtil;
 import stroom.util.shared.NullSafe;
@@ -61,6 +66,7 @@ import com.gwtplatform.mvp.client.View;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class QueryResultVisPresenter
         extends MyPresenterWidget<QueryResultVisView>
@@ -71,20 +77,8 @@ public class QueryResultVisPresenter
     private static final long UPDATE_INTERVAL = 2000;
 
 
-    private static final JavaScriptObject EMPTY_DATA;
-
-    static {
-        final JSONObject dataObject = JSONUtil.getObject(JSONUtil.parse(
-                "{" +
-                        "\"values\": []," +
-                        "\"min\": []," +
-                        "\"max\": []," +
-                        "\"sum\": []," +
-                        "\"types\": []," +
-                        "\"sortDirections\": []" +
-                        "}"));
-        EMPTY_DATA = dataObject.getJavaScriptObject();
-    }
+    // Built on first use rather than when the class loads, as parsing JSON needs a browser
+    private static JavaScriptObject emptyData;
 
     private final VisFunctionCache visFunctionCache;
     private final ScriptCache scriptCache;
@@ -103,18 +97,25 @@ public class QueryResultVisPresenter
     private long nextUpdate;
     private Timer updateTimer;
     private JavaScriptObject lastData;
+    // The settings last drawn with, as the data is: a redraw put off (see update) is still made if they change.
+    private JavaScriptObject lastSettings;
 
     private VisSelectionModel visSelectionModel;
     private boolean pause;
 
-    private final JavaScriptObject context;
+    private final VisContextFactory visContextFactory;
+    private String lastRenderReport;
+    private DocRef currentVisualisation;
 
     @Inject
     public QueryResultVisPresenter(final EventBus eventBus,
                                    final QueryResultVisView view,
                                    final RestFactory restFactory,
-                                   final CurrentPreferences currentPreferences) {
+                                   final CurrentPreferences currentPreferences,
+                                   final VisContextFactory visContextFactory,
+                                   final ClientSecurityContext securityContext) {
         super(eventBus, view);
+        this.visContextFactory = visContextFactory;
         this.visFunctionCache = new VisFunctionCache(eventBus);
         this.scriptCache = new ScriptCache(eventBus);
         this.restFactory = restFactory;
@@ -122,12 +123,22 @@ public class QueryResultVisPresenter
 
         visFrame = new VisFrame(eventBus);
         visFrame.setTaskMonitorFactory(getView().getRefreshButton());
+        // The toolbar above the chart: its data as CSV for those who may download search results.
+        view.getToolbar().setHandlers(this);
+        view.getToolbar().setDataDownloadAllowed(securityContext.hasAppPermission(
+                AppPermission.DOWNLOAD_SEARCH_RESULTS_PERMISSION));
+        // Ask Stroom AI about the chart, its Visualisation attached to the chat.
+        view.getToolbar().setAskAiContext(() -> VisToolbar.chartContext(currentVisualisation));
 
+        visFrame.setReportHandler(this::onRenderReport);
         view.setVisFrame(visFrame);
 
         RootPanel.get().add(visFrame);
+    }
 
-        this.context = new JSONObject().getJavaScriptObject();
+    /// @param fileName Gives the name of a file the chart is saved to, without its extension.
+    public void setFileName(final Supplier<String> fileName) {
+        getView().getToolbar().setFileName(fileName);
     }
 
     public void setVisSelectionModel(final VisSelectionModel visSelectionModel) {
@@ -192,8 +203,13 @@ public class QueryResultVisPresenter
         scriptCache.bind();
         visFrame.bind();
 
-        registerHandler(getEventBus().addHandler(ChangeCurrentPreferencesEvent.getType(), event ->
-                visFrame.setClassName(getClassName(event.getTheme()))));
+        registerHandler(getEventBus().addHandler(ChangeCurrentPreferencesEvent.getType(), event -> {
+            visFrame.setClassName(getClassName(event.getTheme()));
+            // Redraw so the visualisation picks up any change to the theme or time display.
+            if (currentData != null) {
+                refreshVisualisation();
+            }
+        }));
 
         registerHandler(getView().getRefreshButton().addClickHandler(e -> {
             setPause(!pause, true);
@@ -236,7 +252,7 @@ public class QueryResultVisPresenter
     public void startSearch() {
         nextUpdate = 0;
         currentSettings = null;
-        currentData = EMPTY_DATA;
+        currentData = getEmptyData();
         lastData = null;
 
         if (!searching) {
@@ -268,22 +284,35 @@ public class QueryResultVisPresenter
         }
     }
 
+    /// Fetches the latest vis data from the search model and shows it.
+    ///
+    /// Does nothing if this presenter has no search model, e.g. once it has been removed.
+    /// A result that arrives after this presenter has been removed is ignored.
     public void refresh() {
+        final QueryModel searchModel = currentSearchModel;
+        if (searchModel == null) {
+            return;
+        }
+
         getView().getRefreshButton().setRefreshing(true);
-        currentSearchModel.refresh(QueryModel.VIS_COMPONENT_ID, result -> {
-            try {
-                if (result != null) {
-                    setDataInternal(result);
+        searchModel.refresh(QueryModel.VIS_COMPONENT_ID, result -> {
+            // This presenter may have been removed while the refresh was in flight, e.g. when the
+            // search ended with no vis data, so only use the result if it is still wanted
+            if (searchModel == currentSearchModel) {
+                try {
+                    if (result != null) {
+                        setDataInternal(result);
+                    }
+                } catch (final Exception e) {
+                    GWT.log(e.getMessage());
                 }
-            } catch (final Exception e) {
-                GWT.log(e.getMessage());
+                getView().getRefreshButton().setRefreshing(searchModel.isSearching());
             }
-            getView().getRefreshButton().setRefreshing(currentSearchModel.isSearching());
         });
     }
 
     public void clear() {
-        currentData = EMPTY_DATA;
+        currentData = getEmptyData();
         currentError = null;
         update();
 
@@ -312,6 +341,7 @@ public class QueryResultVisPresenter
 
                 // Put a new function in the cache if there isn't one already.
                 final DocRef visualisation = visResult.getVisSettings().getVisualisation();
+                currentVisualisation = visualisation;
                 final VisFunction visFunction = visFunctionCache.get(visualisation);
                 if (visFunction == null) {
                     // Create a new function and put it into the cache.
@@ -351,8 +381,24 @@ public class QueryResultVisPresenter
         }
     }
 
+    private static JavaScriptObject getEmptyData() {
+        if (emptyData == null) {
+            final JSONObject dataObject = JSONUtil.getObject(JSONUtil.parse(
+                    "{" +
+                            "\"values\": []," +
+                            "\"min\": []," +
+                            "\"max\": []," +
+                            "\"sum\": []," +
+                            "\"types\": []," +
+                            "\"sortDirections\": []" +
+                            "}"));
+            emptyData = dataObject.getJavaScriptObject();
+        }
+        return emptyData;
+    }
+
     private JavaScriptObject getJSONData(final QLVisResult visResult) {
-        JavaScriptObject data = EMPTY_DATA;
+        JavaScriptObject data = getEmptyData();
 
         // Turn JSON result text into an object.
         final JSONObject dataObject = JSONUtil.getObject(JSONUtil.parse(visResult.getJsonData()));
@@ -468,7 +514,7 @@ public class QueryResultVisPresenter
             } else if (LoadStatus.FAILURE.equals(function.getStatus())) {
                 // Try and clear the current visualisation.
                 try {
-                    currentData = EMPTY_DATA;
+                    currentData = getEmptyData();
                     currentError = null;
 
                     update();
@@ -486,13 +532,16 @@ public class QueryResultVisPresenter
         if (now > nextUpdate) {
             nextUpdate = now + UPDATE_INTERVAL;
             lastData = currentData;
+            lastSettings = currentSettings;
             refreshVisualisation();
         } else {
             if (updateTimer == null) {
                 updateTimer = new Timer() {
                     @Override
                     public void run() {
-                        if (lastData != currentData) {
+                        // Seen in testing: a chart replaced by the AI chat kept its old look until its query was
+                        // run again, as its new Visualisation's settings arrived with the same data.
+                        if (lastData != currentData || lastSettings != currentSettings) {
                             update();
                         }
                     }
@@ -575,7 +624,17 @@ public class QueryResultVisPresenter
 //    }
 //
     private void refreshVisualisation() {
-        visFrame.setData(context, currentSettings, currentData);
+        visFrame.setData(visContextFactory.create(), currentSettings, currentData);
+    }
+
+    private void onRenderReport(final String reportJson) {
+        lastRenderReport = reportJson;
+        VisRenderReportEvent.fire(this, currentVisualisation, null, null, reportJson);
+    }
+
+    /// @return The latest render report the visualisation sent, as JSON, or null if it hasn't sent one.
+    public String getLastRenderReport() {
+        return lastRenderReport;
     }
 
     @Override
@@ -656,5 +715,8 @@ public class QueryResultVisPresenter
         void hideMessage();
 
         void setVisFrame(VisFrame visFrame);
+
+        /// @return The toolbar above the chart.
+        VisToolbar getToolbar();
     }
 }

@@ -16,6 +16,8 @@
 
 package stroom.document.client;
 
+import stroom.ai.client.AiDocumentReferences;
+import stroom.ai.shared.DocumentReferenceContext;
 import stroom.alert.client.event.AlertEvent;
 import stroom.alert.client.event.ConfirmCallback;
 import stroom.alert.client.event.ConfirmEvent;
@@ -26,6 +28,7 @@ import stroom.core.client.HasSaveRegistry;
 import stroom.core.client.TabPlugin;
 import stroom.core.client.UrlParameters;
 import stroom.core.client.presenter.Plugin;
+import stroom.data.client.event.AskStroomAiEvent;
 import stroom.dispatch.client.DefaultErrorHandler;
 import stroom.dispatch.client.RestError;
 import stroom.dispatch.client.RestFactory;
@@ -144,18 +147,17 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.inject.Singleton;
 
-// STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master
-// Local change: *creating* a document routes through
+// *Creating* a document routes through
 // plugin.getInitialisationHandler().showInitialisationDialog(...) rather than calling
 // plugin.open(...) directly, so a document type can require configuration before it is first
 // opened. The sole call site is in fireShowCreateDocumentDialogEvent below, and it is what makes
 // DocumentPlugin.getInitialisationHandler() do anything at all; FloorMap uses it to prompt for
-// its Facts/Events stores. Upstream calls open() directly - restoring that silently disables the
-// dialog for every document type that relies on it.
+// its Facts/Events stores. Calling open() directly there would silently disable the dialog for
+// every document type that relies on it.
 //
-// This banner said "opening a document" until 2026-09-04, which was wrong and dangerous to act on:
-// the handler's cancel path DELETES the document (see DocInitialisationHandler), so wiring this
-// into the open path would make cancelling the dialog destroy an existing document.
+// This applies to creating a document only, never to opening an existing one: the handler's
+// cancel path DELETES the document (see DocInitialisationHandler), so wiring this into the open
+// path would make cancelling the dialog destroy an existing document.
 @SuppressWarnings("SequencedCollectionMethodCanBeUsed")
 @Singleton
 public class DocumentPluginEventManager extends Plugin {
@@ -1378,6 +1380,10 @@ public class DocumentPluginEventManager extends Plugin {
         }
 
         menuItems.add(createInfoMenuItem(singleReadableItem, 20, isInfoEnabled, explorerListener));
+        final DocumentReferenceContext attachable = AiDocumentReferences.context(readableItems);
+        if (attachable != null) {
+            menuItems.add(createAttachToChatMenuItem(attachable, 20));
+        }
         menuItems.add(createEditOrAddTagsMenuItem(updatableItems, 21, allowUpdate));
         if (updatableItems.size() > 1) {
             menuItems.add(createRemoveTagsMenuItem(updatableItems, 22, isRemoveTagsEnabled));
@@ -1634,6 +1640,19 @@ public class DocumentPluginEventManager extends Plugin {
                 .text("Info")
                 .enabled(enabled && explorerNode != null)
                 .command(command)
+                .build();
+    }
+
+    /// @param attachable The documents to attach.
+    /// @param priority   Where the item goes in the menu.
+    /// @return The item that attaches the selected documents to the chat, as references the chat's agent can read
+    /// with its document tools.
+    private MenuItem createAttachToChatMenuItem(final DocumentReferenceContext attachable, final int priority) {
+        return new IconMenuItem.Builder()
+                .priority(priority)
+                .icon(SvgImage.AI)
+                .text("Attach to chat")
+                .command(() -> AskStroomAiEvent.fire(DocumentPluginEventManager.this, attachable))
                 .build();
     }
 

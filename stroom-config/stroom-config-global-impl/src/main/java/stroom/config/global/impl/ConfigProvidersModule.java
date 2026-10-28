@@ -27,10 +27,73 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
+    stroom.ai.impl.AiBuildsConfig getAiBuildsConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.AiBuildsConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.AiCompactionConfig getAiCompactionConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.AiCompactionConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
     stroom.ai.impl.AiConfig getAiConfig(
             final ConfigMapper configMapper) {
         return configMapper.getConfigObject(
                 stroom.ai.impl.AiConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.AiPipelineStagesConfig getAiPipelineStagesConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.AiPipelineStagesConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.AiSampleUploadsConfig getAiSampleUploadsConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.AiSampleUploadsConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.AiWorkspaceConfig getAiWorkspaceConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.AiWorkspaceConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.ErrorTriageConfig getErrorTriageConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.ErrorTriageConfig.class);
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.ai.impl.McpEndpointConfig getMcpEndpointConfig(
+            final ConfigMapper configMapper) {
+        return configMapper.getConfigObject(
+                stroom.ai.impl.McpEndpointConfig.class);
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
@@ -1002,10 +1065,30 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
+    stroom.ai.impl.AiPipelineStageConfig getAiPipelineStageConfigButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.ai.impl.AiPipelineStageConfig cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
     stroom.analytics.impl.SmtpConfig getSmtpConfigButThrow(
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
                 "stroom.analytics.impl.SmtpConfig cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.aws.sqs.SqsConfig getSqsConfigButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.aws.sqs.SqsConfig cannot be injected directly. "
                         + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
@@ -1042,16 +1125,6 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
-    stroom.query.common.v2.AbstractResultStoreConfig getAbstractResultStoreConfigButThrow(
-            final ConfigMapper configMapper) {
-        throw new UnsupportedOperationException(
-                "stroom.query.common.v2.AbstractResultStoreConfig cannot be injected directly. "
-                        + "Inject a config class that uses it or one of its sub-class instead.");
-    }
-
-    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
-    @Provides
-    @SuppressWarnings("unused")
     stroom.query.common.v2.ResultStoreLmdbConfig getResultStoreLmdbConfigButThrow(
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
@@ -1082,20 +1155,60 @@ public class ConfigProvidersModule extends AbstractModule {
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
-    stroom.util.net.UriConfig getUriConfigButThrow(
+    stroom.util.cache.CacheConfig getCacheConfigButThrow(
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
-                "stroom.util.net.UriConfig cannot be injected directly. "
+                "stroom.util.cache.CacheConfig cannot be injected directly. "
                         + "Inject a config class that uses it or one of its sub-class instead.");
     }
 
     @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
     @Provides
     @SuppressWarnings("unused")
-    stroom.util.shared.AbstractConfig getAbstractConfigButThrow(
+    stroom.util.http.HttpAuthConfiguration getHttpAuthConfigurationButThrow(
             final ConfigMapper configMapper) {
         throw new UnsupportedOperationException(
-                "stroom.util.shared.AbstractConfig cannot be injected directly. "
+                "stroom.util.http.HttpAuthConfiguration cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.util.http.HttpClientConfiguration getHttpClientConfigurationButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.util.http.HttpClientConfiguration cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.util.http.HttpProxyConfiguration getHttpProxyConfigurationButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.util.http.HttpProxyConfiguration cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.util.http.HttpTlsConfiguration getHttpTlsConfigurationButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.util.http.HttpTlsConfiguration cannot be injected directly. "
+                        + "Inject a config class that uses it or one of its sub-class instead.");
+    }
+
+    @Generated("stroom.config.global.impl.GenerateConfigProvidersModule")
+    @Provides
+    @SuppressWarnings("unused")
+    stroom.util.net.UriConfig getUriConfigButThrow(
+            final ConfigMapper configMapper) {
+        throw new UnsupportedOperationException(
+                "stroom.util.net.UriConfig cannot be injected directly. "
                         + "Inject a config class that uses it or one of its sub-class instead.");
     }
 

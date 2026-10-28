@@ -55,10 +55,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-// STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master.
-// Part of adding the SQL Temporal Store, which upstream does not have. FloorMap stores its
-// facts and events in one, so dropping these hunks breaks reference-data lookup, XSLT lookup
-// or the store's Data tab depending on the file. Upstream's version must not simply win here.
 public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
 
     private static final QueryResource QUERY_RESOURCE = GWT.create(QueryResource.class);
@@ -82,10 +78,9 @@ public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
     private Set<String> currentHighlights;
     private final Supplier<QueryTablePreferences> queryTablePreferencesSupplier;
 
-    // STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master.
-    // No timeout setter exists upstream, so every search is built with QuerySearchRequest's
-    // 1-second default. The floor map's baseline read is a whole-store scan that routinely
-    // exceeds that; losing this field silently returns it to late results and poll churn.
+    // Without a timeout every search is built with QuerySearchRequest's 1-second default. The
+    // floor map's baseline read is a whole-store scan that routinely exceeds that, which would
+    // mean late results and poll churn.
     private Long timeout;
 
     private final List<SearchStateListener> searchStateListeners = new ArrayList<>();
@@ -114,7 +109,6 @@ public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
         this.queryDocRef = queryDocRef;
     }
 
-    // STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master. See the `timeout` field.
     /**
      * How long the server waits for a search before responding, in milliseconds.
      *
@@ -172,23 +166,17 @@ public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
         currentHighlights = null;
     }
 
-    /**
-     * Begin executing a new search using the supplied query expression.
-     */
-    public void startNewSearch(final String componentId,
-                               final String componentName,
-                               final String query,
-                               final List<Param> params,
-                               final TimeRange timeRange,
-                               final boolean incremental,
-                               final boolean storeHistory,
-                               final String queryInfo,
-                               final ExpressionOperator additionalQueryExpression) {
-        GWT.log("SearchModel - startNewSearch()");
-
-        // Destroy the previous search and ready all components for a new search to begin.
-        reset(DestroyReason.NO_LONGER_NEEDED);
-
+    /// Builds the request a new search would be started with, without starting it.
+    ///
+    /// @return The request, with no query key.
+    public QuerySearchRequest buildSearchRequest(final String componentId,
+                                                 final String componentName,
+                                                 final String query,
+                                                 final List<Param> params,
+                                                 final TimeRange timeRange,
+                                                 final boolean incremental,
+                                                 final String queryInfo,
+                                                 final ExpressionOperator additionalQueryExpression) {
         final QueryContext currentQueryContext = QueryContext
                 .builder()
                 .params(params)
@@ -213,12 +201,33 @@ public class QueryModel implements HasTaskMonitorFactory, HasHandlers {
                 .incremental(incremental)
                 .queryTablePreferences(queryTablePreferencesSupplier.get());
 
-        // STROOMWORKS-LOCAL: KEEP LOCAL ON MERGE FROM master. See the `timeout` field.
+        // See the `timeout` field.
         if (timeout != null) {
             searchBuilder.timeout(timeout);
         }
 
-        currentSearch = searchBuilder.build();
+        return searchBuilder.build();
+    }
+
+    /**
+     * Begin executing a new search using the supplied query expression.
+     */
+    public void startNewSearch(final String componentId,
+                               final String componentName,
+                               final String query,
+                               final List<Param> params,
+                               final TimeRange timeRange,
+                               final boolean incremental,
+                               final boolean storeHistory,
+                               final String queryInfo,
+                               final ExpressionOperator additionalQueryExpression) {
+        GWT.log("SearchModel - startNewSearch()");
+
+        // Destroy the previous search and ready all components for a new search to begin.
+        reset(DestroyReason.NO_LONGER_NEEDED);
+
+        currentSearch = buildSearchRequest(componentId, componentName, query, params, timeRange, incremental,
+                queryInfo, additionalQueryExpression);
 //            }
 //        }
 //

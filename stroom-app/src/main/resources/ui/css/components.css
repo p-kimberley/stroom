@@ -1708,6 +1708,18 @@ button.main-menu svg {
     align-items: center;
 }
 
+/* Show the explorer loading spinner, without fading it in, once loading has taken 250ms,
+   so quick loads don't flash it. If loading ends sooner the delay is cancelled and it never
+   appears. It still fades out. */
+.navigation-header-spinner.refreshing {
+    transition: opacity 0s linear 250ms;
+}
+
+/* Spin the reload button once when clicked. */
+.explorer-reload.explorer-reload--spin svg {
+    animation: spinner-border 0.6s ease-in-out 1;
+}
+
 .form-control-border {
     border: solid 1px var(--control__border-color);
     border-radius: .25rem;
@@ -1799,6 +1811,14 @@ button.main-menu svg {
     gap: var(--control__gap--horizontal);
     align-items: center;
     margin-bottom: 0.2rem;
+}
+
+/* An unlabelled control (e.g. a tick box) with its help button to its right. */
+.form-group-control-row {
+    display: flex;
+    flex-direction: row;
+    gap: var(--control__gap--horizontal);
+    align-items: center;
 }
 
 .form-group-label-container:has(> label.form-group-label:empty) {
@@ -2842,4 +2862,36 @@ button.main-menu svg {
 
 .visualisation-asset-tree .gwt-TreeItem-selected {
     background-color: var(--row__background-color--selected);
+}
+
+/* A dialog asking the user for a value. */
+.promptViewImpl {
+    overflow: hidden;
+}
+
+.promptViewImpl-message {
+    margin-bottom: 6px;
+    white-space: pre-wrap;
+}
+
+/* The HTTP client configuration dialog: one tab's settings shown at a time, and a row per header. */
+.httpClientConfig-content {
+    overflow: auto;
+}
+
+.httpClientConfig-header {
+    display: flex;
+    align-items: center;
+    gap: var(--control__gap--horizontal);
+    margin-bottom: 4px;
+}
+
+.httpClientConfig-headerName {
+    flex: 2 1 0;
+    min-width: 0;
+}
+
+.httpClientConfig-headerValue {
+    flex: 3 1 0;
+    min-width: 0;
 }

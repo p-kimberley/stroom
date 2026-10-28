@@ -139,7 +139,7 @@ class TestElasticSuggestionsQueryHandlerImpl {
         final FieldValues fieldValues = createHandler().getFieldValues(request("user", null, false, null));
 
         assertThat(fieldValues.getValues())
-                .containsExactly(new FieldValueCount("alice", 6), new FieldValueCount("bob", 3));
+                .containsExactly(new FieldValueCount("alice", 6L), new FieldValueCount("bob", 3L));
         assertThat(fieldValues.getTotalCount()).isEqualTo(10);
         assertThat(fieldValues.isAllTime()).isTrue();
         ELASTIC.verify(WireMock.postRequestedFor(WireMock.urlPathEqualTo(SEARCH_PATH))
@@ -231,7 +231,7 @@ class TestElasticSuggestionsQueryHandlerImpl {
         final FieldValues fieldValues = createHandler().getFieldValues(request("flag", null, false, null));
 
         assertThat(fieldValues.getValues())
-                .containsExactly(new FieldValueCount("true", 3), new FieldValueCount("false", 2));
+                .containsExactly(new FieldValueCount("true", 3L), new FieldValueCount("false", 2L));
     }
 
     @Test

@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TestSuggestionsServiceImpl {
 
-    private static final FieldValues VALUES = new FieldValues(List.of(new FieldValueCount("alice", 3)), 4, true);
+    private static final FieldValues VALUES = new FieldValues(List.of(new FieldValueCount("alice", 3L)), 4L, true);
     private static final Suggestions SUGGESTIONS = new Suggestions(List.of("alice"));
 
     // Lists field values but doesn't suggest values as the user types

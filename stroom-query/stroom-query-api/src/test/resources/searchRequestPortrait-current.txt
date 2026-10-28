@@ -1376,6 +1376,7 @@ class stroom.query.api.datasource.QueryOptionDefinition$Builder - public stroom.
 class stroom.query.api.datasource.QueryOptionDefinition$Builder - public stroom.query.api.datasource.QueryOptionDefinition$Builder stroom.query.api.datasource.QueryOptionDefinition$Builder.integerType(int,int,int)
 class stroom.query.api.datasource.QueryOptionRule - public boolean stroom.query.api.datasource.QueryOptionRule.appliesTo(java.lang.String)
 class stroom.query.api.datasource.QueryOptionRule - public boolean stroom.query.api.datasource.QueryOptionRule.equals(java.lang.Object)
+class stroom.query.api.datasource.QueryOptionRule - public boolean stroom.query.api.datasource.QueryOptionRule.isNegate()
 class stroom.query.api.datasource.QueryOptionRule - public final native java.lang.Class<?> java.lang.Object.getClass()
 class stroom.query.api.datasource.QueryOptionRule - public final native void java.lang.Object.notify()
 class stroom.query.api.datasource.QueryOptionRule - public final native void java.lang.Object.notifyAll()
@@ -1384,6 +1385,7 @@ class stroom.query.api.datasource.QueryOptionRule - public final void java.lang.
 class stroom.query.api.datasource.QueryOptionRule - public final void java.lang.Object.wait(long,int) throws java.lang.InterruptedException
 class stroom.query.api.datasource.QueryOptionRule - public int stroom.query.api.datasource.QueryOptionRule.hashCode()
 class stroom.query.api.datasource.QueryOptionRule - public java.lang.String stroom.query.api.datasource.QueryOptionRule.getOptionId()
+class stroom.query.api.datasource.QueryOptionRule - public java.lang.String stroom.query.api.datasource.QueryOptionRule.getValue()
 class stroom.query.api.datasource.QueryOptionRule - public java.lang.String stroom.query.api.datasource.QueryOptionRule.toString()
 class stroom.query.api.datasource.QueryOptionRule - public static stroom.query.api.datasource.QueryOptionRule stroom.query.api.datasource.QueryOptionRule.disabledUnless(java.lang.String,java.lang.String)
 class stroom.query.api.datasource.QueryOptionRule - public static stroom.query.api.datasource.QueryOptionRule stroom.query.api.datasource.QueryOptionRule.disabledWhen(java.lang.String,java.lang.String)

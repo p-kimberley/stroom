@@ -443,9 +443,7 @@ public class SearchExpressionQueryBuilder {
         }
     }
 
-    /**
-     * Creates a query matching a whole `keyword` or `wildcard` field value, fuzzily if the fuzziness option is set.
-     */
+    /// Creates a query matching a whole `keyword` or `wildcard` field value, fuzzily if the fuzziness option is set.
     private Query buildKeywordValueQuery(final String fieldName,
                                          final String value,
                                          final Map<String, String> options,
@@ -487,11 +485,9 @@ public class SearchExpressionQueryBuilder {
         }
     }
 
-    /**
-     * Creates a full-text query for a field such as `text`. By default this is a `query_string` query, which
-     * supports wildcards and query syntax. The term's options can instead match the value as a phrase, require
-     * all of its words, or match its words fuzzily.
-     */
+    /// Creates a full-text query for a field such as `text`. By default this is a `query_string` query, which
+    /// supports wildcards and query syntax. The term's options can instead match the value as a phrase, require
+    /// all of its words, or match its words fuzzily.
     private Query buildTextQuery(final String fieldName,
                                  final String expression,
                                  final Map<String, String> options) {
@@ -526,19 +522,15 @@ public class SearchExpressionQueryBuilder {
         );
     }
 
-    /**
-     * @return True if the case-insensitive option is set, otherwise null so that Elasticsearch's default
-     * (case-sensitive) applies and the query is unchanged.
-     */
+    /// @return True if the case-insensitive option is set, otherwise null so that Elasticsearch's default
+    /// (case-sensitive) applies and the query is unchanged.
     private static Boolean getCaseInsensitive(final Map<String, String> options) {
         return QueryOptionUtil.getBoolean(options, QueryOptionSet.CASE_INSENSITIVE)
                 ? Boolean.TRUE
                 : null;
     }
 
-    /**
-     * @return The Elasticsearch fuzziness, e.g. `AUTO` or `1`, or null if fuzzy matching is off.
-     */
+    /// @return The Elasticsearch fuzziness, e.g. `AUTO` or `1`, or null if fuzzy matching is off.
     private static String getFuzziness(final Map<String, String> options) {
         final String fuzziness = options.get(QueryOptionSet.FUZZINESS);
         return fuzziness == null || QueryOptionSet.FUZZINESS_OFF.equals(fuzziness)

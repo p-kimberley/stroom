@@ -162,6 +162,15 @@
     background-color: rgba(var(--blue-500-rgb), 0.1);
 }
 
+.fieldValuePicker-row--disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.fieldValuePicker-row--disabled:hover {
+    background-color: transparent;
+}
+
 .fieldValuePicker-value {
     flex: 1 1 auto;
     overflow: hidden;

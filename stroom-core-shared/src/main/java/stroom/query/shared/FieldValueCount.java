@@ -38,9 +38,11 @@ public class FieldValueCount {
     /// @param count The number of documents with the value.
     @JsonCreator
     public FieldValueCount(@JsonProperty("value") final String value,
-                           @JsonProperty("count") final long count) {
+                           @JsonProperty("count") final Long count) {
         this.value = value;
-        this.count = count;
+        this.count = count == null
+                ? 0
+                : count;
     }
 
     /// @return The field value.

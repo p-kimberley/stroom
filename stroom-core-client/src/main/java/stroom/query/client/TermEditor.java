@@ -203,10 +203,10 @@ public class TermEditor extends Composite {
         fieldListBox.setModel(fieldSelectionListModel);
     }
 
-    /**
-     * Sets where the value picker gets the time range to count values in, e.g. the dashboard's time range.
-     * Without one, values are counted across all time.
-     */
+    /// Sets where the value picker gets the time range to count values in, e.g. the dashboard's time range.
+    /// Without one, values are counted across all time.
+    ///
+    /// @param timeRangeSupplier Supplies the current time range, or null.
     public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
         this.timeRangeSupplier = timeRangeSupplier;
     }
@@ -418,10 +418,8 @@ public class TermEditor extends Composite {
         updateValuesButton(selectedField, condition);
     }
 
-    /**
-     * Shows the value picker button for fields whose data source can list their most common values, when the
-     * condition takes values from the text box.
-     */
+    // Shows the value picker button for fields whose data source can list their most common values, when the
+    // condition takes values from the text box.
     private void updateValuesButton(final QueryField field, final Condition condition) {
         final boolean supported = field != null
                                   && field.supportsTopValues()
@@ -617,28 +615,29 @@ public class TermEditor extends Composite {
     private void showValuePicker() {
         final QueryField field = fieldListBox.getValue();
         if (field != null && restFactory != null && dataSource != null) {
-            final boolean caseInsensitive = QueryOptionUtil.getBoolean(
+            // Text fields are searched regardless of case, so their values are filtered regardless of case too.
+            // Other fields follow the term's case-insensitive option.
+            final boolean caseInsensitive = FieldType.TEXT.equals(field.getFldType())
+                                            || QueryOptionUtil.getBoolean(
                     QueryOptionUtil.resolve(field.getQueryOptionSet(), term.getOptions()),
                     QueryOptionSet.CASE_INSENSITIVE);
+            // An `in` term's values are separated by commas, so a value containing a comma can't be one of them
+            final boolean allowCommas = !Condition.IN.equals(conditionListBox.getValue());
             fieldValuePickerPresenterProvider.get().show(
                     valuesButton.getElement(),
                     restFactory,
                     dataSource,
                     field,
                     caseInsensitive,
+                    allowCommas,
                     NullSafe.get(timeRangeSupplier, Supplier::get),
-                    this::insertValue);
+                    pickedValue -> insertValue(field, pickedValue));
         }
     }
 
-    /**
-     * Puts a picked value in the value box, replacing its text for `=` and `!=`, or adding to the list for `in`.
-     * A value containing spaces or wildcard characters is quoted so that it is matched as it is.
-     */
-    private void insertValue(final String pickedValue) {
-        final String quoted = pickedValue.contains(" ") || pickedValue.contains("*") || pickedValue.contains("?")
-                ? "\"" + pickedValue + "\""
-                : pickedValue;
+    // Puts a picked value in the value box, replacing its text for `=` and `!=`, or adding to the list for `in`.
+    private void insertValue(final QueryField field, final String pickedValue) {
+        final String quoted = TermValueQuoter.quote(field.getFldType(), pickedValue);
         final String currentText = StringUtil.trimWhitespace(value.getText());
         if (Condition.IN.equals(conditionListBox.getValue()) && NullSafe.isNonBlankString(currentText)) {
             value.setText(currentText + Condition.IN_CONDITION_DELIMITER + " " + quoted);
@@ -649,10 +648,8 @@ public class TermEditor extends Composite {
         fireDirty();
     }
 
-    /**
-     * Shows the options button only for fields whose data source supports field-level query options, and
-     * highlights it when the term has options other than the defaults.
-     */
+    // Shows the options button only for fields whose data source supports field-level query options, and
+    // highlights it when the term has options other than the defaults.
     private void updateOptionsButton(final QueryField field) {
         final QueryOptionSet queryOptionSet = NullSafe.get(field, QueryField::getQueryOptionSet);
         optionsButton.setVisible(queryOptionSet != null);

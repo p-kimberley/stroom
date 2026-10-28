@@ -183,9 +183,9 @@ public class ExpressionTreePanel extends TreePanel<Item> {
         termEditor.init(restFactory, dataSource, fieldSelectionListModel);
     }
 
-    /**
-     * Sets where the value picker gets the time range to count values in.
-     */
+    /// Sets where the value picker gets the time range to count values in.
+    ///
+    /// @param timeRangeSupplier Supplies the current time range, or null.
     public void setTimeRangeSupplier(final Supplier<TimeRange> timeRangeSupplier) {
         termEditor.setTimeRangeSupplier(timeRangeSupplier);
     }

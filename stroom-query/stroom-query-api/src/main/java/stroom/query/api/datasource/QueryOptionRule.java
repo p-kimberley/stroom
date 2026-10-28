@@ -16,21 +16,39 @@
 
 package stroom.query.api.datasource;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import java.util.Objects;
 
 /// A rule that disables a query option depending on the value of another option in the same
 /// {@link QueryOptionSet}, e.g. "disabled when `matchMode` is `PHRASE`".
 /// A disabled option takes its default value.
+@JsonPropertyOrder({"optionId", "value", "negate"})
+@JsonInclude(Include.NON_NULL)
 public final class QueryOptionRule {
 
+    @JsonProperty
     private final String optionId;
+    @JsonProperty
     private final String value;
+    @JsonProperty
     private final boolean negate;
 
-    private QueryOptionRule(final String optionId, final String value, final boolean negate) {
-        this.optionId = Objects.requireNonNull(optionId);
-        this.value = Objects.requireNonNull(value);
-        this.negate = negate;
+    /// @param optionId The id of the other option.
+    /// @param value    The value of the other option the rule tests for.
+    /// @param negate   False if the rule applies when the other option has the value, true if it applies
+    ///                 when the other option has any other value.
+    @JsonCreator
+    public QueryOptionRule(@JsonProperty("optionId") final String optionId,
+                           @JsonProperty("value") final String value,
+                           @JsonProperty("negate") final Boolean negate) {
+        this.optionId = optionId;
+        this.value = value;
+        this.negate = Boolean.TRUE.equals(negate);
     }
 
     /// Creates a rule that applies when the other option has the given value.
@@ -56,12 +74,23 @@ public final class QueryOptionRule {
         return optionId;
     }
 
+    /// @return The value of the other option the rule tests for.
+    public String getValue() {
+        return value;
+    }
+
+    /// @return False if the rule applies when the other option has the value, true if it applies when the
+    /// other option has any other value.
+    public boolean isNegate() {
+        return negate;
+    }
+
     /// Tests the rule against the other option's effective value.
     ///
     /// @param otherValue The effective value of the option with id {@link #getOptionId()}.
     /// @return True if the option the rule belongs to is disabled.
     public boolean appliesTo(final String otherValue) {
-        final boolean matches = value.equals(otherValue);
+        final boolean matches = Objects.equals(value, otherValue);
         return negate != matches;
     }
 

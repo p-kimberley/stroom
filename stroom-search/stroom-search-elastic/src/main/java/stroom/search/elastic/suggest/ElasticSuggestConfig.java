@@ -49,12 +49,14 @@ public class ElasticSuggestConfig extends AbstractConfig implements IsStroomConf
         this.topValuesCount = Objects.requireNonNullElse(topValuesCount, DEFAULT_TOP_VALUES_COUNT);
     }
 
+    /// @return Whether the value picker is offered for Elasticsearch fields.
     @JsonPropertyDescription("Show a picker of the most common values of a field in query expressions when " +
                              "using an Elasticsearch index as the data source.")
     public Boolean getEnabled() {
         return enabled;
     }
 
+    /// @return The number of most common values the value picker lists, as configured.
     @JsonPropertyDescription("The number of most common values the value picker lists for a field, " +
                              "from 1 to " + MAX_TOP_VALUES_COUNT + ".")
     public int getTopValuesCount() {

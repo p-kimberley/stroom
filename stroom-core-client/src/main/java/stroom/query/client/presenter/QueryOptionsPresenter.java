@@ -96,7 +96,8 @@ public class QueryOptionsPresenter extends MyPresenterWidget<QueryOptionsView> {
         /// @return The value of each option, keyed by option id.
         Map<String, String> getValues();
 
-        /// Disables the given options, setting them to their default values, and enables all others.
+        /// Disables the given options, which don't apply to the other options' current values, setting them
+        /// to their default values, and enables all others.
         ///
         /// @param disabledOptionIds The ids of the options to disable.
         void setDisabledOptions(Set<String> disabledOptionIds);

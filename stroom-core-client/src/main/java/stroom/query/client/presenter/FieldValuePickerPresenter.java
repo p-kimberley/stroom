@@ -25,6 +25,7 @@ import stroom.query.client.presenter.FieldValuePickerPresenter.FieldValuePickerV
 import stroom.query.shared.FetchFieldValuesRequest;
 import stroom.query.shared.FieldValues;
 import stroom.query.shared.SuggestionsResource;
+import stroom.task.client.TaskMonitorFactory;
 import stroom.util.shared.NullSafe;
 import stroom.widget.popup.client.event.HidePopupRequestEvent;
 import stroom.widget.popup.client.event.ShowPopupEvent;
@@ -35,7 +36,6 @@ import stroom.widget.util.client.Rect;
 
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.dom.client.Element;
-import com.google.gwt.user.client.Timer;
 import com.google.gwt.user.client.ui.Focus;
 import com.google.inject.Inject;
 import com.google.web.bindery.event.shared.EventBus;
@@ -50,20 +50,18 @@ import java.util.function.Consumer;
 public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePickerView> {
 
     private static final SuggestionsResource SUGGESTIONS_RESOURCE = GWT.create(SuggestionsResource.class);
-    private static final int DEBOUNCE_PERIOD_MILLIS = 300;
 
     private final DateTimeSettingsFactory dateTimeSettingsFactory;
 
     private RestFactory restFactory;
     private DocRef dataSource;
     private QueryField field;
-    private boolean caseInsensitive;
     private boolean allowCommas;
     private TimeRange timeRange;
     private Consumer<String> valueConsumer;
-    private Timer filterTimer;
     private String lastFilter;
-    // Identifies the latest request so that responses to earlier ones, e.g. for a previous filter, are ignored
+    // Identifies the latest request so that responses to earlier ones, e.g. for a previous filter, or after the
+    // picker has closed, are ignored
     private int requestCount;
 
     @Inject
@@ -80,7 +78,6 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
     /// @param restFactory     Used to fetch the values.
     /// @param dataSource      The data source to fetch values from.
     /// @param field           The field to list values of.
-    /// @param caseInsensitive Whether the filter ignores case.
     /// @param allowCommas     Whether values containing a comma can be picked. They can't for an `in` term, whose
     ///                        values are separated by commas.
     /// @param timeRange       The time range to count values in, or null for all time.
@@ -89,19 +86,17 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
                      final RestFactory restFactory,
                      final DocRef dataSource,
                      final QueryField field,
-                     final boolean caseInsensitive,
                      final boolean allowCommas,
                      final TimeRange timeRange,
                      final Consumer<String> valueConsumer) {
         this.restFactory = restFactory;
         this.dataSource = dataSource;
         this.field = field;
-        this.caseInsensitive = caseInsensitive;
         this.allowCommas = allowCommas;
         this.timeRange = timeRange;
         this.valueConsumer = valueConsumer;
 
-        getView().init(isFilterable(field), this::onFilterChange, this::pick);
+        getView().init(isFilterable(field), this::onFilterChange, this::pick, this::hide);
         lastFilter = null;
         fetchValues(null);
 
@@ -110,6 +105,7 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
                 .popupType(PopupType.POPUP)
                 .popupPosition(new PopupPosition(relativeRect, PopupLocation.BELOW))
                 .onShow(e -> getView().focus())
+                .onHide(e -> cancelPendingRequest())
                 .fire();
     }
 
@@ -127,26 +123,18 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
             return;
         }
         lastFilter = trimmed;
-        if (filterTimer != null) {
-            filterTimer.cancel();
-        }
-        filterTimer = new Timer() {
-            @Override
-            public void run() {
-                fetchValues(trimmed);
-            }
-        };
-        filterTimer.schedule(DEBOUNCE_PERIOD_MILLIS);
+        // The filter box waits for the user to stop typing before reporting a change
+        fetchValues(trimmed);
     }
 
     private void fetchValues(final String filter) {
         final int requestId = ++requestCount;
-        getView().setMessage("Loading...");
         final FetchFieldValuesRequest request = new FetchFieldValuesRequest(
                 dataSource,
                 field,
                 filter,
-                caseInsensitive,
+                // The filter is a convenience for finding values, so it ignores case whatever the term's options
+                true,
                 timeRange,
                 dateTimeSettingsFactory.getDateTimeSettings());
         restFactory
@@ -162,7 +150,7 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
                         getView().setMessage("Unable to fetch values: " + error.getMessage());
                     }
                 })
-                .taskMonitorFactory(this)
+                .taskMonitorFactory(getView().getTaskMonitorFactory())
                 .exec();
     }
 
@@ -178,8 +166,18 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
     }
 
     private void pick(final String value) {
-        HidePopupRequestEvent.builder(this).fire();
+        hide();
         valueConsumer.accept(value);
+    }
+
+    // Requests can't be aborted once sent, so a response that arrives after the picker has closed, or after a
+    // newer request, is ignored.
+    private void cancelPendingRequest() {
+        requestCount++;
+    }
+
+    private void hide() {
+        HidePopupRequestEvent.builder(this).fire();
     }
 
 
@@ -193,7 +191,12 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
         /// @param filterable    Whether to show the filter box.
         /// @param filterHandler Called with the filter text as the user types.
         /// @param pickHandler   Called with the value the user picks.
-        void init(boolean filterable, Consumer<String> filterHandler, Consumer<String> pickHandler);
+        /// @param closeHandler  Called when the user asks to close the picker, by pressing Escape in an empty
+        ///                      filter box.
+        void init(boolean filterable,
+                  Consumer<String> filterHandler,
+                  Consumer<String> pickHandler,
+                  Runnable closeHandler);
 
         /// Lists values, replacing any message.
         ///
@@ -203,9 +206,12 @@ public class FieldValuePickerPresenter extends MyPresenterWidget<FieldValuePicke
         ///                    disabled.
         void setValues(FieldValues fieldValues, String scope, boolean allowCommas);
 
-        /// Shows a message, e.g. that values are loading, in place of the values.
+        /// Shows a message, e.g. that there are no values, in place of the values.
         ///
         /// @param message The message.
         void setMessage(String message);
+
+        /// @return The task monitor that shows a loading indicator while values are being fetched.
+        TaskMonitorFactory getTaskMonitorFactory();
     }
 }

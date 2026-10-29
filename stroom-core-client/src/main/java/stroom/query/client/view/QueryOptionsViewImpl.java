@@ -19,17 +19,23 @@ package stroom.query.client.view;
 import stroom.item.client.SelectionBox;
 import stroom.query.api.datasource.QueryOptionChoice;
 import stroom.query.api.datasource.QueryOptionDefinition;
+import stroom.query.api.datasource.QueryOptionType;
 import stroom.query.client.presenter.QueryOptionsPresenter.QueryOptionsView;
+import stroom.util.shared.NullSafe;
 import stroom.widget.form.client.FormGroup;
+import stroom.widget.help.client.HelpButton;
 import stroom.widget.tickbox.client.view.CustomCheckBox;
 import stroom.widget.valuespinner.client.ValueSpinner;
 
+import com.google.gwt.safehtml.shared.SafeHtmlUtils;
+import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.ui.FlowPanel;
 import com.google.gwt.user.client.ui.Widget;
 import com.google.inject.Inject;
 import com.gwtplatform.mvp.client.ViewImpl;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +45,10 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
 
     private final FlowPanel panel;
     private final Map<String, OptionControl> controls = new LinkedHashMap<>();
+    // The form group of each option that has one, so that its label can be greyed out when it is disabled.
+    // Tick box options show their own label instead.
     private final Map<String, FormGroup> formGroups = new HashMap<>();
+    private final Set<String> disabledOptionIds = new HashSet<>();
     private final Map<String, QueryOptionDefinition> definitions = new HashMap<>();
 
     @Inject
@@ -53,21 +62,19 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
         panel.clear();
         controls.clear();
         formGroups.clear();
+        disabledOptionIds.clear();
         this.definitions.clear();
 
         for (final QueryOptionDefinition definition : definitions) {
             final OptionControl control = createControl(definition, changeHandler);
-
-            final FormGroup formGroup = new FormGroup();
-            formGroup.setLabel(definition.getDisplayName());
-            if (definition.getDescription() != null) {
-                formGroup.setHelpText(definition.getDescription());
+            if (QueryOptionType.BOOLEAN.equals(definition.getType())) {
+                panel.add(createCheckBoxRow(definition, control));
+            } else {
+                final FormGroup formGroup = createFormGroup(definition, control);
+                panel.add(formGroup);
+                formGroups.put(definition.getId(), formGroup);
             }
-            formGroup.add(control.asWidget());
-            panel.add(formGroup);
-
             controls.put(definition.getId(), control);
-            formGroups.put(definition.getId(), formGroup);
             this.definitions.put(definition.getId(), definition);
         }
     }
@@ -91,21 +98,25 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
 
     @Override
     public void setDisabledOptions(final Set<String> disabledOptionIds) {
+        this.disabledOptionIds.clear();
+        this.disabledOptionIds.addAll(disabledOptionIds);
         controls.forEach((id, control) -> {
             final boolean disabled = disabledOptionIds.contains(id);
             if (disabled) {
                 control.setValue(definitions.get(id).getDefaultValue());
             }
+            // An option that doesn't apply to the other options' current values is shown, but disabled
             control.setEnabled(!disabled);
-            formGroups.get(id).setDisabled(disabled);
+            NullSafe.consume(formGroups.get(id), formGroup -> formGroup.setDisabled(disabled));
         });
     }
 
     @Override
     public void focus() {
-        controls.values().stream()
+        controls.entrySet().stream()
+                .filter(entry -> !disabledOptionIds.contains(entry.getKey()))
                 .findFirst()
-                .ifPresent(OptionControl::focus);
+                .ifPresent(entry -> entry.getValue().focus());
     }
 
     @Override
@@ -113,16 +124,45 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
         return panel;
     }
 
+    private FormGroup createFormGroup(final QueryOptionDefinition definition, final OptionControl control) {
+        final FormGroup formGroup = new FormGroup();
+        formGroup.setLabel(definition.getDisplayName());
+        if (definition.getDescription() != null) {
+            formGroup.setHelpText(definition.getDescription());
+        }
+        formGroup.add(control.asWidget());
+        return formGroup;
+    }
+
+    // A tick box with its label beside it, and the option's help after that, all on one line
+    private Widget createCheckBoxRow(final QueryOptionDefinition definition, final OptionControl control) {
+        final FlowPanel row = new FlowPanel();
+        row.setStyleName("form-group queryOptions-checkBoxRow");
+        row.add(control.asWidget());
+        if (definition.getDescription() != null) {
+            final HelpButton helpButton = HelpButton.create(definition.getDisplayName() + " - Click for help");
+            helpButton.setHelpContent(
+                    definition.getDisplayName(),
+                    SafeHtmlUtils.fromString(definition.getDescription()));
+            helpButton.preventTabFocus();
+            row.add(helpButton);
+        }
+        return row;
+    }
+
     private OptionControl createControl(final QueryOptionDefinition definition, final Runnable changeHandler) {
         return switch (definition.getType()) {
-            case BOOLEAN -> createCheckBox(changeHandler);
+            case BOOLEAN -> createCheckBox(definition, changeHandler);
             case CHOICE -> createSelectionBox(definition, changeHandler);
             case INTEGER -> createSpinner(definition, changeHandler);
         };
     }
 
-    private OptionControl createCheckBox(final Runnable changeHandler) {
+    private OptionControl createCheckBox(final QueryOptionDefinition definition, final Runnable changeHandler) {
         final CustomCheckBox checkBox = new CustomCheckBox();
+        checkBox.setLabel(definition.getDisplayName());
+        // Ties the label to the tick box, so that clicking the label toggles it
+        checkBox.setIdentity(DOM.createUniqueId());
         checkBox.addValueChangeHandler(e -> changeHandler.run());
         return new OptionControl() {
             @Override
@@ -134,6 +174,7 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
             public void setValue(final String value) {
                 checkBox.setValue(Boolean.valueOf(value));
             }
+
 
             @Override
             public void setEnabled(final boolean enabled) {
@@ -174,6 +215,7 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
                 }
             }
 
+
             @Override
             public void setEnabled(final boolean enabled) {
                 selectionBox.setEnabled(enabled);
@@ -211,6 +253,7 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
                 spinner.setValue(Long.valueOf(value));
             }
 
+
             @Override
             public void setEnabled(final boolean enabled) {
                 spinner.setEnabled(enabled);
@@ -238,6 +281,7 @@ public class QueryOptionsViewImpl extends ViewImpl implements QueryOptionsView {
         String getValue();
 
         void setValue(String value);
+
 
         void setEnabled(boolean enabled);
 

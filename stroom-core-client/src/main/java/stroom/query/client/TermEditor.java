@@ -615,12 +615,6 @@ public class TermEditor extends Composite {
     private void showValuePicker() {
         final QueryField field = fieldListBox.getValue();
         if (field != null && restFactory != null && dataSource != null) {
-            // Text fields are searched regardless of case, so their values are filtered regardless of case too.
-            // Other fields follow the term's case-insensitive option.
-            final boolean caseInsensitive = FieldType.TEXT.equals(field.getFldType())
-                                            || QueryOptionUtil.getBoolean(
-                    QueryOptionUtil.resolve(field.getQueryOptionSet(), term.getOptions()),
-                    QueryOptionSet.CASE_INSENSITIVE);
             // An `in` term's values are separated by commas, so a value containing a comma can't be one of them
             final boolean allowCommas = !Condition.IN.equals(conditionListBox.getValue());
             fieldValuePickerPresenterProvider.get().show(
@@ -628,7 +622,6 @@ public class TermEditor extends Composite {
                     restFactory,
                     dataSource,
                     field,
-                    caseInsensitive,
                     allowCommas,
                     NullSafe.get(timeRangeSupplier, Supplier::get),
                     pickedValue -> insertValue(field, pickedValue));

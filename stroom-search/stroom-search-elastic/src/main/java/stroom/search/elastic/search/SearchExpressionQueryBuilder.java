@@ -339,8 +339,7 @@ public class SearchExpressionQueryBuilder {
             return buildScalarQuery(
                     condition, elasticIndexField, fieldName, nestedPaths, value, this::getUnsignedLong);
         } else if (Kind.Version.jsonValue().equals(nativeType)) {
-            return buildScalarQuery(
-                    condition, elasticIndexField, fieldName, nestedPaths, value, this::getVersion);
+            return buildVersionQuery(condition, elasticIndexField, fieldName, nestedPaths, value);
         } else if (elasticFieldType.equals(FieldType.ID) ||
             elasticFieldType.equals(FieldType.LONG) ||
             elasticFieldType.equals(FieldType.INTEGER)) {
@@ -536,6 +535,45 @@ public class SearchExpressionQueryBuilder {
         return fuzziness == null || QueryOptionSet.FUZZINESS_OFF.equals(fuzziness)
                 ? null
                 : fuzziness;
+    }
+
+    /// Creates a query for a `version` field. Versions are compared by their precedence like numbers, but as they
+    /// are text, the values of the equality conditions (`=`, `!=` and `in`) may also be wildcard patterns, e.g.
+    /// `1.*`.
+    private Query buildVersionQuery(final Condition condition,
+                                    final ElasticIndexField indexField,
+                                    final String fieldName,
+                                    final List<String> nestedPaths,
+                                    final String value) {
+        if (Condition.EQUALS.equals(condition)) {
+            return wrapInNested(nestedPaths, buildVersionValueQuery(condition, fieldName, value));
+        } else if (Condition.NOT_EQUALS.equals(condition)) {
+            return negate(wrapInNested(nestedPaths, buildVersionValueQuery(condition, fieldName, value)));
+        } else if (Condition.IN.equals(condition) && WILDCARD_PATTERN.matcher(value).matches()) {
+            // Match any of the versions, some of which are wildcard patterns
+            final List<Query> versionQueries = tokenizeExpression(value)
+                    .map(version -> buildVersionValueQuery(condition, fieldName, version))
+                    .toList();
+            return wrapInNested(nestedPaths, BoolQuery.of(q -> q.should(versionQueries))._toQuery());
+        } else {
+            // Without wildcards, `in` matches the versions with a `terms` query, and the other conditions compare
+            // versions by their precedence
+            return buildScalarQuery(condition, indexField, fieldName, nestedPaths, value, this::getVersion);
+        }
+    }
+
+    /// Creates a query matching one value of a `version` field. A value containing wildcard characters, e.g. `1.*`,
+    /// is matched as a wildcard pattern, otherwise the field must hold that exact version.
+    private Query buildVersionValueQuery(final Condition condition, final String fieldName, final String value) {
+        if (WILDCARD_PATTERN.matcher(value).matches()) {
+            return QueryBuilders.wildcard(q -> q
+                    .field(fieldName)
+                    .value(value));
+        }
+        final FieldValue version = getVersion(condition, fieldName, value);
+        return QueryBuilders.term(q -> q
+                .field(fieldName)
+                .value(version));
     }
 
     private Query buildScalarQuery(
@@ -898,9 +936,7 @@ public class SearchExpressionQueryBuilder {
                         .field(fieldName)
                         .value(getUnsignedLong(condition, fieldName, line))));
             } else if (Kind.Version.jsonValue().equals(nativeType)) {
-                mustQueries.must(QueryBuilders.term(q -> q
-                        .field(fieldName)
-                        .value(getVersion(condition, fieldName, line))));
+                mustQueries.must(buildVersionValueQuery(condition, fieldName, line));
             } else if (elasticFieldType.equals(FieldType.ID) ||
                 elasticFieldType.equals(FieldType.LONG) ||
                 elasticFieldType.equals(FieldType.INTEGER)) {

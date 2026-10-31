@@ -238,6 +238,12 @@ class TestElasticSearchConditions_EndToEnd extends AbstractCoreIntegrationTest {
         cases.addAll(range("Byte", "1", "2", "3", "4"));
         // version: ordered by semantic version, so 10.0.0 is after 2.0.0
         cases.addAll(range("Version", "1.0.0", "1.2.0", "2.0.0", "10.0.0"));
+        // The equality conditions also take wildcard patterns, which match the version's text
+        cases.add(match("Version", Condition.EQUALS, "1.*", "1", "2"));
+        cases.add(match("Version", Condition.EQUALS, "1*", "1", "2", "4"));
+        cases.add(match("Version", Condition.NOT_EQUALS, "1.*", "3", "4", "5"));
+        cases.add(match("Version", Condition.IN, "1.2.?,10.*", "2", "4"));
+        cases.add(dictionary("Version", List.of("2.*"), "3"));
 
         // floating point numbers
         cases.addAll(range("Float", "1.5", "2.5", "3.5", "4.5"));

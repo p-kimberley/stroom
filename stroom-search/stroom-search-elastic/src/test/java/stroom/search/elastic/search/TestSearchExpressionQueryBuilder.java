@@ -285,6 +285,50 @@ class TestSearchExpressionQueryBuilder {
                             "\" but was given string \"lots\"");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"1.*", "1.2.?", "*-beta"})
+    void testVersionFieldEqualsWildcard(final String value) {
+        assertWildcard(buildSingleTerm(VERSION_FIELD, Condition.EQUALS, value), VERSION_FIELD, value);
+    }
+
+    @Test
+    void testVersionFieldNotEqualsWildcard() {
+        final Query query = buildSingleTerm(VERSION_FIELD, Condition.NOT_EQUALS, "1.*");
+
+        assertWildcard(assertNegated(query), VERSION_FIELD, "1.*");
+    }
+
+    @Test
+    void testVersionFieldInWithWildcard() {
+        final Query query = buildSingleTerm(VERSION_FIELD, Condition.IN, "1.0.0, 2.*");
+
+        assertThat(query.isBool()).isTrue();
+        final List<Query> should = query.bool().should();
+        assertThat(should).hasSize(2);
+        assertTerm(should.get(0), VERSION_FIELD, "1.0.0");
+        assertWildcard(should.get(1), VERSION_FIELD, "2.*");
+    }
+
+    @Test
+    void testVersionFieldInDictionaryWithWildcard() {
+        when(wordListProvider.getWords(DICTIONARY_REF)).thenReturn(new String[]{"1.0.0", "2.*"});
+
+        final List<Query> lines = assertDictionaryLines(buildSingleTerm(dictionaryTerm(VERSION_FIELD)), 2);
+
+        assertTerm(lines.get(0), VERSION_FIELD, "1.0.0");
+        assertWildcard(lines.get(1), VERSION_FIELD, "2.*");
+    }
+
+    @Test
+    void testVersionFieldRangeIsNotAWildcard() {
+        // Wildcards only apply to the equality conditions, so a range compares the value as a version
+        final UntypedRangeQuery range = assertRange(
+                buildSingleTerm(VERSION_FIELD, Condition.GREATER_THAN, "1.*"),
+                VERSION_FIELD);
+
+        assertThat(rangeValue(range.gt())).isEqualTo("1.*");
+    }
+
     @Test
     void testDateFieldRelativeExpression() {
         final long before = System.currentTimeMillis();

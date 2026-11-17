@@ -1395,6 +1395,15 @@ attached or snapshotted results table that isn't grouped, a `run_stroomql` table
 event is written as `<stroom-event streamId=".." eventId="..">`, holding the stream's header, the event's segment
 and the stream's footer, so each is a whole document.
 
+The file is XML 1.1 (`EventsFile.start`), as Stroom writes its Events streams, so an event well-formed in the version
+it declares is kept as XML, without its declaration, a control character as Stroom stored it (`&#xc;`). Seen in chat
+181: in an XML 1.0 file a Teams message's form feed made the event escaped text (`format="text"`, `&amp;#xc;`), and
+every grep for `&#xc` missed it. An event of another version has the characters XML 1.1 reads differently (C1
+controls, DEL and U+2028) written as character references, so its values read the same. Anything else (text, XML
+that isn't well-formed, a DOCTYPE) is kept as escaped text, with `format="text"`; its control characters other than
+tab, line feed and carriage return (and NEL and U+2028, which XML 1.1 would read as a new line) are written as
+character references, NUL, surrogates, U+FFFE and U+FFFF left out.
+
 Rows are read in order without repeats, up to `limit` (capped by `stroom.ai.workspace.maxEventsPerFetch`, default
 500). Within each stream, events are read in stored order. Stored data is compressed in blocks, so reading out of
 order would decompress the same block again. Events are segments 1 to n-2 of the stream (0 is the header, the last
@@ -2717,7 +2726,15 @@ one XSLT is the group's, which keeps its mapping. A check ending `(promotion wai
   doesn't go on with fields silently unmapped), `works_from`. With `full: true`, each step's description and tools and each document's path.
 * **Refuses**: no `build`.
 * **Notes**: compact is the default because the full result (about 10 KB) was saved to the workspace and fetched again
-  and again, as the agent couldn't keep it in view.
+  and again, as the agent couldn't keep it in view. For an aggregated feed whose groups import different versions of
+  its common module or helpers (a promoted module changes only by a new version), `module_versions` says so in one
+  informational line, naming the groups and the versions (`SourceTypeGroups.mixedModuleVersions`: a group the build
+  changes as the build has it, the others as production has them).
+  For each new version of an events (or records) pipeline in the build whose predecessor's Events promoted pipelines
+  read (their filters name it: `ProcessorFilters.followOnPipelines`), `follow_on_review` names them and says
+  `review_coverage pipeline_uuid=<predecessor> changed_pipeline_uuid=<new version>` checks them against the new
+  version's Events before promotion, which gives each a new filter, disabled, reading them
+  (`BuildStatusTool.followOnReview`, 2026-11-17).
 
 ### `promote_build`
 
@@ -2727,7 +2744,7 @@ destinations; unlocked by Manage Processors (the promoted pipelines' filters are
 approve) · confirms itself · chat group build · Classes: `PromoteBuildTool`, `PromotionLayout`, `PromotionProcessing`,
 `DocumentPlaces`, `DocumentWrites`, `WriteGuard`, `BuildRecords`, `BuildChecks`, `Consent`, `IndexingRuns`,
 `OutputFeeds`, `XsltHistory`, `DocumentationVersions`, `SurveyDocuments`, `SourceTypeGroups`, `GroupReferences`,
-`FeedIndexDecisions`, `SourceFolders`
+`FeedIndexDecisions`, `SourceFolders`, `PromotionTidyUp`
 
 An aggregated feed's indexes (`FeedIndexDecisions.changes`, `apply`): each indexing plan kept in the build is
 matched to its source type group and output feed (as `draft_index_mapping` recorded them in the build record's
@@ -2754,10 +2771,13 @@ review doesn't offer to move it); its source type registry always goes beside th
 Each document left in the workspace is marked `kept_at_promotion` in the build's record, with its version then
 (`kept_version`), so it doesn't hold the build open on its feed until it is changed.
 An aggregated feed's modules (`modulesBeside`: helpers, common module and source type groups, by their `mcp:module`
-marker) and a group's output feed of its own go beside the feed too, unless given a destination, a working copy's
-(written back) or a new version's (its version folder); a group's new version of its XSLT (`version_of` the
-original, named as it is) goes in its pipeline's version folder, not beside the old one; the group pipelines go
-where the destinations say. The
+marker) and a group's output feed of its own go under the feed too, unless given a destination or a working copy's
+(written back): the common module in `<feed>/Common/V<x.y>` and the helpers in `<feed>/Helpers/V<x.y>` (roles of their
+own, the version after the module's name, none being `V1.0`: `VersionNames.moduleVersion`; a new version, `<feed>
+common V1.1`, beside its predecessor the same way), a group's XSLT with its pipeline in `<feed>/<group>/Events/<the
+pipeline's version>` whatever its own name says (seen in e2e: `PEGA security-V2`, named before the user settled the
+pipeline's `v2`, went in a `V2` folder apart from its pipeline), a group's output feed in `<feed>/<group>/`; nothing
+promoted is written. The
 reference data each group pipeline lacks for its group's lookups (`GroupReferences.changes`, from the registry rows'
 `references`) is listed in the review and the approval form as `pipeline_changes` and added once approved, after the
 moves (forward only: none is removed): the build's pipelines (a new one, a new version, or a working copy's
@@ -2773,37 +2793,63 @@ Promotes a build out of the workspace in two calls. The first works out the whol
 changing anything (`status: needs_review`, a `layout` tree from `PromotionLayout.promotionTree`, and a `review_id`,
 the first 12 hex characters of the tree's SHA-256). The agent shows the tree in the chat; once the user confirms it,
 the second call passes `reviewed=<review_id>` and the user approves a short form bound to that layout (build, document
-count, folders, role subfolders, warnings, processing after promotion; the review id isn't shown, but the answer is
+count, folders, role locations, warnings, processing after promotion, follow-on filters; the review id isn't shown,
+but the answer is
 bound to it through `Consent.Request.boundTo`). `reviewed=true`, or an id
 for another layout, gets the review again (seen: `reviewed=true` on the first call, and the user approved a form whose
 layout was never shown). Any change of destinations changes the tree and so the id.
 
 Where each document goes (`plan`):
 
-* A working copy (`working_copy_of`) of a pipeline is deleted after its documents are written back (the original
-  keeps running); a working copy of anything else is **written back**: the original is copied into
+* A working copy of a pipeline, or of its code (an XSLT or text converter, an aggregated feed's common module or
+  helpers too), from a build opened before new versions became the only way, is refused (`refuseCodeWorkingCopies`:
+  `Not promoted: XSLT '...' is a working copy of a promoted pipeline's code, which changes only by a new version ...
+  Nothing was changed.`; for a shared module, that build_translation_xslt of the build's group makes the new
+  version the group imports); an unchanged one is only discarded. A working copy of Documentation is
+  **written back**: the original is copied into
   `<workspace>/backups` as `<name> backup <yyyyMMddHHmmss>` (UTC, tagged `mcp-generated`), then the copy's `data`,
   `converterType`, `documentation` and `description` are written over it, and the copy deleted. An unchanged copy is
   just deleted. A copy whose original was changed since it was taken is put to the user first (below).
 * `keep` for a document UUID leaves it in the workspace (seen: a test feed made while fixing had nowhere to go but
   production, and the agent never promoted the fix). A build on existing feeds keeps its feeds there unless given a
-  folder. The build's test feed (named `-MCP-TEST`, or recorded `output_for` the feeds it works from) always stays,
-  whatever the destinations say, and the layout ends saying so (`testFeedNote`): seen in chat 177, the test feed
-  listed under Events and the agent asked the user whether to promote it.
-* Otherwise a destination by document UUID, then the version folder proposed for a new version, then by type. Source
-  notes and reference docs go beside the build's only feed; a pipeline's (or index's) documentation, unless given a
-  destination by its own UUID, goes wherever that document's step goes, role subfolder too (given by UUID, a
-  version folder or the source's own folder: `besideWhatItDocuments`); a
-  verification dashboard goes where the index it searches goes, or with the build's indexing pipeline when the index
-  is from outside the build (seen in VS Code: promotion stopped for want of the dashboard's destination); the
-  documentation of a production pipeline or existing index goes beside it.
-* A new version of a production document (`version_of`, from `copy_pipeline`) goes in a version subfolder beside its
-  predecessor named by its version (`…-V1.1-Events` → `V1.1`), and the version's other new documents headed for that
-  place join it (`PromotionLayout.versionFolders`, `joining`). Documents given a destination of their own keep it,
-  as does a version whose type is given a destination elsewhere than beside its predecessor, so a version and its
-  other documents aren't split (seen in testing: with the version always put beside its predecessor, TWITTER's V1.1
-  pipeline went under /Feeds/Twitter while its XSLT and documentation went to System/MCP Testing/Twitter, the folder
-  given for their type).
+  folder. The build's test feed (named `-MCP-TEST`, or recorded `output_for` the feeds it works from), its test
+  indexes (`test_index_for`) and the `-VERIFY` dashboards searching only them are never promoted, whatever the
+  destinations say (`PromotionTidyUp.testDocs`): seen in chat 177, the test feed listed under Events and the agent
+  asked the user whether to promote it. The layout ends with the tidy-up (below), or, for a test feed not tidied up,
+  saying it stays in the workspace.
+* Otherwise a destination by document UUID (exactly that folder), else by type. Source notes and reference docs go
+  beside the build's only feed; a pipeline's (or index's) documentation, unless given a destination by its own UUID,
+  goes wherever that document's step goes (`besideWhatItDocuments`); a verification dashboard goes where the index it
+  searches goes (`withWhatItSearches`), or with the build's indexing pipeline when the index is from outside the
+  build (seen in VS Code: promotion stopped for want of the dashboard's destination); the documentation of a
+  production pipeline or existing index goes beside it.
+* **Role first, then version** (`layOut`, `PromotionLayout.rolePath`; decided by the user 2026-11-17): a document of
+  a role (its build role subfolder, or a pipeline's stage: a CEF flattener, Events in and CEF to Kafka, is the
+  forwarding stage, `CEF`; a reference loader `Reference`) goes in `<source's own folder>/<Role>/<version>` where its
+  role's root is the feed's own, else `<role root>/<source's folder name>/<version>` with no role folder, whatever
+  folder its type was given (so with the source's folder known no destination is needed). A pipeline's version is its
+  name's version token; a pipeline with none goes in `V1.0` and the layout warns `Pipeline '...' has no version in
+  its name (e.g. -V1.0-): placed in V1.0.` The role's other documents go with their pipeline: the one whose version
+  their name holds, else the one sharing most of their name (of their source type group first). Replaced role
+  subfolders made only when more than one role moved (and `role_subfolders`).
+* **A new version** (`version_of`, from `copy_pipeline`) goes in a sibling version folder of its predecessor's
+  (`PromotionLayout.predecessor`, `nextVersionPath`): `<feed>/Events/V1.0` gives `<feed>/Events/V1.1`,
+  `<root>/<feed>/V1.0` gives `<root>/<feed>/V1.1`; a predecessor laid out the old way (`<feed>/<Role>`,
+  `<feed>/V1.0/<Role>`, `<feed>/<Role>/v2`, `<feed>` alone) keeps its place, the new version beside it, with a role
+  folder where the predecessor sits in the feed's (or a group's) folder. Unless its role's root was changed in the
+  review: then it is laid out afresh under that root. A new version with no other place is laid out beside its
+  predecessor.
+* **Each role's root** (`roleRoots`, `RoleRoot`): a destination keyed by the role (`{"Indexing": "/Elastic
+  Indices"}`), else the user's earlier answer (`promotion_roots` in the build record), else the proposal: a new
+  version's predecessor's root, else where the sibling feeds' production pipelines of that role are
+  (`SourceFolders.siblings`: feeds in the feed's root and the folders there holding a feed; `PromotionLayout.siblingRoots`
+  reads, from `PipelineIndex.read()`, pipelines in a folder named for a sibling, not templates others inherit from nor
+  in the workspace, at most 200, by stage role, and takes the root most are under), else the feed's own root. Options:
+  the proposal, then the feed's own location where it differs; the user may type another. With forms, all roles in one
+  form on the review's call (`Consent.answerEach`: suggested answers as buttons, a blank one taking the proposal),
+  recorded so the approval call lays out what was reviewed; without, the reply's `role_locations` (`role`,
+  `location`, `why`, `options`) for the agent to ask in the chat. The tree ends with `Where each role goes ...: -
+  <Role>: <root> (<why>)`, so the review id and the approval cover them.
 * **A folder of the source's own** (`SourceFolders`): the source is the feed the build works from, else its
   registry's feed, else its one new feed. Where that feed's folder is a parent of sources (a subfolder of it, not a
   role or version subfolder, holds a feed: the siblings' convention), the build's documents go in
@@ -2822,9 +2868,8 @@ Where each document goes (`plan`):
   common module, helpers, source notes) stay in the source's own folder; a document given another folder keeps it, a
   version goes in its version folder, a working copy is written back in place. A build of no group (and an
   assessment) is placed as before. Seen in chat 178: the group's XSLT at the feed's folder beside the common module
-  and helpers, apart from its pipeline.
-* Role subfolders (`Events`/`Records`, `Indexing`, `CEF`, `Reference`) are kept under each destination only when
-  documents of more than one role move, unless `role_subfolders=false`.
+  and helpers, apart from its pipeline. Since 2026-11-17 with version folders: `<feed>/<group>/<Role>/<version>`, or
+  `<role root>/<feed>/<group>/<version>` for a role whose root is elsewhere.
 
 **Production changed since the copy.** `copy_pipeline` records in each working copy's build record entry the version
 its original had when copied (`BuildRecords.COPY_OF_VERSION`, `copy_of_version`). Before the layout is built (on the
@@ -2856,18 +2901,64 @@ missing folders are created (one made since the review is used, never twinned; t
 `mcp-managed`); each promoted pipeline has its StreamAppender `feed` property removed where it named a build feed
 other than a group's output feed of its own (`OutputFeeds.restoreOutputFeed`: in production its Events go into the
 input's feed); then write-backs, moves (untagged `mcp-managed`, so the agent may no longer change them directly),
-discards and keeps. The build's record entries go, the build folder is removed if empty,
-and `PromotionProcessing.createPromotionFilters` makes a feed-wide filter per promoted pipeline, **disabled**, with no
-minimum creation time.
+discards and keeps. The build's record entries go, the tidy-up is carried out (below), the build folder is removed
+if empty, and `PromotionProcessing.createPromotionFilters` makes a feed-wide filter per promoted pipeline,
+**disabled**, with no minimum creation time.
 
-* **Arguments**: `build` (required), `destinations` (object, or JSON text: type or document UUID → explorer path, in
-  any form `WriteGuard.folderParts` takes, or `keep`), `reviewed` (a `review_id`), `role_subfolders` (default true).
+**Tidy-up** (`PromotionTidyUp`; decided by the user 2026-11-17), on by default. What it will do is read on both calls,
+before anything moves (`plan`), and listed in the review's `tidy_up` and at the end of the layout tree (`Tidy-up after
+promotion (the user can untick it in the approval):`), so the approval, bound to the tree, is bound to it too. The
+review id and the approval are bound to each item's identity, kind and action, not its live counts (the tree shown
+gives the stream counts, sizes and shard counts; the one digested doesn't): a test feed still being written to keeps
+its review id, and only another set of items is reviewed again (found in review, 2026-11-18: bound to the counts, the
+approval never came). The approval form refers to it (`tidy-up after promotion: <n> test document(s), as listed in
+the chat (stream counts and sizes as of the review)`) and has it as a
+choice, `Tidy up the build's test data after promotion (as listed in the chat)`, ticked to start
+(`Consent.Request.withOption`). Unticked, or `tidy_up=false` (no choice is shown then, and the layout is another to
+review), nothing is tidied. Items, in the order carried out after promotion: (1) each test feed's unlocked streams
+marked deleted (`MetaService.updateStatus` with the feed's Data tab expression, `MetaExpressionUtil.createFeedExpression`,
+as the Data screen's Delete marks them: logical, data retention purges them; the review gives their count and total
+`File Size`), (2) each Lucene test index's shards deleted on every node (`IndexResource.reset`, as the Index Shards
+screen deletes them; the review gives their count), (3) the documents deleted as the user: dashboards, then index
+docs (an Elastic Index doc recorded as a test index is deleted as a doc only, never its index on the cluster), then
+feeds. A failure is kept to its item: its later steps are skipped and it stays (a dashboard stays while an index it
+searches does); the others carry on, and the promotion, already done, never fails. Only what the build provably
+made is tidied: in the build's own workspace folder, tagged `mcp-managed`, left there by the plan, not a feed the build
+works from, used by nothing outside the build (Stroom's dependencies: a pipeline or dashboard naming it; for a feed,
+any pipeline whose processor filter reads it, `ProcessorFilters.pipelinesReading`; without Manage Processors that
+check fails closed), nor by a document of the build the plan moves to production other than a pipeline (a dashboard
+not named `-VERIFY` searching the test index, say: `used outside the build, by Dashboard '<name>' (the promotion moves
+it to production)`). What uses each item is checked again once the build is promoted, before its first step: a
+promoted document naming it now (a pipeline property naming the test feed that `restoreOutputFeed` doesn't rewrite,
+say) keeps it, `skipped: left in the workspace: used outside the build since it was promoted, by ...`, its later
+steps not run; a promoted pipeline's own processor filters, made in the build, don't keep a test feed (found in
+review, 2026-11-18: checked only before promotion, what the build promoted was still the build's, and production then
+used what was deleted). Each test document passed over is listed with why (`Not tidied up, left in the workspace:`). The
+build record forgets what was deleted. Never touched: the promoted documents, production feeds and their streams, a
+feed the build works from, the survey doc and the build record.
+
+* **Arguments**: `build` (required), `destinations` (object, or JSON text: type, role or document UUID → explorer
+  path, in any form `WriteGuard.folderParts` takes, or `keep`), `reviewed` (a `review_id`), `tidy_up` (boolean,
+  default true; false keeps the test data).
 * **Returns**: first call `{status: needs_review, build, layout, review_id, warnings?, processing_after_promotion?,
-  pipeline_changes?, index_changes?, hint}`. After approval: `build`, `layout`, `folders` (each with a link to open
-  it), `updated_in_place`, `promoted` (what was done), `promoted_with_warnings`, `processing_filters` (each with
-  `pipeline_link`, and `before_enabling` for an index that must start fresh) with a `next` telling the user to review
-  and enable them, and `user_actions` (buttons: the filters, and disabling an earlier version's enabled filters "if
-  you choose").
+  role_locations?, follow_on_filters?, pipeline_changes?, index_changes?, tidy_up?, hint}`. After approval: `build`,
+  `tidied_up` (per item: `document`, `streams_marked_deleted` or `shards_deleted`, `deleted`, and `failed` or
+  `skipped` where it was left; or `tidy_up: not done ...` when the user unticked it), `layout`,
+  `folders` (each with a link to open it), `updated_in_place`, `promoted` (what was done), `promoted_with_warnings`,
+  `processing_filters` (each with `pipeline_link`, and `before_enabling` for an index that must start fresh) with a
+  `next` telling the user to review and enable them, `follow_on_filters`, `next_steps` and `user_actions` (buttons:
+  enabling the new filters; none disables a filter).
+* **Follow-on filters** (`PromotionProcessing.followOns`, `createFollowOnFilters`; decided by the user 2026-11-17): for
+  each new events (or records) version promoted, every filter outside the build and every other build with a
+  `Pipeline IS_DOC_REF <predecessor>` term (a CEF flattener's, an indexing pipeline's), not one selecting stream ids,
+  gets a sibling on its pipeline: the same selection, priority, task limit and minimum creation time, the Pipeline
+  term naming the new version, created **disabled** (`copied_from`, `reads`, `in_place_of`; its enable button after
+  the new version's own filter). One already made (promoted again) isn't made twice. The filter it follows is never
+  changed, disabled or removed. The review lists them (`follow_on_filters`) and so does the approval form. The
+  result's `next_steps`: `1. Enable the new version's filters when ready: filter <id> ('<pipeline>'); ...` then `2.
+  Once the new version's output is right, the admin disables or removes the earlier version's filters (the tools
+  never do): '<old>': filter <ids>; '<follow-on>': filter <id> (reading the Events of '<old>').` The buttons that
+  disabled a predecessor's enabled filters are gone (the user: that is the admin's).
 * **Refuses**: no `build`; a build with no documents; `destinations` that isn't an object; every document without a
   destination, named in one refusal with the destinations already placed (seen: Delinea SecretServer, one failed call
   per type); a blocking check (`Not promoted: ... once promoted, the pipeline's documentation can only change through a
@@ -2886,7 +2977,11 @@ minimum creation time.
   enabled filter already selecting what arrives gets no second one (it would process everything twice). An index read
   by a pipeline promoted with its events pipeline has the events pipeline's filter made first (seen in e2e: both
   enabled together, the index held the sample twice). An index starts fresh: `before_enabling` says to drop (or empty)
-  it first, with a button.
+  it first, with a button. A production index is never put up for dropping (`PromotionProcessing`): an original a
+  working copy was written back over keeps its live index (no drop or empty), and a new version's own Elasticsearch
+  index is dropped only while nothing but this promotion's documents writes to it or names it
+  (`ProductionIndexes.claimsBesides`); otherwise `before_enabling` says it is a production index, not dropped, and
+  why.
 
 ## Samples, surveys and feeds
 
@@ -3009,7 +3104,8 @@ kept still reads (see `SurveyDoc` under "Sample analysis").
   are read whole, else 3: seen in testing, a feed's latest streams uploaded again as one stream of five parts was
   surveyed through three), `max_records_per_stream` (10 to 10,000), `examples_per_shape` (1 to 10,
   default 2), `build`; as the user said: `kind_field`, `read_deeper` (no forms), `accept_as_is`,
-  `source_type_field` (`none` for one source; `meta:<Attribute>` for a stream meta attribute, below), `aggregated`
+  `source_type_field` (`none` for one source; `meta:<Attribute>` for a stream meta attribute, below; a reading into
+  held values, below), `aggregated`
   (below); `find` (a registry row's name, below).
 * **Returns**: `feed`, `format`, `time_range`, `streams_read`, `records_read`, `records_in` (an XML document's root
   with its namespace, which the examples inherit), `saturated`, `coverage`, `per_stream` (each stream's records,
@@ -3048,7 +3144,8 @@ in a form (`Which field says which source a record came from?`, the candidates b
 feed: one source`); without forms, `status: needs_source_type_field` with the candidates, nothing surveyed.
 `source_type_field` gives the user's answer (`none` for one source); `aggregated: true` says the user called the feed
 aggregated (weaker separation is enough, and a field of one shape a value is offered). The choice is kept in the
-survey state (`source_types`); the kind fields are then chosen with the source type field left out. Each record read
+survey state (`source_types`); the kind fields are then chosen with the source type field left out. A field named for
+kinds of event (an event type, action, operation, `SourceTypeFields.mayName`) is never a candidate. Each record read
 is counted by its value (`SourceTypeProfiles`: records, bytes, days, streams, message formats and parse failures,
 fields, shapes, kinds, levels, signals); the result's `source_types` gives the field and the records read of each
 value, and names `record_source_types`. A survey with no build notes a likely field (`aggregated_feed`) and offers an
@@ -3056,8 +3153,45 @@ assessment build (`no_build`). A build that then translates the feed whole, with
 the survey read with its mapping, and its XSLT logs a value outside them once a stream (`build_translation_xslt`, a
 feed translated whole).
 
+**A source type read inside a held value** (decided 2026-11-17, built 2026-11-18). The source type field may be a
+reading (`SourceTypeReading`): a field, then `>` into the structured data its string value holds (`HeldText`: JSON,
+encoded once or twice; XML; an RFC 5424 or RFC 3164 syslog header's `host`, `app`, `message`; two or more key=value
+pairs; else text, never read), its format told per record, then `.` into its objects or elements
+(`event>payload.logger_name`), at most three held values deep (`event>payload>inner>@n`). A step's names read whichever
+format the record holds (a JSON key, an XML element below the root by local name, a key=value key, a syslog field);
+`xml:`, `json:`, `kv:` or `syslog:` names one format; `@name` an XML attribute, `#root` the root's name; `#format` the
+held format itself (a last resort, the user's only, never offered). Readings tried in turn are joined by ` | `, the
+first with a value giving it. The head's candidates include the names inside held values (`HeldText.expand`,
+`HeldCandidates`), each judged over the records whose held field is in a format it is seen in (most must hold it, and
+a quarter of all records), with the records' shapes taken with the held field's structure; a held field whose formats
+name the source differently is offered first a reading joining them (the best name, then for each format it misses a
+name of that format whose values are like its own, a value in common or both structured names, qualified by its
+format: `event>logger_name | event>xml:@logger`); a record's own field comes first unless a held reading separates
+better by 0.1. The form says
+each held candidate's formats and its records with no value; without forms each candidate gives `formats` and
+`no_value`, and `held` says how readings work. A reading the user gives is checked (`SourceTypeReadings`): its syntax
+(refused saying why), its fields spelt as the records spell them, and refused when it reads no value from any record
+read (naming the held formats seen). Records with no value are the `(no value)` row's (`record_source_types`).
+
+**A combination of readings.** Where only two fields together tell the source (the wrapper's `system` and, inside
+the held `event`, `logger_name`), the field is their readings joined by ` + ` (`system + event>logger_name`, at most
+four parts, none a meta attribute, nor one among a part's readings tried in turn), its value a key of the parts'
+values joined by ` ‖ ` (`Teams ‖ System`, a part
+of no value empty), counted, profiled and scoped by the key. A pair is offered first (`SourceTypeCombinations`) only
+where every single candidate offered has a value another reading splits into families (that reading's values with
+shapes of their own, several shapes each: a kind is one shape, never a family) and each part so splits a value of
+the other; kind-named, free-text and address or time fields are never parts, and three or more parts only as the
+user names them (`source_type_field=a + b + c`). The form's line says its pairs of values, the evidence (`within
+system = Teams, event>logger_name System and Application have shapes of their own`, and the other way) and the source
+types proposed; without forms the candidate gives `combination`, `evidence` and `rows_proposed`, and `held` says how
+combinations work. The rows proposed (a row each for a next part's values that are families, `*` for the rest or
+where they share their shapes) are kept in the survey state (`rows_proposed`) for `record_source_types`; a
+combination the user names has its rows proposed from the head the same way. Each part the user gives is spelt as the
+records spell it, and refused where it reads no value from any record read.
+
 **A stream meta attribute as the source type field.** Only where the user names it, `source_type_field=meta:<Attribute>`
-(never found unasked): the attribute each part of a stream carries in its meta (its receipt headers, what
+(never found unasked; on its own, never among readings tried in turn or a combination's part, which a group's XSLT
+can't read): the attribute each part of a stream carries in its meta (its receipt headers, what
 `stroom:meta()` reads while the part is processed or stepped; `SourceTypeMeta`), for a feed whose source is said by
 a header, not a record's field (a proxy's aggregate of many hosts' parts, each with its own headers). The parts of
 the streams to be read are checked, up to 200 (`PartAttributes`): the attribute is spelt as the first part carrying
@@ -3126,11 +3260,24 @@ row every value of which an earlier row takes). A list-member row (`match: membe
 value split on its `separator` (inferred from the values seen, kept on the row), each item stripped of XML's white
 space and compared exactly (case and all). A registry already in the build, or beside the feed, is carried on from:
 its rows and statuses kept, values it lacks added as `new` (a row a value; where its rows are a list's items, a row for
-the value's rarest item no row has). Rows given again keep the registry's translated or placed rows (those with a group
+the value's rarest item no row has). Where the survey read records with no value (a held value of plain text, the
+held field or the field missing), the `(no value)` row (`match: none`, `SourceTypeRows.NONE`, matching only records
+with no value) is added last, unless the rows are given (`(no value)` gives it); it may be in a scope like any other
+source type, and a group translating it selects records whose reading finds nothing. Rows given again keep the
+registry's translated or placed rows (those with a group
 or pipeline) they leave out, each where it was in the order; `remove` drops rows by name. Removing a translated or
 placed row, or a changed value or pattern on a translated row, is confirmed by the user in one form (plain text,
 listed as `to_confirm` in the review), and refused for a translated row where no form can be shown; a translated row
-renamed (a new name with its match) is refused, saying to add the new row and remove the old one. Each row's profile is the sum of its values' (`SourceTypeProfiles.summarise`):
+renamed (a new name with its match) is refused, saying to add the new row and remove the old one. For a combination
+of readings (a field joining readings by ` + `), rows match its key part by part (`match: tuple`, its parts in
+`value`: `= Teams + *`), written `name = part + part`, each part `value` (exactly), `~ ^pattern`, `∈ item` (`in
+item`) or `*` (any value, none too), e.g. `Teams System = Teams + System`, `Skype ~ ^Sk + *`; a part of no value is
+matched only by `*`, else the record is the `(no value)` row's. Refused: parts not the combination's count, an
+operator none of these, an empty part, `*` in every part, a one-value row on a combination, and a row an earlier row
+covers part by part (or, without a `*` part, every key seen of which an earlier row takes). Rows start from those the
+survey kept with the combination, a key they miss given a row matching each part exactly; with none kept, a row a
+key whose parts all have a value. The review's `rows` give every row back as it is written (`(no value)` alone; a
+combination's `name = part + part`). Each row's profile is the sum of its values' (`SourceTypeProfiles.summarise`):
 records and bytes read and their shares, an estimate scaled to the streams read, per day, streams seen, formats and
 failures, fields (the wrapper's aside) with fill rates, shapes and the commonest's share, top kinds, levels, signals
 each with what it rests on, a suggested category (security audit, operational, network, diagnostic noise) with a
@@ -3176,7 +3323,7 @@ over. The review is bound to the table (`Consent.wasReviewed`): other rows, or c
   user a stream id they know, or a search, both `survey_feed find=`), `hint`, `next`.
 * **Refuses**: no `feed`; another build open on the feed (one open build per aggregated feed, under
   `start_onboarding`); no source type field known (`survey_feed` first); no values counted; a row that is neither
-  `name = value`, `name ~ ^pattern` nor `name ∈ item` (`name in item`); rows that can't be used (`These rows can't be used: ...`); a patterns answer
+  `name = value`, `name ~ ^pattern`, `name ∈ item` (`name in item`) nor `(no value)`; rows that can't be used (`These rows can't be used: ...`); a patterns answer
   that is neither; a scope naming a source type not offered; `scope` without `group`; with forms, no `group` to
   suggest; a group with no name, or a new one with no source type chosen (`scope=[]` naming a new group, or no group); `dropped` without `drop_reason`, or naming no source type
   of the registry.
@@ -3459,9 +3606,31 @@ A build pipeline whose indexing filter names a Lucene index outside the build (a
 production indexing pipeline) is pointed at a test index in the build first, `<INDEX>-MCP-TEST`, mirroring the
 production index's settings and fields plus the pipeline's kept plan's, so a build never writes into a production
 index (seen in an eval: a working copy's test run put 192 documents into the live index). `verify_index` on the
-production index searches the test index. Processing a copy of an Elasticsearch indexing pipeline that writes to a
-production index is refused: step it clean instead. At promotion the test index stays in the workspace, the pipeline
-is written back pointed at production, and the production index gains the plan's missing fields (said in the
+production index searches the test index. A build pipeline writing to a production Elasticsearch index is refused
+(`ProductionIndexes`, through `IndexingRuns.refuseUnsafeIndex`), before any lookup, `index_exists`, `drop_first`,
+template or approval form: production is decided by the index name, not by where an Elastic Index doc lives, a name
+that a non-template pipeline outside the build writes to (its own `indexName`, or the one it inherits from a
+template), that an Elastic Index doc outside the build names (one naming a pattern names none), or, for a working
+copy or new version, that its original writes (inherited from a template too). Names are compared with the variables
+filled in that Stroom's ElasticIndexingFilter would fill (`IndexNameValues`: it fills `{name}` from the document's
+root field `name`, as written): a field every XSLT of the pipeline writes as a fixed text, or as
+`stroom:feed-name()` (perhaps lower- or upper-cased), once for each feed it processes (its processor filters'
+feeds; for a build pipeline, its build's feeds too). Its filters' feeds are taken only where every filter's can be
+listed in full (`PipelineFeeds.enumeratedFeeds`: Feed `EQUALS`, `IN`, `IS_DOC_REF` or `IN_DICTIONARY`, a sample
+stream's `Id`, or an upstream pipeline whose own are listed in full, in an AND or every branch of an OR); a filter of
+a stream type alone, a feed under NOT or `NOT_EQUALS`, a feed wildcard, an unreadable Dictionary, filter list or
+upstream pipeline makes the feed variable a wildcard (found in review, 2026-11-18: a filter of Type only was passed
+over, and the claim narrowed to the other filter's feed). A `NOT_EQUALS` Feed is never a feed read. Any other variable
+is a wildcard. So children of a
+`{feed}-events` template claim only their own feeds' indices (`writes to '{feed}-events' ('acme-a-events')`). The refusal says nothing was processed and nothing is to
+be dropped (`Pipeline '...' writes to Elasticsearch index '...', which is a production index (...) ... Nothing was
+processed, and nothing is to be dropped or deleted ...`): step a working copy clean instead, or make a new version
+with its own index (`copy_pipeline`). Seen in a user's test: the build's own Elastic Index doc for the production name
+made the index count as the build's, and the user was asked to drop the production index, and did. `freshIndex` and
+the existing-index lookup refuse it again, so `drop_first` and `delete_first` never name one. A new version's first
+run (`version_of`, no filter yet) looks its own index up again: anything it matches, or a failed lookup, refuses it.
+At promotion the test index isn't promoted (the tidy-up deletes its shards, then it, unless the user unticks it),
+the pipeline is written back pointed at production, and the production index gains the plan's missing fields (said in the
 review's `index_changes`), for any build.
 
 Creates a processor filter on a pipeline in a build (`ProcessorFilterWrites.managedPipeline`), through Stroom's
@@ -3569,7 +3738,8 @@ indexing or discovery pipeline runs on the user's approval (created enabled); an
 user. An index this pipeline wrote to starts fresh, because Stroom's purge on reprocess doesn't apply to a second filter on the same
 streams nor remove a Lucene index's documents (seen: an index held each event twice after its XSLT was fixed and the
 stream reprocessed): a `drop_first` reply comes before the approval, then `index_dropped=true` (an Elasticsearch
-index still holding documents then gets `index_exists`); a build's own Lucene index is emptied once approved.
+index still holding documents then gets `index_exists`); a build's own Lucene index is emptied once approved. A
+production Elasticsearch index is refused first, as in `create_processor_filter`, so `drop_first` never names one.
 
 * **Arguments**: `pipeline_uuid`, `stream_ids` (required; 1 to 10), `source_pipeline_uuid`, `index_dropped`,
   `template_committed_by_user`.
@@ -3743,7 +3913,7 @@ Shared behaviour:
   this check (`PipelineStepping.refuseUnsafeDrafts`).
 * **A source type group's draft** is stepped as draft code for its own pipeline's XSLT element, as any
   translation's: a group is its pipeline's one XSLT, so nothing is inlined or routed. Its imports (the feed's common
-  module, which imports the helpers) resolve to the saved documents, the build's working copies where it has them.
+  module, which imports the helpers) resolve to the saved documents: the versions the group's XSLT imports.
 * **Mistyped properties.** A pipeline with a property Stroom can't take as written is refused before any step,
   naming it (`SteppedPipeline.refuseMistyped`): a boolean or integer property is checked against the type Stroom's
   element registry declares (`ElementRegistryFactory`). `jsonParser.addRootObject` written as the string `'false'`
@@ -4140,6 +4310,11 @@ Given `stream_ids`, it reads the Events streams itself (`EventStreams`) rather t
 an agent once read 50 events back 23 at a time, 47 s a read, to check them. A stream holding more events than are
 checked (500 in all) is read at events spread over it, not its start (`spread` in `read`): seen in testing, the first
 500 of 6,000 events were almost all of one kind.
+Events are read as the XML version they declare: Stroom writes Events streams as XML 1.1, where a control character
+in a source's value (a form feed, bell or escape) is written as a character reference (`&#xc;`) XML 1.0 forbids.
+The merged events of `stream_ids` keep the 1.1 declaration when any record has it, and an `events_xml` with a 1.1
+declaration is read as 1.1. Seen in chat 181: a Teams message's form feed, passed by Stroom's schema filter, was
+refused as "not well-formed (line 1)" of the merged one-line document, and the agent spent about 30 calls looking.
 
 * **Arguments**: `events_xml` (an `<Events>` document, e.g. step output) or `stream_ids` (Events streams processing
   wrote, as `wait_for_processing` lists them); exactly one of the two. `schema_version` (default the version the
@@ -4149,7 +4324,11 @@ checked (500 in all) is read at events spread over it, not its start (`spread` i
   failed rule with `events_failing` and up to three `examples`; `notes` when events are EventDetail/Unknown), `note`
   when the XML came HTML-escaped. With `stream_ids` also `read` (per stream, records checked and held),
   `recorded_for` (the pipelines recorded) and the plan's `next`.
-* **Refuses**: both or neither of `events_xml` and `stream_ids`; XML that isn't well-formed; a schema version this
+* **Refuses**: both or neither of `events_xml` and `stream_ids`; XML that isn't well-formed in the version it
+  declares (an XML 1.0 document holding `&#xc;` is), saying where (`WellFormedFaults`): line and column, the Event
+  it is in (for `stream_ids`, the stream and event number), the text near it with control characters visible, and
+  for a control character reference that XML 1.1 allows it, the value is the source's, and transform
+  `strip_control` is needed only if the output must be XML 1.0; a schema version this
   Stroom doesn't hold; a stream that can't be read, isn't Events, or has no Events records; a stream the user may
   not read (no View Data).
 * **Notes**:
@@ -4318,37 +4497,65 @@ parent template, the same element changes (removed or re-linked steps, extra XSL
 property values, and its description. The XSLTs and text converters its own layer names
 (`PipelineWrites.OWNED_TYPES`) are copied too, with `rename` applied to their names, and the copy is rewired to
 them; other documents (shared libraries, indexes, clusters) stay shared. The user confirms the names in a form
-first. It is the route for a new version that keeps the XSLT and changes parts, and for a working copy of a
-production pipeline.
+first. It is the route for a new version that keeps the XSLT and changes parts.
+
+A copy is always a new version (decided by the user, 2026-11-17: a promoted pipeline and the code it runs are never
+changed in place): nothing is asked but its names, recorded `version_of` its source, and `working_copy=true` is
+refused (`... only a new version of it is copied, never a working copy ... Nothing was copied.`). Without forms the
+reply is `needs_names`: the proposed names (`new_version_names`) and a hint to put them to the user. Seen in a user's
+test: a promoted feed's pipelines copied under the same names as working copies, where the user expected a new
+version.
 
 A source type group's pipeline (`SourceTypeGroups.chainCopies`, `newVersion`): its one XSLT is the group's. An owned
-document the build has copied already (the group's working copy, made when the build first saved a change to a
-promoted group, `copy_of`; or its new version, `version_of`) is run by the copy, not copied again. The common and
-helpers modules the group imports aren't the pipeline's own, so stay shared; every module in the build importing a
-promoted module the build has a working copy of is pointed at that copy, so the chain runs the copies. A working copy
-(`working_copy=true`, after the user chose to change the group's pipeline) leaves the registry naming the original. A
-new version (`working_copy=false`, after `pipeline=new_version`): the group's registry rows move to it (`pipeline`:
-its `name` and `uuid`; `source_types` in the result); the current pipeline runs on unchanged until the user retires
-it. Copying the promoted pipeline of the group the build's scope names, before the build has decided what its change
-goes to (`SourceTypeGroups.promotedGroup`: no choice recorded, no copy of the group's XSLT), puts the change-or-new-
-version question to the user in the form `build_translation_xslt` asks (`SourceTypeGroups.askPipelineChoice`), and
-the answer decides the copy, not `working_copy` (seen in eval case 61: the agent's `working_copy=true` made the
-user's choice). The answer is recorded in the build record (`group_pipeline_choices`), so neither tool asks again;
-without forms the call is refused until `pipeline=change|new_version` carries it. A new version needs a `new_name`
-of its own.
+document the build has made a new version of already (`version_of`: `build_translation_xslt` saves a promoted group's
+change in a new version of its XSLT, without asking) is run by the copy, not copied again; one made under the
+original's name (before such versions were named for them) is refused (`refuseCopiesUnderOriginalNames`: `... have
+the original's ... Rename each in Stroom ... Nothing was copied.`), as a new version under the original's names is.
+The common and helpers modules the group imports aren't the pipeline's own, so stay shared (the group's new XSLT
+imports the build's new versions of them where `build_translation_xslt` made them); every module in the build
+importing a promoted module the build has a working copy of (an older build's) is pointed at that copy, so the chain
+runs the copies. The group's registry
+rows move to the new version (`pipeline`: its `name` and `uuid`; `source_types` in the result); the current pipeline
+runs on unchanged until the user retires it.
+
+A new version's names are proposed (`VersionNames`) and confirmed or edited in the copy's form, each an editable
+field: the agent's where they differ from the original's, else the next version's. The pipeline's last version token
+goes up by its last part (`V1.0` to `V1.1`, `V1` to `V2`, `-v1.2` to `-v1.3`), the major bump (`V2.0`) said in the
+form as the other choice; a name with none is taken as `V1.0` (as promotion files it) and gets `-V1.1` (`-V2.0` the
+major choice), before its first `{variable}`. A token inside the name of a feed the build works from is the feed's,
+never the pipeline's version (found in review, 2026-11-18: `CISCO-ASA-V9-EVENTS` of feed `CISCO-ASA-V9` was V9, its
+next V10): with no other the name is unversioned, `CISCO-ASA-V9-EVENTS-V1.1`; promotion's layout, a group pipeline's
+default name (`<feed> <group> V1.0` whatever the feed's name holds) and a group XSLT's new version read it the same
+way. A token whose numbers run past 9 digits (a timestamp, `Acme-v20261117093000123456`) is no version. Its documents follow the
+pipeline's change where they hold the same token, else bump their own. For an Elasticsearch indexing pipeline the
+index name's last token goes up (`acme-events-v1` to `acme-events-v2`; none: `-v2`, before the first variable,
+`acme-events{_suffix}` to `acme-events-v2{_suffix}`), the copy's ElasticIndexingFilter gets it, and each Elastic Index
+doc outside the build naming exactly the old index gets a new doc in the build for the new one (its settings and
+fields, `version_of` the old), beside it. A new version under any of the original's names (pipeline, document, index,
+Elastic Index doc) is refused.
+
+Once the names are confirmed and before anything is copied, a new index name is looked up
+(`ProductionIndexes.taken`, asked for by the user): on the cluster (`ExistingIndexes`, variables as wildcards) and
+against every pipeline and Elastic Index doc outside the build, there with its variables filled in as for production
+claims (`IndexNameValues`: the copied XSLTs and the build's feeds, so feed B's `{feed}-events-v2` isn't taken by feed
+A's). Any data stream, index or alias it matches, even an
+empty one, a lookup that fails (never taken as free), or another Stroom document naming it, refuses the copy, saying
+what matched (name, kind, document count, the Stroom document), the pattern looked up and the next free version name;
+nothing it matches is offered for deletion.
 
 * **Arguments**: `build`, `source_uuid`, `new_name` (required); `rename` (text replacements for the copied
   documents' names, e.g. `{"V1.2": "V1.3"}`; JSON text or a single-quoted literal is read too:
-  `PipelineArguments.textMap`); `set_properties` (changes on the copy, e.g. a new `indexName`); `working_copy` (true
-  when promotion will write the copy back over the original; false, the default, for a new version promoted
-  alongside it; for the build's group's promoted pipeline the user's choice decides it); `pipeline` (`change` or
-  `new_version`: the user's answer, where no form can be shown).
-* **Returns**: `type`, `uuid`, `name`, `copy_of`, `working_copy`, `copied_documents`, `source_types` (a new version
-  of a group's pipeline: the registry rows moved to it), `note` (a `working_copy` the user's choice overrode, or a
-  `pipeline` ignored), and `next`.
+  `PipelineArguments.textMap`); `set_properties` (changes on the copy, e.g. a new `indexName`); `working_copy`
+  (refused when true: a copy is always a new version).
+* **Returns**: `type`, `uuid`, `name`, `copy_of`, `copied_documents`, `source_types` (a new version of a group's
+  pipeline: the registry rows moved to it), `index_name` and `index_docs` (a new version's own index and its Elastic
+  Index docs), `note`, and `next`; or `needs_names` (see above).
 * **Refuses**: a missing required argument; a template (`PipelineTemplates.templateReason`: `... is a template
   (...): templates are inherited, not copied ...`, pointing at `create_pipeline`); an owned document the user can't
-  read; the user declining the form, or no form.
+  read; a new version under the original's names (`A new version of X needs names of its own, and ... are the
+  original's ... Nothing was copied.`); a new index name that is taken (`Index name '...' (looked up as '...') is not
+  free for the new version: ... Nothing was copied. ... '<next>' is free ...`); `working_copy=true`; the user
+  declining the form.
 * **Notes**:
   * A document that `set_properties` replaces is not copied: the copy would be unused, and its renamed name could
     clash with the replacement's (v2's XSLT made first, then V1's copied and renamed to the same name, which the
@@ -4374,7 +4581,7 @@ its XSLT's `stroom:lookup()` calls find the maps. It asks nothing itself; as it 
 * **Returns**: `uuid`, `name`, `type`, `set` (each `element.name` set), `reference_data` (all the pipeline's
   references now, when references were given), and `note` when `addRootObject` was also set for a JSON array.
 * **Refuses**: no `pipeline_uuid`; neither argument; a pipeline that isn't the tools' own, or not in a build folder
-  (`... is not in a build folder: it is changed only in a build. Make a working copy in one (copy_pipeline) ...`,
+  (`... is not in a build folder: it is changed only in a build. Make a new version in one (copy_pipeline) ...`,
   audited); an element the pipeline doesn't have; a validation property; a mistyped value; an Elasticsearch
   indexing filter's `indexName` that differs from the build's Elastic Index doc (`BuildIndexes.otherIndex`:
   `rename_index` changes both, and the index template follows).
@@ -4670,7 +4877,7 @@ constants, its shared calls, the registry's Environment and default System Name;
 System Name (its source types' rows', else its mapping's) as a parameter. A later group's entries the same as the
 common module's (its System Name and Environment aside) are left to it; others are its own, said in `group.notes`;
 a shared call of a later group's that the common module lacks is added to the common module, saved again (in place,
-or through a working copy of a promoted one), never imported by the group. **One source type group a build**
+or as a new version of a promoted one), never imported by the group. **One source type group a build**
 (decided 2026-11-13): `group` defaults to the one the build's scope names (`record_source_types`; a new translation in
 such a build with no `group` is that group's), and another group name is refused (`one source type group a build`;
 for a scope kept before scopes named their group, another group whose XSLT the build made is refused). Its source types
@@ -4678,7 +4885,11 @@ are `source_types`, else the build's scope's with those the group translates alr
 scope keeps its own); the sample check reads theirs alone. A build with a whole-feed scope (no registry) is
 unaffected. Saving: the helpers (made, or written again when this
 generator writes them otherwise) and common module first, then the group importing the common module by UUID, and the
-registry's rows for the group's source types set `translated` with `group` and `group_xslt`.
+registry's rows for the group's source types set `translated` with `group` and `group_xslt`, and its `modules` the
+versions saved (the feed's newest, for a new group to import). The modules a group has are those its XSLT imports
+(`SourceTypeGroups.modules`: its common module by the module's mark, and the helpers that module imports; the
+build's copy of the group's XSLT where it has one), so groups may import different versions; a new group takes the
+registry's.
 
 The group carries a snapshot of every registry row when saved (its kept mapping's `module.rows`), tries them in order
 (`=` a value, `matches()` an anchored pattern, checked in Java's and XPath's dialects alike, `∈` an item of the value
@@ -4689,7 +4900,17 @@ part, and `stroom:meta()` reads the part's, in stepping and processing alike): a
 handed to the group's mode; any other part's records are passed over whole, never judged one by one (no pass-over
 template). A group on a record's field judges each record as below. It reads a record's source type value as the tools do
 (`SourceTypeFields.valueOf`): stripped of the white space around it, and no value for `-`, `null`, `none` or `n/a`
-(any case), so processing and the survey count the same records as each source type. Every other record (another
+(any case), so processing and the survey count the same records as each source type. A group whose field is a
+reading into held values (`SourceTypeReadingXslt`) reads it with functions of its own (mode-prefixed): each held
+value's format told by the tools' rules in their order with their regular expressions (`HeldText`: `json-to-xml`
+of an object or of a JSON string holding one, `parse-xml` of a text holding no `<!DOCTYPE`, the syslog headers,
+`tokenize()` counting pairs; held JSON is JSON itself, `ToolJson.loadsStrict` in the tools: no `NaN` or `Infinity`,
+each number read as written, `2.10` and `1e10`, as `json-to-xml` keeps it), then
+stepped into as the tools step (JSON keys; XML elements and attributes by local name, the first in document order;
+a key's first `key=` value; a syslog field), each reading's value normalised, the first with a value taken; the
+`(no value)` row matches an empty value (`$value = ''`). A reading that isn't one is refused (`groupProblems`). Parity
+with the tools is tested over held JSON (once and twice encoded), XML, key=value, syslog, two and three held values
+deep, plain text and missing or malformed held fields (`TestSourceTypeReadingParity`). Every other record (another
 group's, parked, dropped, or a value no row matches) is passed over, its record's number read so the group's log
 lines name the right records, never logged nor warned of: an INFO line a document of the records passed over
 (`XsltGenerator.PASSED_OVER`, written by group XSLTs generated before 2026-11-15) made Stroom write an Error stream
@@ -4716,15 +4937,21 @@ group), as is a group whose mode is the common module's. The rows record it (`pi
 group=`. `references` (as `create_pipeline` takes them) are kept on the group's rows: its pipeline loads them
 (`create_pipeline`, and promotion).
 
-**A promoted group** (`promotedPipeline`, `SourceTypeGroups.workingCopy`): the first save in a build of a group whose
-pipeline is promoted asks whether the change goes to that pipeline or to a new version of it ("What does the change
-to group 'x' go to?"; without forms, `pipeline=change|new_version`). The answer isn't stored: the build's copy of the
-group's XSLT marks it decided. A change works on a working copy in the build's Events folder; every promoted module
-importing a copied one is copied too, and the build's modules import the copies, so stepping and processing in the
-build run them (`copy_pipeline working_copy=true` steps the group's pipeline with them). A new version is a new XSLT
-recorded `version_of` the original, which `copy_pipeline working_copy=false` then runs; the group's rows move to the
-new pipeline. Imports are rewritten by text, without `check_xslt`. At promotion the modules are pointed back at the
-originals before the copies are written back (`promote_build`).
+**A promoted group** (`promotedPipeline`, `SourceTypeGroups.groupTarget`): a change to a group whose pipeline is
+promoted is always a new version (decided by the user, 2026-11-17), nothing asked: a new XSLT in the build's Events
+folder recorded `version_of` the original, which `copy_pipeline` of the group's pipeline then runs; the group's rows
+move to the new pipeline. The new XSLT is named for its pipeline's new version (`SourceTypeGroups.versionName`:
+`VersionNames.following` the pipeline's next version's token, as `copy_pipeline` names what it copies;
+`PEGA security` for pipeline `PEGA PEGA security` becomes `PEGA security-V1.1`). A promoted shared module the change
+needs (a shared call added to the common module, or the helpers out of date) is never changed in place either
+(decided by the user, 2026-11-17): a new version of it is made in the build (`newModuleVersion`, recorded
+`version_of`), named `<base> V<next>` after the highest version the feed knows (the module changed, the registry's
+newest; one with no version is V1.0, so `PEGA common V1.1`; `VersionNames.nextModule`), and only the group's new
+XSLT imports it; the feed's other groups keep the versions they import, and nothing promoted is rewritten. A
+helpers' new version makes a new version of the common module too, its import of the helpers rewritten by text (code
+and kept mapping), as the chain is by UUID; a common change makes no helpers version. A later save in the build
+changes the build's versions where they are. At promotion each goes in a version folder beside its predecessor
+(`promote_build`).
 
 **A feed translated whole** (no `group`, `SourceTypeGroups.seenSourceTypes`): in a build whose survey confirmed a
 source type field, the mapping keeps `seen_source_types` (the field, and the values seen: the registry's rows where
@@ -4749,7 +4976,7 @@ rows' pipeline), `output_feed`, `registry` (`uuid`, `name`, `translated`) and `g
   version history line); `include_xslt` (also return the code when saving); `reviewed` (a `review_id`);
   `field_mapping`, `pipeline_uuid`, `max_records` (1 to 1000, default 50); `discard_hand_edit`,
   `hand_edit_choices`; `group` and `source_types` (a source type group, above); with `group`, `own_output_feed` and
-  `pipeline` (`change` | `new_version`; no forms) and `references`.
+  `references`.
 * **Returns**: the generator's result (`ok`, `xslt` unless saved, `problems`, `warnings` grouped, `events`),
   `schema_version` (and `schema_version_settled`), `required_imports`, `sample_check` (`records`, `problems`,
   `warnings`, `fields_seen`, `not_checked`, `kept_unknown`, `note`), `changes_applied`, `changes_applied_to`,
@@ -5450,8 +5677,10 @@ is reported with its error, not allowed to hide the others.
   `other_groups`, source type to the group translating it; `processing.passed_over`, a group's `records` and
   `raw_streams` passed over; `unseen_source_types`, a whole translation's values its survey didn't see;
   `new_source_types` and `registry`), `passed_over` (the kinds outside what the pipeline translates) and
-  `other_groups` (another group's kinds). Examples (`holds`) are read with the pipeline's own Data Splitter
-  (`KeptMappings.dataSplitter`), as processing read them, else a spec inferred from the stream.
+  `other_groups` (another group's kinds); for a group's pipeline whose feed's groups import different versions of
+  its common module or helpers, `module_versions`, one informational line naming the groups and versions
+  (`SourceTypeGroups.mixedModuleVersionsOf`, 2026-11-17). Examples (`holds`) are read with the pipeline's own Data
+  Splitter (`KeptMappings.dataSplitter`), as processing read them, else a spec inferred from the stream.
 * **Refuses**: no `pipeline_uuid`; a pipeline that can't be read; one that has processed nothing (no Error and no
   Events streams, on a first call); `max_streams` out of range; a cancelled call; no Stepping permission where it
   steps.
@@ -5922,7 +6151,10 @@ for its current index and code.
 * **Notes**:
   * The template's name and pattern follow the pipeline's index name (`IndexingHelpers.templateTarget`): values the
     name is built from (`{_suffix}`) are wildcards in the pattern and left out of the name (seen: a literal pattern
-    `ecs-windows{_suffix}v1*` matched no index).
+    `ecs-windows{_suffix}v1*` matched no index). The pattern is the exact index name otherwise
+    (`["acme-events-v1"]`, not `acme-events-v1*`, which also covered `acme-events-v10`; asked for by the user), each
+    variable a `*` (`index-name-v1{_suffix}` to `["index-name-v1*"]`; `IndexNamePatterns`); a data stream's template
+    matches the data stream's name. A template drafted from an Elastic Index doc's fields does the same.
   * An ECS plan's template composes `ecs@mappings` and leaves the standard ECS fields to it, with dynamic mapping
     on. The plan's convention is taken from the kept or drafted plan when the agent's copy left it out
     (`IndexPlans.withConvention`), as it decides that.
@@ -5943,7 +6175,8 @@ for its current index and code.
 
 Indexing · write (keeps an agreed template in the pipeline's description) · requires Stepping; checks View and Edit
 (the build's own pipeline only) · confirms itself · takes a run slot · Classes: `CheckIndexTemplateTool`,
-`TemplatePipelines`, `TemplateReviews`, `TemplateCheck`, `TemplateMappings`, `ExampleTemplates.ecsDuplicates`
+`TemplatePipelines`, `TemplateReviews`, `TemplateCheck`, `TemplateMappings`, `ExampleTemplates.ecsDuplicates`,
+`TemplateOverlaps`
 
 Checks a user's Elasticsearch index template (or an existing index's mapping), with its component templates composed
 as Elasticsearch composes them, against the documents the candidate indexing pipeline writes
@@ -5958,7 +6191,11 @@ as the example.
   `reviewed`, the template that review showed, kept for the session so it is never retyped); `events_stream_ids`
   (required); `component_templates`; `without_components`; `max_records` (1 to 500, default 50); `reviewed`.
 * **Returns**: `compatible`, `blocking`, `pipeline_changes`, `notes` (standing instructions' components missing or
-  excluded, components not given and so unchecked, ECS fields mapped twice), `component_templates`,
+  excluded, components not given and so unchecked, ECS fields mapped twice), `warnings` (not blocking: a pattern
+  ending in a digit then `*`, which also covers longer numbers, unless it is the index name with its variables as
+  `*`; another agreed template, kept in another pipeline's description, whose `index_patterns` also cover the index
+  on the same cluster at the same priority, named with its pipeline and patterns, to narrow or out-prioritise:
+  `TemplateOverlaps`), `component_templates`,
   `template_name`, `index`, `cluster`, `pipeline_link`, `stopped_early`/`stepped`; then `needs_review` or `agreed:
   true` with the `commit-template` button, as for `propose_index_template`.
 * **Refuses**: no `pipeline_uuid`, streams or template; a template that can't be read; `max_records` out of range;
@@ -6068,8 +6305,8 @@ with its mapping also carries `mcp-kept-mapping`.
 * `create(type, name, build, copyOf, ..., role)` makes an empty tagged document; `createFilled(...)` makes and fills
   one, deleting it again if filling fails. A name the build already has for the type is refused, naming the one there
   (seen: after a long conversation was summarised, an agent made the same indexing pipeline twice).
-* Before changing a document: `checkManaged` (it must be tagged `mcp-managed`, else "Make a working copy in a build
-  (copy_pipeline)"), `checkInBuild` (and in a build folder, which it returns: index docs and pipelines change only
+* Before changing a document: `checkManaged` (it must be tagged `mcp-managed`, else "Make a new version of its pipeline
+  in a build (copy_pipeline ...)"), `checkInBuild` (and in a build folder, which it returns: index docs and pipelines change only
   there, whatever their tags, as a doc moved out in Stroom keeps them) or `checkBuilt` (generated, promoted or not).
   Each refusal is a `ToolRefusal` and is audited (`access_denied`).
 * `createFolder` looks for a folder of the name first and uses it (Stroom allows twins under one parent), under a lock
@@ -6297,7 +6534,12 @@ The checks `check_xslt`, `check_events`, the translation build and the stepping 
 * **`EventChecks`** and **`SchemaErrors`**: `check_events`' two checks. `SchemaErrors` validates against a compiled
   schema, giving each error's line, a path such as `/Events/Event[2]/EventTime/TimeCreated` (a position where the
   parent holds more than one of that name) and the message, the validator's two messages for one bad value given as
-  one error. **`EventStreams`** reads Events streams as one `<Events>` document for it.
+  one error. **`EventStreams`** reads Events streams as one `<Events>` document for it, XML 1.1 (with its
+  declaration) when any record declares 1.1, as Stroom writes Events.
+* **`WellFormedFaults`**: where XML that isn't well-formed is at fault, for the refusals of `XsltChecks.parse` and
+  `check_events`: the line and column, the Event it is in (the Nth `<Event>`), up to 50 characters before and 30
+  after with control characters shown as `\u000c`, and, for a C0 character reference XML 1.0 forbids, that XML 1.1
+  allows it and the value is the source's.
 * **`EventElements`**: what an event-logging element takes, from the schema in this Stroom, for describing it to the
   agent.
 * **`XPathChecks`**: evaluates a mapping's xpaths and extraction regexes against the sample before anything is

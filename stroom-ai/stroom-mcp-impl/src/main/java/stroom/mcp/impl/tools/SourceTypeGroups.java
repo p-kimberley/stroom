@@ -36,6 +36,7 @@ import stroom.ai.impl.tools.generation.XsltNames;
 import stroom.ai.impl.tools.sample.FeedSampling.SurveyRecord;
 import stroom.ai.impl.tools.sample.SourceTypeMeta;
 import stroom.ai.impl.tools.sample.SourceTypeProfiles;
+import stroom.ai.impl.tools.sample.SourceTypeReading;
 import stroom.ai.impl.tools.sample.SourceTypeRegistry;
 import stroom.ai.impl.tools.sample.SourceTypeRows;
 import stroom.ai.impl.tools.sample.SourceTypeScope;
@@ -67,6 +68,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /// An aggregated feed's source type groups, as `build_translation_xslt group=` builds them: each group the XSLT of a
 /// pipeline of its own, translating its source types' records and passing over the rest. The group's mapping is
@@ -76,26 +79,31 @@ import java.util.function.Predicate;
 /// the registry's rows for its source types are set `translated`, naming the group and its XSLT, its pipeline
 /// (`<feed> <group>` until create_pipeline makes it) and its output feed (absent for the feed's own Events).
 ///
-/// A later build finds the feed's modules through the registry, beside the feed. It changes a promoted one through a
-/// working copy with a UUID of its own ([#workingCopy]), and every promoted module importing that one is copied too,
-/// importing the copy, so stepping in the build runs the copies; promotion points them all at the originals again
-/// ([#toOriginals]) before the copies are written back.
+/// A later build finds the modules a group imports through its XSLT's imports (a new group's through the registry,
+/// which names the feed's newest), beside the feed. A promoted module is never changed in place (decided by the user,
+/// 2026-11-17): a change to it makes a new version of it in the build ([#newModuleVersion]: its version bumped,
+/// `<feed> common V1.1` after `<feed> common`), imported only by the build's group, so the feed's other groups keep
+/// importing the version they import now. Each module versions on its own, but the chain is by UUID: a common module
+/// importing a helpers' new version is a new version too. Working copies of modules from builds opened before this
+/// are refused at promotion; [#toOriginals] still points the build's modules at the originals of unchanged copies.
 class SourceTypeGroups {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(SourceTypeGroups.class);
 
     /// What a feed's common module is named after: `<feed> common`.
     static final String COMMON_SUFFIX = " common";
+    // The registry's keys of the feed's modules.
+    private static final String HELPERS_KEY = "helpers";
+    private static final String COMMON_KEY = "common";
+    // The UUID in an import's href.
+    private static final Pattern HREF_UUID = Pattern.compile("uuid='([^']+)'");
     // The kept mapping's rule of the common module, which has none of its own.
     private static final String COMMON_RULE = "common";
     private static final String SYSTEM_NAME = "EventSource/System/Name";
     private static final String ENVIRONMENT = "EventSource/System/Environment";
-    /// A build changing a group whose pipeline is promoted changes that pipeline (through working copies).
-    static final String CHANGE = "change";
-    /// A build changing a group whose pipeline is promoted makes a new version of it (copy_pipeline).
+    /// A build changing a group whose pipeline is promoted makes a new version of it (copy_pipeline): the only way a
+    /// promoted pipeline changes (decided by the user, 2026-11-17).
     static final String NEW_VERSION = "new_version";
-    /// What a build changing a group whose pipeline is promoted may do with that pipeline.
-    static final List<String> PIPELINE_CHOICES = List.of(CHANGE, NEW_VERSION);
     // A row's keys: where it is translated, and its group's reference data.
     static final String PIPELINE = "pipeline";
     static final String OUTPUT_FEED = "output_feed";
@@ -131,6 +139,24 @@ class SourceTypeGroups {
     /// @return The name of its common module.
     static String commonName(final String feed) {
         return feed + COMMON_SUFFIX;
+    }
+
+    /// @param name An XSLT's name.
+    /// @return The feed whose common module it is, by its name (`<feed> common`, or a version of it,
+    /// `<feed> common V1.1`); empty for any other name.
+    static Optional<String> feedOfCommon(final String name) {
+        if (name == null) {
+            return Optional.empty();
+        }
+        int at = name.lastIndexOf(COMMON_SUFFIX);
+        while (at > 0) {
+            final String feed = name.substring(0, at);
+            if (VersionNames.isModuleName(commonName(feed), name)) {
+                return Optional.of(feed);
+            }
+            at = name.lastIndexOf(COMMON_SUFFIX, at - 1);
+        }
+        return Optional.empty();
     }
 
     /// @param uuid A document's UUID.
@@ -315,8 +341,11 @@ class SourceTypeGroups {
             throw new ToolRefusal("The group's name '" + group + "' makes the mode of the feed's common module: name "
                                   + "it for its source types");
         }
-        final Module helpersDoc = module(build, state, "helpers", HelpersXslt.docName(feed));
-        final Module commonDoc = module(build, state, "common", commonName(feed));
+        // The versions the group imports (a new group: the feed's newest), not "the" feed's: its groups may import
+        // different ones.
+        final Modules modules = modules(build, state, group, feed);
+        final Module helpersDoc = modules.helpers();
+        final Module commonDoc = modules.common();
         final String helpersHref = helpersDoc == null
                 ? HelpersXslt.docName(feed)
                 : href(helpersDoc.uuid(), helpersDoc.name());
@@ -327,7 +356,7 @@ class SourceTypeGroups {
         final String systemName = systemName(state, types, given);
         final Split split = commonDoc == null
                 ? firstSplit(given, state, feed, naming, helpersHref)
-                : leftToCommon(given, keptCommon(commonDoc), helpersHref);
+                : leftToCommon(given, keptCommon(commonDoc), helpersHref, commonSaid(commonDoc));
         final TranslationMapping common = split.common();
         final TranslationMapping groupMapping = split.group();
         notes.addAll(split.notes());
@@ -351,6 +380,14 @@ class SourceTypeGroups {
                 notes, unsaved, problems);
     }
 
+    // The common module as a note names it: a promoted one's change goes to a new version of it.
+    private static String commonSaid(final Module common) {
+        return "'" + common.name() + "'" + (common.inBuild()
+                ? ""
+                : " (as a new version of it in this build: a promoted module changes only by a new version, and "
+                  + "only this group imports it)");
+    }
+
     // The registry's rows, in the order they are tried, as a group tells its records by them.
     private static List<SourceTypeModule.Row> rows(final Map<String, Object> state) {
         return JsonValues.maps(state.get("rows")).stream()
@@ -359,8 +396,10 @@ class SourceTypeGroups {
     }
 
     /// Saves what the group's XSLT imports before it: the feed's helpers (made, or written again when the generator
-    /// writes them otherwise now: a promoted one through a working copy) and its common module (made, where the feed
-    /// has none; written again with a shared call the group added to it, a promoted one through a working copy).
+    /// writes them otherwise now: a promoted one as a new version) and its common module (made, where the feed has
+    /// none; written again with a shared call the group added to it, or importing the helpers' new version: a
+    /// promoted one as a new version). A promoted module is never changed in place (decided by the user, 2026-11-17),
+    /// and only the build's group imports its new version: the feed's other groups import what they import now.
     ///
     /// @param context The call's context.
     /// @param build   The build.
@@ -375,24 +414,27 @@ class SourceTypeGroups {
                         final String version) {
         final Map<String, Object> saved = new LinkedHashMap<>();
         final Map<String, Object> state = plan.registry().found().state();
-        final String helpersCode = HelpersXslt.generate();
-        final Module promotedHelpers = plan.helpersDoc() != null && !plan.helpersDoc().inBuild()
-                ? plan.helpersDoc()
-                : null;
+        final Module helpersDoc = plan.helpersDoc();
         final Map<String, Object> helpers;
-        if (promotedHelpers != null && HelpersXslt.isCurrent(readXsltData(promotedHelpers.uuid()))) {
-            helpers = moduleSaid(promotedHelpers, false);
+        if (helpersDoc != null && !helpersDoc.inBuild() && HelpersXslt.isCurrent(readXsltData(helpersDoc.uuid()))) {
+            helpers = moduleSaid(helpersDoc, false);
         } else {
-            final String into = promotedHelpers == null
-                    ? NullSafe.get(plan.helpersDoc(), Module::uuid)
-                    : workingCopy(context, build, state, promotedHelpers.uuid());
-            helpers = translationDocs.saveModule(context, build, HelpersXslt.docName(plan.feed()), into, helpersCode,
-                    TranslationDocs.Source.NONE, "The generator's helpers, version " + HelpersXslt.VERSION);
+            final String into = helpersDoc == null
+                    ? null
+                    : helpersDoc.inBuild()
+                            ? helpersDoc.uuid()
+                            : newModuleVersion(context, build, state, HELPERS_KEY, helpersDoc,
+                                    HelpersXslt.docName(plan.feed()));
+            helpers = translationDocs.saveModule(context, build, HelpersXslt.docName(plan.feed()), into,
+                    HelpersXslt.generate(), TranslationDocs.Source.NONE, "The generator's helpers, version "
+                                                                         + HelpersXslt.VERSION);
         }
-        saved.put("helpers", helpers);
-        final String helpersHref = href(String.valueOf(helpers.get("uuid")), String.valueOf(helpers.get("name")));
-        final String commonHref;
-        if (plan.commonDoc() == null || plan.commonChanged()) {
+        saved.put(HELPERS_KEY, helpers);
+        final String helpersUuid = String.valueOf(helpers.get("uuid"));
+        final String helpersHref = href(helpersUuid, String.valueOf(helpers.get("name")));
+        final Module commonDoc = plan.commonDoc();
+        final Map<String, Object> made;
+        if (commonDoc == null || plan.commonChanged()) {
             final TranslationMapping common = plan.common().withModule(plan.common().module().withImports(null,
                     helpersHref));
             final XsltGenerator.Generated generated = XsltGenerator.generate(common, schema, version);
@@ -400,52 +442,70 @@ class SourceTypeGroups {
                 throw new ToolRefusal("The feed's common module doesn't generate: " + String.join("; ",
                         generated.problems()));
             }
-            // The build's copy where it has one (the helpers' working copy may have brought one), else a working
-            // copy of the promoted one; a new one for a feed with none.
-            final Module existing = plan.commonDoc() == null
+            // The build's own where it has one (made in it, or a new version of the promoted one), else a new
+            // version of the promoted one; a new one for a feed with none.
+            final String into = commonDoc == null
                     ? null
-                    : Objects.requireNonNullElse(module(build, state, "common", commonName(plan.feed())),
-                            plan.commonDoc());
-            final String into = existing == null
-                    ? null
-                    : existing.inBuild()
-                            ? existing.uuid()
-                            : workingCopy(context, build, state, existing.uuid());
-            final Map<String, Object> made = translationDocs.saveModule(context, build, commonName(plan.feed()),
-                    into, generated.xslt(), TranslationDocs.Source.of(common), existing == null
+                    : commonDoc.inBuild()
+                            ? commonDoc.uuid()
+                            : newModuleVersion(context, build, state, COMMON_KEY, commonDoc, commonName(plan.feed()));
+            made = translationDocs.saveModule(context, build, commonName(plan.feed()), into, generated.xslt(),
+                    TranslationDocs.Source.of(common), commonDoc == null
                             ? "The parts every source type group of " + plan.feed() + " writes one way"
                             : "The shared calls of group '" + plan.group() + "' added");
-            saved.put("common", made);
-            commonHref = href(String.valueOf(made.get("uuid")), String.valueOf(made.get("name")));
         } else {
-            // The build's copy, where the helpers' working copy brought one.
-            final Module common = Objects.requireNonNullElse(module(build, state, "common", commonName(plan.feed())),
-                    plan.commonDoc());
-            saved.put("common", moduleSaid(common, false));
-            commonHref = href(common.uuid(), common.name());
+            final Optional<String> imported = importedHref(commonDoc.uuid(), ModuleChecks.HELPERS);
+            if (imported.isPresent() && !imported.get().contains("uuid='" + helpersUuid + "'")) {
+                // The helpers' new version, imported by UUID: the common module importing it is a new version too
+                // (seen in testing when the helpers were regenerated: the chain is by UUID).
+                final String into = commonDoc.inBuild()
+                        ? commonDoc.uuid()
+                        : newModuleVersion(context, build, state, COMMON_KEY, commonDoc, commonName(plan.feed()));
+                translationDocs.rewriteModule(context, into, readXsltData(into).replace(imported.get(), helpersHref),
+                        description -> NullSafe.string(description).replace(imported.get(), helpersHref),
+                        "Imports the helpers' new version");
+                made = moduleSaid(new Module(into, nameOf(into), true), true);
+            } else {
+                made = moduleSaid(commonDoc, false);
+            }
         }
+        saved.put(COMMON_KEY, made);
+        final String commonHref = href(String.valueOf(made.get("uuid")), String.valueOf(made.get("name")));
         // The group imports the common module alone, which imports the helpers: a chain.
         final TranslationMapping group = plan.groupMapping().withModule(plan.groupMapping().module()
                 .withImports(commonHref, null));
         return new Imports(group, helpersHref, saved);
     }
 
+    // A new version of a promoted module of the feed, in the build: its content as the original's, named for the
+    // next version after the highest the feed has (the module's own, the registry's newest), promoted beside its
+    // predecessor. Only the build's group imports it.
+    private String newModuleVersion(final ToolCallContext context,
+                                    final String build,
+                                    final Map<String, Object> state,
+                                    final String key,
+                                    final Module original,
+                                    final String base) {
+        final List<String> names = new ArrayList<>(List.of(original.name()));
+        names.add(JsonValues.text(JsonValues.mapOrEmpty(JsonValues.mapOrEmpty(state.get(MODULES)).get(key))
+                .get("name")));
+        return versionOf(original.uuid(), VersionNames.nextModule(base, names), build);
+    }
+
     /// The XSLT a group is saved in: the build's own (the one the registry names, or of the group's name), else a
-    /// copy of the group's promoted XSLT made now: a working copy, written back over it at promotion, or, where the
-    /// user chose a new version of the group's pipeline, a new version of it, promoted beside its predecessor. A copy
-    /// imports the build's copies of the feed's modules, so the chain stays the build's.
+    /// new version of the group's promoted XSLT made now, promoted beside its predecessor (a promoted group's code is
+    /// never changed in place: decided by the user, 2026-11-17). It imports the build's copies of the feed's modules,
+    /// so the chain stays the build's. A copy made before (an older build's working copy) is used as it is.
     ///
     /// @param context The call's context.
     /// @param build   The build.
     /// @param plan    The plan.
     /// @param name    The name the group's XSLT is saved with.
-    /// @param choice  [#CHANGE] or [#NEW_VERSION] for a group whose pipeline is promoted, or null.
     /// @return The XSLT's UUID; empty when a new one is made.
     Optional<String> groupTarget(final ToolCallContext context,
                                  final String build,
                                  final Plan plan,
-                                 final String name,
-                                 final String choice) {
+                                 final String name) {
         final Map<String, Object> state = plan.registry().found().state();
         final String uuid = groupXslt(state, plan.group());
         if (uuid.isEmpty() || !readable(uuid)) {
@@ -458,9 +518,7 @@ class SourceTypeGroups {
         if (have.isPresent()) {
             return have;
         }
-        return Optional.of(NEW_VERSION.equals(choice)
-                ? versionCopy(context, build, uuid)
-                : workingCopy(context, build, state, uuid));
+        return Optional.of(versionCopy(context, build, uuid, plan));
     }
 
     // The UUID of the XSLT the registry names for a group, or "".
@@ -496,9 +554,9 @@ class SourceTypeGroups {
                 .findFirst();
     }
 
-    /// The group's pipeline, when it is promoted and the build changes the group for the first time: the user then
-    /// chooses whether the change goes to that pipeline or to a new version of it. Not asked again once the build has
-    /// a copy of the group's XSLT (a working copy, made by a change or by copy_pipeline, or a new version's).
+    /// The group's pipeline, when it is promoted and the build changes the group for the first time: the change then
+    /// goes to a new version of it, nothing asked. Empty once the build has a copy of the group's XSLT (a new
+    /// version's, made by a change or by copy_pipeline).
     ///
     /// @param build A build.
     /// @param plan  A group's plan.
@@ -519,109 +577,6 @@ class SourceTypeGroups {
             return Optional.empty();
         }
         return placed;
-    }
-
-    /// The source type group a promoted pipeline runs, where it is the group the build changes (its scope's), with
-    /// how far the build has decided what its change goes to: copy_pipeline of the group's promoted pipeline puts the
-    /// change-or-new-version choice to the user, as build_translation_xslt does.
-    ///
-    /// @param build        A build.
-    /// @param pipelineUuid A pipeline.
-    /// @return The group, the pipeline's name, the user's choice recorded for the build (or null), and whether the
-    /// build has a copy of the group's XSLT already (a working copy or a new version's: decided by it); empty for a
-    /// pipeline no row of the build's registry names, one of the build's own, or one of a group the build's scope
-    /// doesn't name.
-    Optional<PromotedGroup> promotedGroup(final String build, final String pipelineUuid) {
-        final Optional<Registry> registry = buildRegistry(build);
-        if (registry.isEmpty() || guard.buildOf(new DocRef(PipelineDoc.TYPE, pipelineUuid)).isPresent()) {
-            return Optional.empty();
-        }
-        final Map<String, Object> state = registry.get().found().state();
-        final Optional<Map<String, Object>> row = JsonValues.maps(state.get("rows")).stream()
-                .filter(each -> pipelineUuid.equals(JsonValues.text(JsonValues.mapOrEmpty(each.get(PIPELINE))
-                        .get("uuid"))))
-                .filter(each -> !JsonValues.text(each.get("group")).isEmpty())
-                .findFirst();
-        if (row.isEmpty()) {
-            return Optional.empty();
-        }
-        final String group = JsonValues.text(row.get().get("group"));
-        if (scopedGroup(build, state).filter(group::equals).isEmpty()) {
-            // Not the group the build changes (its scope's): another group's pipeline, copied only to run it in the
-            // build.
-            return Optional.empty();
-        }
-        final String xslt = groupXslt(state, group);
-        final boolean copied = !xslt.isEmpty() && (inBuild(build, xslt) || copyInBuild(build, xslt).isPresent()
-                                                   || versionInBuild(build, xslt).isPresent());
-        final String name = JsonValues.text(JsonValues.mapOrEmpty(row.get().get(PIPELINE)).get("name"));
-        return Optional.of(new PromotedGroup(group, name.isEmpty()
-                ? pipelineUuid
-                : name, recordedPipelineChoice(build, group).orElse(null), copied));
-    }
-
-    /// @param build A build.
-    /// @param group A source type group.
-    /// @return What the user chose the build's change to the group's promoted pipeline goes to ([#CHANGE] or
-    /// [#NEW_VERSION]), as recorded; empty when not recorded.
-    Optional<String> recordedPipelineChoice(final String build, final String group) {
-        return records.groupPipelineChoice(build, group).filter(PIPELINE_CHOICES::contains);
-    }
-
-    /// Records what the user chose the build's change to a group's promoted pipeline goes to, so it is not asked
-    /// again (by copy_pipeline or build_translation_xslt).
-    ///
-    /// @param build  A build.
-    /// @param group  The group.
-    /// @param choice [#CHANGE] or [#NEW_VERSION].
-    void rememberPipelineChoice(final String build, final String group, final String choice) {
-        records.rememberGroupPipelineChoice(build, group, choice);
-    }
-
-    /// Puts to the user what a change to a group whose pipeline is promoted goes to: that pipeline (through working
-    /// copies), or a new version of it. The one form for it, whichever tool asks (build_translation_xslt saving the
-    /// group, or copy_pipeline copying its pipeline).
-    ///
-    /// @param consent  Asks the user.
-    /// @param call     The call asking.
-    /// @param context  The call's context.
-    /// @param tool     The tool asking.
-    /// @param group    The group.
-    /// @param pipeline The name of the group's promoted pipeline.
-    /// @return [#CHANGE] or [#NEW_VERSION]; empty when no form can be shown (the agent then asks in the chat).
-    static Optional<String> askPipelineChoice(final Consent consent,
-                                              final ToolCall call,
-                                              final ToolCallContext context,
-                                              final String tool,
-                                              final String group,
-                                              final String pipeline) {
-        final Map<String, String> options = pipelineChoiceOptions(pipeline);
-        return consent.choose(call, context, tool, "Group '" + group + "' runs in pipeline " + pipeline + ", in "
-                                                   + "production. This build changes the group: change that "
-                                                   + "pipeline, or make a new version of it.",
-                        List.copyOf(options.keySet()), "What does the change to group '" + group + "' go to?")
-                .map(options::get);
-    }
-
-    /// @param group    The group.
-    /// @param pipeline The name of its promoted pipeline.
-    /// @param argument How the agent passes the user's answer, e.g. `pipeline=change|new_version`.
-    /// @return What the agent is told where no form can be shown: ask the user in the chat, then call again.
-    static String pipelineChoiceAsked(final String group, final String pipeline, final String argument) {
-        return "Group '" + group + "' runs in pipeline " + pipeline + ", in production: ask the user whether this "
-               + "change goes to that pipeline or to a new version of it (" + String.join("; ",
-                pipelineChoiceOptions(pipeline).keySet()) + "), then call again with " + argument + ". Nothing was "
-               + "saved.";
-    }
-
-    // The choices of what a change to a group's promoted pipeline goes to, as the user reads them, each to what it
-    // is recorded as.
-    private static Map<String, String> pipelineChoiceOptions(final String pipeline) {
-        final Map<String, String> options = new LinkedHashMap<>();
-        options.put("Change " + pipeline + " (its working copy is written back over it at promotion)", CHANGE);
-        options.put("A new version of " + pipeline + " (copy_pipeline; " + pipeline + " runs on until the new one "
-                    + "replaces it)", NEW_VERSION);
-        return options;
     }
 
     // The registry of the build's aggregated feed: the one the build holds, else the one beside a feed the build
@@ -645,9 +600,15 @@ class SourceTypeGroups {
 
     /// @param feed  An aggregated feed's name.
     /// @param group One of its source type groups.
-    /// @return The name its pipeline is given by default: `<feed> <group>`.
+    /// @return The name its pipeline is given by default: `<feed> <group>`, with ` V1.0` after it where it holds no
+    /// version of its own (decided by the user, 2026-11-17: promotion files a pipeline by the version in its name,
+    /// and a later version's name is proposed from it). A version token of the feed's or the group's own name is
+    /// theirs, not the pipeline's (found in review, 2026-11-18).
     static String pipelineName(final String feed, final String group) {
-        return feed + " " + group;
+        final String name = feed + " " + group;
+        return VersionNames.token(name, List.of(feed, group)).isPresent()
+                ? name
+                : name + " " + PromotionLayout.FIRST_VERSION;
     }
 
     /// Saves the group in the registry: its rows set `translated`, naming the group, its XSLT, its pipeline (by the
@@ -676,7 +637,7 @@ class SourceTypeGroups {
                                        final List<Map<String, Object>> references) {
         final Map<String, Object> state = JsonValues.deepCopy(plan.registry().found().state());
         final Map<String, Object> modules = new LinkedHashMap<>(JsonValues.mapOrEmpty(state.get(MODULES)));
-        for (final String key : List.of("helpers", "common")) {
+        for (final String key : List.of(HELPERS_KEY, COMMON_KEY)) {
             final Map<String, Object> saved = JsonValues.mapOrEmpty(imports.saved().get(key));
             if (saved.get("uuid") != null) {
                 modules.put(key, Map.of("uuid", String.valueOf(saved.get("uuid")), "name",
@@ -765,58 +726,51 @@ class SourceTypeGroups {
         return out;
     }
 
-    /// The build's working copy of a promoted module of the feed: made now if the build has none, with a UUID of
-    /// its own (written back over the original at promotion). Every other promoted module of the feed that imports
-    /// the original is copied too, and every module in the build imports the copy instead, so the build steps and
-    /// processes what it changes.
-    ///
-    /// @param context  The call's context.
-    /// @param build    The build.
-    /// @param state    The registry's machine block, naming the feed's modules.
-    /// @param original The promoted module's UUID.
-    /// @return The working copy's UUID.
-    /// @throws ToolRefusal if the module can't be read.
-    String workingCopy(final ToolCallContext context,
-                       final String build,
-                       final Map<String, Object> state,
-                       final String original) {
-        final Optional<String> have = copyInBuild(build, original);
-        if (have.isPresent()) {
-            return have.get();
-        }
-        final XsltDoc doc = documentAccess.read(new DocRef(XsltDoc.TYPE, original), XsltDoc.class)
-                .orElseThrow(() -> new ToolRefusal("XSLT " + original + " can't be read: it doesn't exist, or you "
-                                                   + "don't have permission to view it"));
-        final DocRef ref = guard.create(XsltDoc.TYPE, doc.getName(), build, original, false, "Events");
-        if (doc.getVersion() != null) {
-            // As copy_pipeline records it: promotion asks before writing over an original changed since.
-            records.update(build, ref, entry -> entry.put(BuildRecords.COPY_OF_VERSION, doc.getVersion()));
-        }
-        final XsltDoc made = documentAccess.read(ref, XsltDoc.class)
-                .orElseThrow(() -> new ToolRefusal("The working copy of '" + doc.getName() + "' can't be read"));
-        writeXslt(made.copy().data(doc.getData()).description(doc.getDescription()).build());
-        if (guard.tags(new DocRef(XsltDoc.TYPE, original)).contains(WriteGuard.KEPT_MAPPING)) {
-            guard.tag(List.of(ref), Set.of(WriteGuard.KEPT_MAPPING));
-        }
-        final String needle = "uuid='" + original + "'";
-        for (final String other : promotedModules(build, state)) {
-            if (!other.equals(original) && readXsltData(other).contains(needle)) {
-                workingCopy(context, build, state, other);
-            }
-        }
-        rewire(context, build, Map.of(original, ref.getUuid()), "Imports the working copy of '" + doc.getName()
-                                                                + "'");
-        return ref.getUuid();
+    // A new version of a promoted group's XSLT, in the build: its content as the original's (so a later save is
+    // checked for hand edits as a working copy is), named for its pipeline's new version as copy_pipeline names the
+    // documents it copies (seen in testing: under the original's name, it was told apart only by its version
+    // folder), promoted beside its predecessor, importing the build's copies of the feed's modules.
+    private String versionCopy(final ToolCallContext context,
+                               final String build,
+                               final String original,
+                               final Plan plan) {
+        final String pipeline = groupPlacement(plan.registry().found().state(), plan.group())
+                .map(row -> JsonValues.text(JsonValues.mapOrEmpty(row.get(PIPELINE)).get("name")))
+                .orElse("");
+        final String name = versionName(nameOf(original), pipeline, plan.feed(), plan.group());
+        final String uuid = versionOf(original, name, build);
+        chainCopies(context, build);
+        return uuid;
     }
 
-    // A new version of a promoted group's XSLT, in the build: its content as the original's (so a later save is
-    // checked for hand edits as a working copy is), promoted beside its predecessor, importing the build's copies of
-    // the feed's modules.
-    private String versionCopy(final ToolCallContext context, final String build, final String original) {
+    /// The name of a new version of a group's XSLT: its version token following its pipeline's next version's, as
+    /// copy_pipeline proposes the documents it copies ([VersionNames#following]), else its own bumped.
+    ///
+    /// A version token of the feed's or the group's own name is theirs, never changed (found in review, 2026-11-18).
+    ///
+    /// @param xslt     The group's XSLT's name.
+    /// @param pipeline Its pipeline's name, or "" when it has none.
+    /// @param feed     The aggregated feed's name.
+    /// @param group    The group's name.
+    /// @return The new version's name: never the original's.
+    static String versionName(final String xslt, final String pipeline, final String feed, final String group) {
+        final List<String> held = new ArrayList<>();
+        NullSafe.consumeNonBlankString(feed, held::add);
+        NullSafe.consumeNonBlankString(group, held::add);
+        if (pipeline == null || pipeline.isBlank()) {
+            return VersionNames.next(xslt, held);
+        }
+        return VersionNames.following(xslt, VersionNames.token(pipeline, held).orElse(null),
+                VersionNames.token(VersionNames.next(pipeline, held), held).orElse(null), held);
+    }
+
+    // A new version of a promoted XSLT in the build, under the name given: its content and description as the
+    // original's, its kept mapping's tag too, recorded as the original's new version.
+    private String versionOf(final String original, final String name, final String build) {
         final XsltDoc doc = documentAccess.read(new DocRef(XsltDoc.TYPE, original), XsltDoc.class)
                 .orElseThrow(() -> new ToolRefusal("XSLT " + original + " can't be read: it doesn't exist, or you "
                                                    + "don't have permission to view it"));
-        final DocRef ref = guard.create(XsltDoc.TYPE, doc.getName(), build, null, false, "Events");
+        final DocRef ref = guard.create(XsltDoc.TYPE, name, build, null, false, "Events");
         records.update(build, ref, entry -> entry.put(VERSION_OF, original));
         final XsltDoc made = documentAccess.read(ref, XsltDoc.class)
                 .orElseThrow(() -> new ToolRefusal("The new version of '" + doc.getName() + "' can't be read"));
@@ -824,7 +778,6 @@ class SourceTypeGroups {
         if (guard.tags(new DocRef(XsltDoc.TYPE, original)).contains(WriteGuard.KEPT_MAPPING)) {
             guard.tag(List.of(ref), Set.of(WriteGuard.KEPT_MAPPING));
         }
-        chainCopies(context, build);
         return ref.getUuid();
     }
 
@@ -981,32 +934,6 @@ class SourceTypeGroups {
                     SourceTypeRegistry.render(state));
         }
         return types;
-    }
-
-    // Every module of the build importing one of the documents given imports the one it maps to instead.
-    private void rewire(final ToolCallContext context,
-                        final String build,
-                        final Map<String, String> uuids,
-                        final String change) {
-        for (final WriteGuard.BuildDoc doc : guard.folderContents(build)) {
-            if (XsltDoc.TYPE.equals(doc.type()) && !uuids.containsValue(doc.uuid())) {
-                translationDocs.rewriteImports(context, doc.uuid(), uuids, change);
-            }
-        }
-    }
-
-    // The feed's modules promoted beside it, as its registry names them: helpers, common module and groups.
-    private List<String> promotedModules(final String build, final Map<String, Object> state) {
-        final Set<String> found = new LinkedHashSet<>();
-        JsonValues.mapOrEmpty(state.get(MODULES)).values()
-                .forEach(module -> found.add(JsonValues.text(JsonValues.mapOrEmpty(module).get("uuid"))));
-        for (final Map<String, Object> row : JsonValues.maps(state.get("rows"))) {
-            found.add(JsonValues.text(JsonValues.mapOrEmpty(row.get(GROUP_XSLT)).get("uuid")));
-        }
-        return found.stream()
-                .filter(uuid -> !uuid.isEmpty() && readable(uuid)
-                                && guard.buildOf(new DocRef(XsltDoc.TYPE, uuid)).isEmpty())
-                .toList();
     }
 
     /// Before a build's working copies are written back at promotion: every module of the build imports the originals
@@ -1214,21 +1141,171 @@ class SourceTypeGroups {
         return answers;
     }
 
-    // A module of the feed: the build's of that name (its own, or its working copy), else the promoted one the
-    // registry names.
-    private Module module(final String build, final Map<String, Object> state, final String key, final String name) {
-        final WriteGuard.BuildDoc doc = xsltInBuild(build, name);
-        if (doc != null) {
-            return new Module(doc.uuid(), doc.name(), true);
+    // The feed's modules a group imports: the common module its XSLT imports (the build's copy of the XSLT where it
+    // has one), and the helpers that module imports. For a group with no XSLT yet, the registry's (the feed's
+    // newest), else the build's own of their names (a feed's first group). A promoted module the build has a new
+    // version of is that version.
+    private Modules modules(final String build,
+                            final Map<String, Object> state,
+                            final String group,
+                            final String feed) {
+        final String xslt = groupXslt(state, group);
+        Module common = null;
+        if (!xslt.isEmpty() && readable(xslt)) {
+            final String runs = inBuild(build, xslt)
+                    ? xslt
+                    : buildCopyOf(build, xslt).orElse(xslt);
+            common = importedHref(runs, SourceTypeModule.COMMON).flatMap(SourceTypeGroups::uuidOf)
+                    .map(uuid -> moduleOf(build, uuid))
+                    .orElse(null);
         }
+        if (common == null) {
+            common = registryModule(build, state, COMMON_KEY, commonName(feed));
+        }
+        Module helpers = common == null
+                ? null
+                : importedHref(common.uuid(), ModuleChecks.HELPERS).flatMap(SourceTypeGroups::uuidOf)
+                        .map(uuid -> moduleOf(build, uuid))
+                        .orElse(null);
+        if (helpers == null) {
+            helpers = registryModule(build, state, HELPERS_KEY, HelpersXslt.docName(feed));
+        }
+        return new Modules(helpers, common);
+    }
+
+    // A module of the feed as the registry names it (the feed's newest), else the build's own of its name or a
+    // version of it; null for none.
+    private Module registryModule(final String build,
+                                  final Map<String, Object> state,
+                                  final String key,
+                                  final String base) {
         final Map<String, Object> named = JsonValues.mapOrEmpty(JsonValues.mapOrEmpty(state.get(MODULES)).get(key));
-        final String uuid = JsonValues.text(named.get("uuid"));
-        if (uuid.isEmpty() || !readable(uuid)) {
+        final Module found = moduleOf(build, JsonValues.text(named.get("uuid")));
+        if (found != null || build == null) {
+            return found;
+        }
+        return guard.folderContents(build).stream()
+                .filter(doc -> XsltDoc.TYPE.equals(doc.type()) && VersionNames.isModuleName(base, doc.name()))
+                .findFirst()
+                .map(doc -> new Module(doc.uuid(), doc.name(), true))
+                .orElse(null);
+    }
+
+    // A module by UUID: the build's own, else the build's new version of it (or its working copy, from a build
+    // opened before new versions), else the promoted one; null for one that can't be read.
+    private Module moduleOf(final String build, final String uuid) {
+        if (uuid == null || uuid.isEmpty() || !readable(uuid)) {
             return null;
         }
-        return copyInBuild(build, uuid)
-                .map(copy -> new Module(copy, JsonValues.text(named.get("name")), true))
-                .orElseGet(() -> new Module(uuid, JsonValues.text(named.get("name")), false));
+        if (inBuild(build, uuid)) {
+            return new Module(uuid, nameOf(uuid), true);
+        }
+        return versionInBuild(build, uuid).or(() -> copyInBuild(build, uuid))
+                .map(copy -> new Module(copy, nameOf(copy), true))
+                .orElseGet(() -> new Module(uuid, nameOf(uuid), false));
+    }
+
+    // The href of an XSLT's import of a module of that kind (by the module's mark), if it has one.
+    private Optional<String> importedHref(final String uuid, final String kind) {
+        for (final String href : ModuleChecks.hrefs(readXsltData(uuid))) {
+            final Optional<String> imported = uuidOf(href);
+            if (imported.isPresent() && ModuleChecks.marker(readXsltData(imported.get()))
+                    .filter(marker -> kind.equals(marker.kind()))
+                    .isPresent()) {
+                return Optional.of(href);
+            }
+        }
+        return Optional.empty();
+    }
+
+    // The UUID an href imports by.
+    private static Optional<String> uuidOf(final String href) {
+        final Matcher matcher = HREF_UUID.matcher(NullSafe.string(href));
+        return matcher.find()
+                ? Optional.of(matcher.group(1))
+                : Optional.empty();
+    }
+
+    /// When the build's aggregated feed's groups import different versions of its common module (or helpers): one
+    /// line for each ([#mixedModuleVersions(String, String)]).
+    ///
+    /// @param build A build.
+    /// @return The lines; none for a build with no registry, or a feed whose groups import one version of each.
+    List<String> mixedModuleVersions(final String build) {
+        return buildRegistry(build).map(registry -> mixedModuleVersions(build, registry.feed(),
+                registry.found().state())).orElse(List.of());
+    }
+
+    /// When the feed of a source type group's XSLT has groups importing different versions of its common module
+    /// (or helpers): one line for each ([#mixedModuleVersions(String, String)]).
+    ///
+    /// @param build The build the XSLT is in, or null for a promoted one.
+    /// @param xslt  A group's XSLT's UUID.
+    /// @return The lines; none for an XSLT importing no common module, or a feed whose groups import one version
+    /// of each.
+    List<String> mixedModuleVersionsOf(final String build, final String xslt) {
+        // The common module's mark names its feed.
+        final Optional<String> feed = importedHref(xslt, SourceTypeModule.COMMON).flatMap(SourceTypeGroups::uuidOf)
+                .flatMap(uuid -> ModuleChecks.marker(readXsltData(uuid)))
+                .map(ModuleChecks.Marker::name)
+                .filter(NullSafe::isNonBlankString);
+        return feed.map(name -> mixedModuleVersions(build, name)).orElse(List.of());
+    }
+
+    /// When a feed's groups import different versions of its common module (or helpers): one line for each,
+    /// naming the groups and the versions they import (informational: each group keeps the version it imports
+    /// until a build of it changes it). The build's group is read as the build has it.
+    ///
+    /// @param build The build, or null to read the registry beside the feed.
+    /// @param feed  The aggregated feed.
+    /// @return The lines; none for a feed with no registry, or whose groups import one version of each.
+    List<String> mixedModuleVersions(final String build, final String feed) {
+        return registries.registry(build, feed)
+                .map(found -> mixedModuleVersions(build, feed, found.state()))
+                .orElse(List.of());
+    }
+
+    // The lines for a feed's registry.
+    private List<String> mixedModuleVersions(final String build, final String feed, final Map<String, Object> state) {
+        final Map<String, Map<String, List<String>>> byKind = new LinkedHashMap<>();
+        byKind.put(COMMON_KEY, new TreeMap<>());
+        byKind.put(HELPERS_KEY, new TreeMap<>());
+        final Set<String> named = new LinkedHashSet<>();
+        JsonValues.maps(state.get("rows")).forEach(row -> named.add(JsonValues.text(row.get("group"))));
+        for (final String group : named) {
+            if (group.isEmpty() || groupXslt(state, group).isEmpty()) {
+                continue;
+            }
+            // A group the build changes is read as the build has it; any other as production has it (the build's
+            // new version of a module is its group's alone).
+            final String xslt = groupXslt(state, group);
+            final boolean changed = inBuild(build, xslt) || buildCopyOf(build, xslt).isPresent();
+            final Modules modules = modules(changed
+                    ? build
+                    : null, state, group, feed);
+            if (modules.common() != null) {
+                byKind.get(COMMON_KEY).computeIfAbsent(modules.common().name(), key -> new ArrayList<>())
+                        .add(group);
+            }
+            if (modules.helpers() != null) {
+                byKind.get(HELPERS_KEY).computeIfAbsent(modules.helpers().name(), key -> new ArrayList<>())
+                        .add(group);
+            }
+        }
+        final List<String> out = new ArrayList<>();
+        byKind.forEach((kind, versions) -> {
+            if (versions.size() > 1) {
+                final List<String> each = new ArrayList<>();
+                versions.forEach((name, groups) -> each.add("'" + name + "' (" + String.join(", ", groups) + ")"));
+                out.add("The groups of " + feed + " import different versions of its "
+                        + (COMMON_KEY.equals(kind)
+                        ? "common module"
+                        : "helpers") + ": " + String.join(", ", each) + ". Each keeps the version it imports "
+                        + "until a build of the group changes it (a promoted module changes only by a new "
+                        + "version).");
+            }
+        });
+        return out;
     }
 
     /// The build's working copy of a promoted XSLT, else its new version in the build: what the build changes of
@@ -1253,6 +1330,9 @@ class SourceTypeGroups {
 
     // The build's working copy of a document.
     private Optional<String> copyInBuild(final String build, final String original) {
+        if (build == null) {
+            return Optional.empty();
+        }
         final Map<String, Object> docs = BuildRecords.docs(records.load(build));
         for (final WriteGuard.BuildDoc doc : guard.folderContents(build)) {
             if (docs.get(doc.uuid()) instanceof final Map<?, ?> entry && original.equals(entry.get("copy_of"))) {
@@ -1264,6 +1344,9 @@ class SourceTypeGroups {
 
     // The build's new version of a document.
     private Optional<String> versionInBuild(final String build, final String original) {
+        if (build == null) {
+            return Optional.empty();
+        }
         final Map<String, Object> docs = BuildRecords.docs(records.load(build));
         for (final WriteGuard.BuildDoc doc : guard.folderContents(build)) {
             if (docs.get(doc.uuid()) instanceof final Map<?, ?> entry && original.equals(entry.get(VERSION_OF))) {
@@ -1274,11 +1357,19 @@ class SourceTypeGroups {
     }
 
     private boolean inBuild(final String build, final String uuid) {
-        return guard.buildOf(new DocRef(XsltDoc.TYPE, uuid)).filter(build::equals).isPresent();
+        return build != null && guard.buildOf(new DocRef(XsltDoc.TYPE, uuid)).filter(build::equals).isPresent();
     }
 
     private boolean readable(final String uuid) {
         return documentAccess.read(new DocRef(XsltDoc.TYPE, uuid), XsltDoc.class).isPresent();
+    }
+
+    // An XSLT's name, or "" for one that can't be read.
+    private String nameOf(final String uuid) {
+        return documentAccess.read(new DocRef(XsltDoc.TYPE, uuid), XsltDoc.class)
+                .map(XsltDoc::getName)
+                .map(NullSafe::string)
+                .orElse("");
     }
 
     private String readXsltData(final String uuid) {
@@ -1476,7 +1567,8 @@ class SourceTypeGroups {
     // imports the site's libraries, so none is imported twice in the group's stylesheet.
     private static Split leftToCommon(final TranslationMapping given,
                                       final TranslationMapping common,
-                                      final String helpersHref) {
+                                      final String helpersHref,
+                                      final String commonSaid) {
         final List<String> notes = new ArrayList<>();
         final List<FieldMapping> kept = new ArrayList<>(given.common());
         for (final SourceTypeModule.CommonPart part : SourceTypeModule.commonParts(common)) {
@@ -1508,10 +1600,8 @@ class SourceTypeGroups {
         final TranslationMapping withCalls = common.withCommonAndShared(common.common(), shared)
                 .withModule(common.module().withImports(null, helpersHref));
         notes.add("Shared call(s) " + ToolText.list(added.stream().map(SharedTemplate::template).toList())
-                  + " added to the feed's common module '" + (common.module() == null
-                ? "common"
-                : common.module().name() + COMMON_SUFFIX) + "', which imports their libraries: a group imports only "
-                  + "the common module, and calls them through it");
+                  + " added to the feed's common module " + commonSaid + ", which imports their libraries: a group "
+                  + "imports only the common module, and calls them through it");
         return new Split(withCalls, given.withCommonAndShared(kept, List.of()), notes, true);
     }
 
@@ -1612,10 +1702,21 @@ class SourceTypeGroups {
             return effective;
         }
         // The source type field is read to tell the group's records from the rest, not a field the group leaves
-        // unread.
+        // unread. A field holding the record's data, read into for its source type (a reading's held field), is the
+        // group's rules' to read like any other.
+        final SourceTypeReading reading = SourceTypeReading.cached(field);
+        final List<String> read = reading == null
+                ? List.of(field)
+                : reading.paths().stream()
+                        .filter(path -> path.held().isEmpty())
+                        .map(SourceTypeReading.Path::field)
+                        .toList();
+        if (read.isEmpty()) {
+            return effective;
+        }
         final Map<String, Object> json = new LinkedHashMap<>(effective.toJson(DumpMode.COMPACT));
         final Set<String> ignored = new LinkedHashSet<>(effective.ignoredFields());
-        ignored.add(ToolText.split(ToolText.split(field, ".").getFirst(), "/").getFirst());
+        read.forEach(each -> ignored.add(ToolText.split(ToolText.split(each, ".").getFirst(), "/").getFirst()));
         json.put("ignored_fields", new ArrayList<>(ignored));
         return TranslationMapping.parse(json);
     }
@@ -1641,16 +1742,6 @@ class SourceTypeGroups {
     }
 
 
-    /// A source type group whose pipeline is promoted, and how far a build has decided what its change goes to.
-    ///
-    /// @param group    The group's name.
-    /// @param pipeline The name of its pipeline, as the registry names it.
-    /// @param recorded What the user chose the build's change goes to ([#CHANGE] or [#NEW_VERSION]), or null when
-    ///                 not recorded.
-    /// @param copied   True if the build has a copy of the group's XSLT (a working copy or a new version's).
-    record PromotedGroup(String group, String pipeline, String recorded, boolean copied) {
-
-    }
 
     /// How a group is built.
     ///
@@ -1704,9 +1795,17 @@ class SourceTypeGroups {
     ///
     /// @param uuid    Its UUID.
     /// @param name    Its name.
-    /// @param inBuild True for the build's own (made in it, or its working copy); false for one promoted beside the
-    ///                feed, which the build changes only through a working copy.
+    /// @param inBuild True for the build's own (made in it, or its new version of a promoted one); false for one
+    ///                promoted beside the feed, which the build changes only by a new version of it.
     record Module(String uuid, String name, boolean inBuild) {
+
+    }
+
+    /// The feed's modules a group imports.
+    ///
+    /// @param helpers The helpers, or null.
+    /// @param common  The common module, or null.
+    record Modules(Module helpers, Module common) {
 
     }
 

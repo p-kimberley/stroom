@@ -29,6 +29,7 @@ import stroom.ai.impl.tools.ToolText;
 import stroom.ai.impl.tools.indexing.FeedIndexes;
 import stroom.ai.impl.tools.sample.FeedSampling.SurveyRecord;
 import stroom.ai.impl.tools.sample.SourceTypeProfiles;
+import stroom.ai.impl.tools.sample.SourceTypeReading;
 import stroom.ai.impl.tools.sample.SourceTypeRegistry;
 import stroom.ai.impl.tools.sample.SourceTypeRows;
 import stroom.ai.impl.tools.sample.SourceTypeScope;
@@ -190,7 +191,11 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
                                                                  + "item' (ASCII: 'name in item'): a value that is "
                                                                  + "a list (its separator read from the values seen) "
                                                                  + "holding the item exactly, e.g. 'Mail ∈ Mail "
-                                                                 + "Server'. Narrower before wider; the first row "
+                                                                 + "Server'. Where the field is a combination "
+                                                                 + "('a + b'): 'name = part + part', each part "
+                                                                 + "'value', '~ ^pattern', '∈ item' or '*' (any "
+                                                                 + "value), e.g. 'Teams = Teams + *'. Narrower "
+                                                                 + "before wider; the first row "
                                                                  + "matching takes a record, so of a list holding "
                                                                  + "several rows' items, the earlier row's. Without "
                                                                  + "it, rows are proposed from the "
@@ -274,14 +279,16 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
                                   + "user (or source_type_field= as they said), then call " + NAME + " again.");
         }
         final Map<String, Long> values = SourceTypeProfiles.valueCounts(sources);
-        final Rows proposed = rows(call, context, feed, field, values, before);
+        final Rows proposed = rows(call, context, feed, field, values, sources, before,
+                noValue(field, sources, values));
         if (proposed.early() != null) {
             return proposed.early();
         }
         // The registry's translated and placed rows are kept unless removed; changing or removing one is the user's.
         final Edits edits = edits(call, context, proposed.rows(), before);
         final Rows rows = new Rows(edits.rows(), null);
-        final List<String> problems = SourceTypeRows.problems(rows.rows(), values.keySet());
+        final List<String> problems = SourceTypeRows.problems(rows.rows(), values.keySet(),
+                SourceTypeReading.partsOf(field));
         if (!problems.isEmpty()) {
             throw new ToolRefusal("These rows can't be used: " + String.join("; ", problems) + ". Nothing was "
                                   + "written.");
@@ -331,7 +338,7 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
             result.put("table", table);
             result.put("review_id", Consent.reviewId(table));
             // The rows as confirmed, for the next call to give back, so the user isn't asked about them again.
-            result.put(ROWS_ARG, rows.rows().stream().map(row -> row.name() + " " + row.said()).toList());
+            result.put(ROWS_ARG, rows.rows().stream().map(SourceTypeReadings::written).toList());
             if (!edits.confirmations().isEmpty()) {
                 result.put("to_confirm", edits.confirmations());
             }
@@ -398,7 +405,7 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
         if (joined.isPresent()) {
             result.put("joins", "Group '" + scope.get().group() + "' exists: the source types join it, its pipeline"
                                 + " and where its Events go, when build_translation_xslt builds it (through a "
-                                + "working copy of its XSLT where it is promoted).");
+                                + "new version of its XSLT where it is promoted).");
         }
         if (restarted) {
             result.put("coverage_restarted", "The scope adds source types some streams the survey read weren't read "
@@ -406,8 +413,13 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
                                              + "survey_feed build='" + build + "' feed='" + feed + "' reads them "
                                              + "again for those source types.");
         }
-        result.put("hint", "The registry is written and the build's scope recorded: source type group '"
-                           + scope.get().group() + "', " + groupTypes + ". build_translation_xslt builds "
+        // Seen in chat 181: told only "the scope recorded", with the chosen source types still `parked` until their
+        // group is built, the agent took the user's form answer for a choice made without them, and asked again.
+        result.put("chosen_by", "user");
+        result.put("hint", "The registry is written with the scope the user chose (in the form, or as they said): "
+                           + "source type group '" + scope.get().group() + "', " + groupTypes + ". Don't ask them "
+                           + "again. Its source types stay parked until the group is built. build_translation_xslt "
+                           + "builds "
                            + "it (group and source_types default to these); a build makes one group, so another "
                            + "is a later build's, after this one is promoted. Carry on with the plan (next).");
         offerToFind(result, build, feed, unseen(registry, before, groupTypes));
@@ -590,25 +602,50 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
     }
 
     // The registry's rows: as the user gave them, those of the registry beside the feed (values it lacks added),
-    // or proposed from the values the survey saw (patterns confirmed by the user).
+    // or proposed from the values the survey saw (patterns confirmed by the user); the (no value) row last where
+    // the survey read records with no value (a held value of plain text, the field missing), unless the user gave
+    // the rows.
     private Rows rows(final ToolCall call,
                       final ToolCallContext context,
                       final String feed,
                       final String field,
                       final Map<String, Long> values,
-                      final Map<String, Object> before) {
+                      final Map<String, Object> sources,
+                      final Map<String, Object> before,
+                      final long noValue) {
+        final Rows rows = rowsOf(call, context, feed, field, values, sources, before);
+        if (rows.early() != null || !stringListArg(call, ROWS_ARG).isEmpty() || noValue == 0
+            || rows.rows().stream().anyMatch(row -> SourceTypeRows.NONE.equals(row.match()))) {
+            return rows;
+        }
+        final List<SourceTypeRows.Row> withNone = new ArrayList<>(rows.rows());
+        withNone.add(SourceTypeRows.noValue());
+        return new Rows(withNone, null);
+    }
+
+    private Rows rowsOf(final ToolCall call,
+                        final ToolCallContext context,
+                        final String feed,
+                        final String field,
+                        final Map<String, Long> values,
+                        final Map<String, Object> sources,
+                        final Map<String, Object> before) {
         final List<String> given = stringListArg(call, ROWS_ARG);
+        final int parts = SourceTypeReading.partsOf(field);
         if (!given.isEmpty()) {
             // A list's item is matched on the separator the values seen are lists by.
-            return new Rows(SourceTypeRows.withSeparator(given.stream().map(RecordSourceTypesTool::parseRow)
+            return new Rows(SourceTypeRows.withSeparator(given.stream().map(row -> parseRow(row, parts))
                     .toList(), SourceTypeRows.separator(values.keySet())), null);
         }
         if (!before.isEmpty()) {
-            return new Rows(withValuesSeen(SourceTypeRegistry.rows(before), values), null);
+            return new Rows(withValuesSeen(SourceTypeRegistry.rows(before), values, field), null);
         }
         if (values.isEmpty()) {
             throw new ToolRefusal("The survey of feed '" + feed + "' has counted no records by '" + field + "' yet: "
                                   + "survey_feed with the build first.");
+        }
+        if (parts > 1) {
+            return new Rows(combinationRows(values, sources, field), null);
         }
         final SourceTypeRows.Proposal proposal = SourceTypeRows.propose(values);
         final List<SourceTypeRows.Row> proposed = proposal.rows().stream().map(SourceTypeRows.Proposed::row)
@@ -780,6 +817,33 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
         return SourceTypeRows.Row.of(row).said();
     }
 
+    /// The registry's rows with a row added for each value the survey saw that none matches, as
+    /// [#withValuesSeen(List, Map)] adds them; for a combination, a row matching each part of the key exactly (named by
+    /// its parts' values), never for a key with a part of no value (the (no value) row's).
+    ///
+    /// @param rows   The registry's rows, in order.
+    /// @param values The records the survey saw with each value (a combination's keys).
+    /// @param field  The source type field.
+    /// @return The rows, those added after the registry's.
+    static List<SourceTypeRows.Row> withValuesSeen(final List<SourceTypeRows.Row> rows,
+                                                   final Map<String, Long> values,
+                                                   final String field) {
+        if (!SourceTypeReading.isCombination(field)) {
+            return withValuesSeen(rows, values);
+        }
+        final List<SourceTypeRows.Row> out = new ArrayList<>(rows);
+        final Set<String> names = new LinkedHashSet<>();
+        rows.forEach(row -> names.add(row.name()));
+        values.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .filter(entry -> SourceTypeRows.first(out, entry.getKey()).isEmpty())
+                .forEach(entry -> SourceTypeRows.exactParts(entry.getKey()).ifPresent(parts -> out.add(
+                        new SourceTypeRows.Row(SourceTypeRows.uniqueName(String.join(" ",
+                                SourceTypeReading.keyParts(entry.getKey())), names), SourceTypeRows.TUPLE,
+                                parts))));
+        return out;
+    }
+
     /// The registry's rows with a row added for each value the survey saw that none matches, commonest first: a value
     /// a row, or, where the registry's rows are a list's items, a row for the value's rarest item (over the values
     /// seen) that no row has, so the value is matched and no row added is one no value reaches.
@@ -852,12 +916,44 @@ class RecordSourceTypesTool extends AbstractBuiltInTool {
                + "value none matches later is a new source type.\n" + String.join("\n", lines);
     }
 
-    // A row as the user gave it: `name = value`, `name ~ ^pattern`, or `name ∈ item` (`name in item`).
-    private static SourceTypeRows.Row parseRow(final String given) {
-        return SourceTypeRows.parse(given).orElseThrow(() -> new ToolRefusal("Row '" + given + "' is none of "
-                                                                             + "'name = value', 'name ~ ^pattern' "
-                                                                             + "and 'name ∈ item' ('name in "
-                                                                             + "item')."));
+    // A row as the user gave it: `name = value`, `name ~ ^pattern`, or `name ∈ item` (`name in item`); for a
+    // combination, `name = part + part`, each part `value`, `~ ^pattern`, `∈ item` or `*`.
+    private static SourceTypeRows.Row parseRow(final String given, final int parts) {
+        return SourceTypeRows.parse(given, parts).orElseThrow(() -> new ToolRefusal("Row '" + given + "' is none "
+                                                                                    + "of " + (parts > 1
+                ? "'name = part + part' (a part each of the combination's " + parts + ", each 'value', '~ ^pattern', "
+                  + "'" + SourceTypeRows.MEMBER_SIGN + " item' or '*')"
+                : "'name = value', 'name ~ ^pattern' and 'name ∈ item' ('name in item')") + ", nor '"
+                                                                                    + SourceTypeRows.NO_VALUE + "'."));
+    }
+
+    // A combination's rows: those proposed when the user confirmed it (the pair's, its next part's values collapsed to
+    // * where they share their shapes), with a row matching each part exactly for a key seen they don't match;
+    // a row a key where none were kept.
+    private static List<SourceTypeRows.Row> combinationRows(final Map<String, Long> values,
+                                                            final Map<String, Object> sources,
+                                                            final String field) {
+        final List<SourceTypeRows.Row> kept = JsonValues.maps(sources.get(SourceTypeProfiles.ROWS_PROPOSED))
+                .stream()
+                .map(SourceTypeRows.Row::of)
+                .toList();
+        if (kept.isEmpty()) {
+            return SourceTypeRows.proposeKeys(values).stream().map(SourceTypeRows.Proposed::row).toList();
+        }
+        return withValuesSeen(kept, values, field);
+    }
+
+    // The records the survey read with no value: none at all, and for a combination, a part of none (the (no value)
+    // row's, unless a row with * for that part takes them).
+    private static long noValue(final String field, final Map<String, Object> sources, final Map<String, Long> values) {
+        long out = SourceTypeProfiles.noValueRecords(sources);
+        if (SourceTypeReading.isCombination(field)) {
+            out += values.entrySet().stream()
+                    .filter(entry -> SourceTypeReading.keyParts(entry.getKey()).contains(""))
+                    .mapToLong(Map.Entry::getValue)
+                    .sum();
+        }
+        return out;
     }
 
     // Each row's profile: from the survey's counts, else the registry beside the feed's own (carried over).

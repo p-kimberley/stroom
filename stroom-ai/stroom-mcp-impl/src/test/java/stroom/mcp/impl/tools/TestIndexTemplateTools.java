@@ -41,6 +41,7 @@ import stroom.ai.impl.tools.indexing.TemplateCheck;
 import stroom.ai.impl.tools.sample.ToolJson;
 import stroom.docref.DocRef;
 import stroom.mcp.impl.BundledKnowledge;
+import stroom.pipeline.shared.PipelineDoc;
 import stroom.search.elastic.shared.ElasticIndexDoc;
 import stroom.security.api.SecurityContext;
 import stroom.util.json.JsonUtil;
@@ -58,9 +59,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 /// propose_index_template and check_index_template: the pipeline's destination and the documents it writes are
 /// given; the pipeline itself, its description and the user's confirmations are the in-memory world's.
@@ -139,9 +142,34 @@ class TestIndexTemplateTools {
                                                 + "&docUuid=p1");
         @SuppressWarnings("unchecked") final Map<String, Object> rendered = (Map<String, Object>) plan
                 .withIndexName("ecs-acme-v2").elasticTemplate("ecs-acme-v2", 200L, true, ecs()).get("body");
-        assertThat(rendered.get("index_patterns")).isEqualTo(List.of("ecs-acme-v2*"));
+        assertThat(rendered.get("index_patterns")).isEqualTo(List.of("ecs-acme-v2"));
         // The plan leaves some written fields unmapped (dynamic false): noted, not blocking.
         assertThat(TemplateCheck.compare(rendered, DOCS, "ecs-acme-v2", ecs()).get("compatible")).isEqualTo(true);
+    }
+
+    @Test
+    void testAProductionIndexIsNeverPutUpForDroppingWhileATemplateIsAgreed() {
+        // Seen in a user's test: a build's copy of a promoted indexing pipeline writing to the production index, and
+        // the existing-index warning told them the cluster admin drops it; they deleted the production index.
+        final FieldPlan plan = FieldPlan.of("elasticsearch", "whatever", "@timestamp", List.of(
+                PlannedField.of("@timestamp", "date", "EventTime/TimeCreated")));
+        world.world.add(PipelineDoc.TYPE, "Acme-V1-Indexing", world.world.folder("System/Feeds/Acme").uuid, "prod");
+        world.world.docs.put("prod", PipelineDoc.builder().uuid("prod").name("Acme-V1-Indexing").version("v0")
+                .pipelineData(PipelineLayers.layer("prod").chain("elasticIndexingFilter", "ElasticIndexingFilter")
+                        .property("elasticIndexingFilter", "indexName", "ecs-acme-v2").data())
+                .build());
+        Mockito.when(world.feeds.docFinder.findByName(eq(PipelineDoc.TYPE), eq("*"), anyBoolean())).thenReturn(
+                List.of(new DocRef(PipelineDoc.TYPE, "prod", "Acme-V1-Indexing"), P1));
+        world.presences.put("ecs-acme-v2", new Presence(State.PRESENT, List.of("ecs-acme-v2"), List.of(),
+                List.of(), 52L, null));
+
+        final Map<String, Object> result = propose(args("plan", plan.toJson()));
+
+        assertThat(String.valueOf(result.get(ProposeIndexTemplateTool.EXISTING_INDEX)))
+                .contains("production")
+                .contains("Acme-V1-Indexing")
+                .doesNotContain("admin drops")
+                .doesNotContain("DELETE");
     }
 
     @Test
@@ -186,6 +214,8 @@ class TestIndexTemplateTools {
         assertThat(String.valueOf(((List<?>) result.get("notes")).getFirst()))
                 .startsWith("composed_of ['ecs-base'] not given, so not checked");
         assertThat(String.valueOf(result.get("hint"))).contains("Show the user pipeline_changes");
+        // ecs-acme-v2* also covers ecs-acme-v20: warned of, not blocking.
+        assertThat(String.valueOf(result.get("warnings"))).contains("index pattern 'ecs-acme-v2*' ends in a digit");
         final ToolResult bad = checkTool().execute(call(CheckIndexTemplateTool.NAME, args("template", "{",
                 "pipeline_uuid", "p1", "events_stream_ids", List.of(8))),
                 context(UserQuestions.NONE));
@@ -231,7 +261,7 @@ class TestIndexTemplateTools {
         // Without the review id, which meant nothing to the user: the answer is bound to it unseen.
         assertThat(details).containsEntry("index template", "ecs-acme-v2, exactly as shown in the chat")
                 .doesNotContainKey("notes");
-        assertThat(String.valueOf(details.get("applies to"))).startsWith("ecs-acme-v2* (priority ");
+        assertThat(String.valueOf(details.get("applies to"))).startsWith("ecs-acme-v2 (priority ");
         assertThat(Integer.parseInt(String.valueOf(details.get("fields mapped here")))).isPositive();
         // Short (seen in testing: every field, note and component made it 2,000 characters, and the client
         // declined it as too long): the notes are beside it in the reply, for the chat.
@@ -539,11 +569,13 @@ class TestIndexTemplateTools {
 
     private ProposeIndexTemplateTool proposeTool() {
         return new ProposeIndexTemplateTool(plans, examples, inputs, buildIndexes, pipelines, reviews,
-                world.existingIndexes);
+                world.existingIndexes, world.productionIndexes);
     }
 
     private CheckIndexTemplateTool checkTool() {
-        return new CheckIndexTemplateTool(plans, examples, inputs, buildIndexes, pipelines, reviews, memory);
+        return new CheckIndexTemplateTool(plans, examples, inputs, buildIndexes, pipelines, reviews, memory,
+                new TemplateOverlaps(new PipelineIndex(() -> world.feeds.docFinder, world.world.documentAccess),
+                        world.world.documentAccess));
     }
 
     private static ToolCall call(final String name, final Map<String, Object> arguments) {

@@ -13,8 +13,8 @@ Reference stream yet is stepped only once that table is processed (Stroom rememb
 10 minutes). Context data (each stream part's Context child) only when the user asks: propose_context_lookup.
 Events sent on to ArcSight: CEF output
 (draft_cef_mapping). A pipeline to evaluate (how well an existing one works): evaluate_pipeline, then the report from
-its outline, shown to the user and saved only if they want it kept. A pipeline to fix or change: a new version or
-working copy of it (copy_pipeline). Data not
+its outline, shown to the user and saved only if they want it kept. A pipeline to fix or change: a new version of it
+(copy_pipeline; a promoted one is never changed in place). Data not
 being processed, or processed slowly (a pipeline, a feed or a stream), or processing's health and priorities:
 explain_processing, which finds what stops it and changes nothing. When what the user wants fits more than one, ask
 which.
@@ -36,7 +36,7 @@ cannot read the sample (replace_parser swaps any template's parser for the one i
 has no translation template at all and the user has no pipeline to base it on, create_pipeline standalone='events'
 builds the events pipeline on its own: a last resort (for a discovery index with no discovery template,
 create_indexing_pipeline standalone='discovery', the same way). Templates are inherited (create_pipeline), never copied: copy_pipeline refuses one, and is for a
-new version or working copy of a source's own pipeline.
+new version of a source's own pipeline.
 
 Tools: a tool this server names (in `next`, a hint or a refusal) may not be in your tool list yet: some clients
 hide part of a server's tools behind tools that enable a group of them (VS Code: activate_*). Call the one in your
@@ -66,13 +66,13 @@ not such a question: ask for it in your answer and end your turn. Whatever is fo
 to review, a choice) goes in your answer, never only in your thinking: clients collapse thinking, and the user
 doesn't see it (seen: a question asked only there went unanswered).
 
-Existing feed: when the user asks to onboard data a feed already holds (or makes a new version or working copy of a
+Existing feed: when the user asks to onboard data a feed already holds (or makes a new version of a
 production pipeline), work from that feed: start_build feeds=[it], then survey_feed. No feed is created and nothing
 uploaded, whatever sample files the workspace holds: its streams are stepped and processed where they are (step_sample
 and create_processor_filter with their stream ids), the server writing their Events to a test feed it makes in the
 build, never into the production feed; only sample files the user chooses instead go to a test feed of their own
 (create_feed user_samples=). Then stage 2 indexes those Events, as for a new source, and promotion gives the pipeline
-its filter on the feed.
+its filter on the feed and tidies up the test feed and test indexes, as its review lists, unless the user unticks it.
 
 Samples (a new source): ask for every sample file the user has. Files on their disk: start_onboarding files=[their paths], then
 create_feed, upload_sample files=[the same paths], and start_onboarding again with the build and stream_ids, which
@@ -91,11 +91,13 @@ that read its Events (indexing, CEF): review_coverage reviews them too, and they
 with it. Each save records its change (change=) for the XSLT's version history and the doc's version control, as one
 entry when the build is promoted.
 
-Aggregated feeds (several sources in one feed, told apart by one field): when survey_feed finds such a field or the
-user says so, the plan adds record_source_types (the feed's registry, and the build's scope: one source type group a
-build, its source types and name the user's). build_translation_xslt builds it, the XSLT of a pipeline of its own; the
-user chooses where a new group's Events go in a form. One open build per feed; a parked source type's history is not
-backfilled. stroom://guide/aggregated-feeds.
+Aggregated feeds (several sources in one feed, told apart by one field, or by a name inside structured data a field
+holds: event>logger_name, or two together: system + event>logger_name; plain text is never read, its records the
+"(no value)" source type): when survey_feed finds
+such a field or the user says so, the plan adds record_source_types (the feed's registry, and the build's scope: one
+source type group a build, its source types and name the user's). build_translation_xslt builds it, the XSLT of a
+pipeline of its own; the user chooses where a new group's Events go in a form. One open build per feed; a parked
+source type's history is not backfilled. stroom://guide/aggregated-feeds.
 
 Questions about the data (what a feed holds, what a field means, how to search it): describe_feed, read only,
 from the generated documentation and the indexes' fields. Answer in plain words and give the documentation links.
@@ -125,6 +127,8 @@ Rules for every run:
 - Build everything in one build (start_build, with the feeds when known: it returns the standing instructions
   too); nothing leaves the workspace until promote_build is approved. Before promoting, build_status shows what
   the build's pipelines still lack (a clean step of their current code, documentation): resolve it first.
+  Promotion files each role's documents in `<feed>/<Role>/<version>` by the version in the pipeline's name: name a
+  first version's pipelines with V1.0 (e.g. `Acme-V1.0-Events`) unless the user names them otherwise.
 - The user confirms key details and approves risky actions in a form their client shows (MCP elicitation); in
   Stroom AI, a form in the chat. A call refused for want of a form or an approval is the user's to resolve: tell
   them why, and don't look for another way round it. needs_review: show what it returns in the chat, then call

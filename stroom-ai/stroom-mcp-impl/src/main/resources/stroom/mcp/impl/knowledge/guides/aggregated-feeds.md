@@ -7,8 +7,22 @@ sources the user picks for it, any number of them (ExchangeOnline and MicrosoftT
 
 Terms:
 
-* **Source type field**: the one field that tells the sources apart, at any depth (`event.source`). Never a
-  combination: a second field that tells kinds apart within a source is a kind field, as usual. Or, only where the
+* **Source type field**: the one field that tells the sources apart, at any depth (`event.source`), or a
+  **reading** into the structured data a string field holds (JSON, encoded once or twice; XML; a syslog header's
+  `host`, `app`, `message`; key=value pairs), its format told per record: `event>logger_name` (`>` steps into the
+  held value, `.` into its objects or elements, three held values deep at most). The same name reads every format
+  that has it (a JSON key and a `logger_name=` pair alike); where formats name the source differently, readings
+  are tried in turn, joined by ` | `, one naming its format: `event>logger_name | event>xml:@logger` (`@` an XML
+  attribute, `#root` the root element's name). A held value of plain text is never read: its records are the
+  `(no value)` source type, offered as a row of its own. Never a field naming kinds of event (an event type, action,
+  operation): those are told apart within a source type by `classify_kinds` and the rules, not split into source
+  types. Where only two fields together tell the source, a **combination**: their readings joined by ` + `
+  (`system + event>logger_name`), its value a key of the parts' values (`Teams ‖ System`). The survey offers a pair
+  only where the record shapes justify it (each part's values split the other's into records of shapes of their
+  own), with its evidence; offer it as it is, never add a part yourself. Three or more parts only as the user names
+  them. A source type by the held value's format alone
+  (`event>#format`: json, xml, syslog, kv, text) is a last resort, only on the user's word, after you have looked
+  for a name inside the held value that says the source. Or, only where the
   user names it, a stream meta attribute: `source_type_field=meta:<Attribute>` (a header each part of a stream
   carries, as `stroom:meta()` reads it), for a feed whose source is said by a header rather than a record's field.
   Every record of a part has the part's value, so a group passes over a whole part not of its own at once: the
@@ -17,7 +31,8 @@ Terms:
 * **Source type**: the records one registry row matches: a value of that field exactly (`= Billing`), an anchored
   pattern on it (`~ ^/var/log/mail/`) where the values are many paths or names, or an item of a value that is a list
   (`∈ Mail Server`, in ASCII `in`: `Mail in Mail Server`), split on the separator the values use (`,` `;`
-  `|`), each item stripped and compared exactly. Rows are tried in order: of a list holding several rows' items, the
+  `|`), each item stripped and compared exactly. A combination's row matches each part: `Teams System = Teams +
+  System`, `Teams = Teams + *` (`*` any value, none too; a part of no value falls to `(no value)` otherwise). Rows are tried in order: of a list holding several rows' items, the
   first row's takes the record, so put the rarer, more telling item first.
 * **Registry**: `<feed> source types`, a Documentation doc made in the build and promoted beside the feed. One row a
   source type, tried in order (the first match wins), each with its status: `translated`, `parked` (for a later
@@ -31,7 +46,10 @@ Terms:
 ## How it starts
 
 * **On evidence**: when `survey_feed` finds a candidate source type field (several values whose records differ in
-  their fields or message formats), it asks the user to confirm it, as it confirms a kind field. The plan then adds
+  their fields or message formats), it asks the user to confirm it, as it confirms a kind field. Candidates inside
+  held values come with the formats they read and the records they give no value; a reading joining the held
+  formats is offered first. Where a format has no reading yet, propose one to the user and pass it as
+  `source_type_field=` as they confirm it. The plan then adds
   the `source_types` step. A feed of one source never sees it. If the user says the feed aggregates sources, say so
   when the survey asks.
 * **As an assessment**: `start_onboarding kind=assessment feed=<feed>` plans only the survey, the registry and
@@ -57,7 +75,7 @@ At promotion the survey doc always stays in the build (nobody is asked); the reg
    `group=<name>` and the user keeps or changes. Rows the user confirmed are given back as `rows=` and not asked again.
    It writes the registry, the scope naming the group; the source types not chosen are `parked` for a later build.
    Naming an existing group adds the chosen source types to it: they join its pipeline and output feed when it is
-   built (through a working copy of its XSLT where it is promoted). Named with none chosen, the build changes that
+   built (in a new version of its XSLT where it is promoted). Named with none chosen, the build changes that
    group alone.
 
 Pass the feed's `system_name` and `environment` (and `system_names` for a source type whose system differs) as the
@@ -99,10 +117,10 @@ stream of the feed (processor filters choose streams, not records) and passes ov
 accepts that cost for groups isolated from each other (their own processor filter, priority, reprocessing and errors).
 When a build saves a new group, a form asks **where its Events go**: into the same feed (the default) or an output
 feed of its own. Without forms, the call is refused until `own_output_feed=true|false` carries the user's answer.
-Either way the group's index is its own (below). For a group whose pipeline is promoted, the first save in a
-build asks whether the change goes to **that pipeline** (through working copies) or to **a new version** of it
-(`copy_pipeline`, kept for history); without forms, `pipeline=change|new_version`. `group.group_next` says what
-follows. Source types added to a group in a later build join its pipeline and output feed (said in `group.notes`). A
+Either way the group's index is its own (below). For a group whose pipeline is promoted, a change goes to
+**a new version** of it, nothing asked: a promoted pipeline and the code it runs are never changed in place. The save
+makes a new version of the group's XSLT and `group.group_next` says what follows (`copy_pipeline` of the group's
+pipeline). Source types added to a group in a later build join its pipeline and output feed (said in `group.notes`). A
 source type belongs to one group: one another group translates is refused.
 
 * `create_feed group=<name> stream_type=Events` makes a group's own output feed, before its pipeline.
@@ -110,12 +128,11 @@ source type belongs to one group: one another group translates is refused.
   the group's, every stream appender's `feed` set to the group's output feed (refused until that feed is made), the
   group's reference data loaded, the pipeline recorded in the registry's rows. One pipeline a group; a common or
   helpers module is refused as a pipeline's XSLT.
-* `copy_pipeline source_uuid=<the group's pipeline> working_copy=true` steps and processes a promoted group's
-  pipeline in the build with its working copies (the import chain pointed at the build's copies; a build processes
-  only its own pipelines, so this is also how a promoted group's pipeline takes the build's later data);
-  `working_copy=false` after a `new_version` answer makes the new version, and the group's registry rows move to it.
-  Copying the pipeline of the group the build changes before the question is answered asks it there instead (the
-  same form; without forms, `pipeline=change|new_version`), and the answer decides the copy, not `working_copy`.
+* `copy_pipeline source_uuid=<the group's pipeline>` makes its new version (names proposed, the user confirms or
+  edits them), running the build's new version of the group's XSLT where it has one (else copying it); the group's
+  registry rows move to it, and the old
+  version runs on until the user retires it. A build processes only its own pipelines, so this is also how a promoted
+  group's pipeline takes the build's later data. `working_copy=true` is refused.
 
 A user who doesn't want a pipeline per group treats the feed as a normal source: `build_translation_xslt` without
 `group=`, one mapping for every source type, surveyed and translated in its entirety (below).
@@ -154,7 +171,7 @@ source type field gets none of this.
 **Each source type group has an index of its own**, even where its Events go into the same feed as other groups':
 its indexing pipeline's processor filter selects only the Events its group's pipeline wrote
 (`create_processor_filter source_pipeline_uuid=<the group's pipeline>`, a `Pipeline` condition beside the feed's;
-promotion keeps it, naming the original where the build processed through a working copy). Don't ask the user
+promotion keeps it). Don't ask the user
 whether groups share an index. Name a group's index like the feed's others, with the group in it
 (`get_field_conventions` suggests one, `index_name`); a name another group's index has is refused. The first build's
 backend and field naming are the feed's shared decisions, kept in the registry: later builds inherit them
@@ -170,15 +187,21 @@ is held while a clash remains, and refuses a plan naming another group's index n
 
 ## Promotion and later builds
 
-* Promotion moves the common module, helpers and the registry (always; the survey doc stays in the build) beside
-  the feed (in a folder of the source's own where the feed's folder holds other sources' folders; the build's test
-  feed is never promoted: don't offer it), and the group's own documents into `<that folder>/<group>/`: its output
-  feed there, its pipeline, XSLT and documentation in `Events/`, its index, indexing pipeline and dashboard in
-  `Indexing/` (a later build of the feed into its own group's folder). Its review shows the pipeline changes
-  (reference data each group pipeline lacks, only ever added) and the index changes (fields added, forward only).
+* Promotion moves the registry (always; the survey doc stays in the build) and source notes beside the feed (in a
+  folder of the source's own where the feed's folder holds other sources' folders; the build's test feed is never
+  promoted: don't offer it; it is tidied up after, as the review lists, unless the user unticks it), the common module and helpers into `<that folder>/Common/<version>` and
+  `Helpers/<version>`, and the group's own documents into `<that folder>/<group>/`: its output feed there, its
+  pipeline, XSLT and documentation in `Events/<version>`, its index, indexing pipeline and dashboard in
+  `Indexing/<version>` (the version from the pipeline's name; an Indexing location elsewhere, chosen in the review,
+  gives `<there>/<feed>/<group>/<version>`). Its review shows the pipeline changes (reference data each group pipeline
+  lacks, only ever added) and the index changes (fields added, forward only).
 * One open build per aggregated feed: another is refused, naming the open one. Finish (promote) or abandon it first.
-* A later build changes promoted modules through working copies (imported by the build's own modules, so the chain
-  runs the copies). Promotion writes them back, the chain pointed at the originals again.
+* A later build never changes a promoted common or helpers module in place: a change to one (a shared call added,
+  the helpers out of date) makes a new version of it, `<feed> common V1.1` (one with no version is V1.0), imported
+  only by the build's group; the feed's other groups keep the versions they import. Promotion puts it in a version
+  folder beside its predecessor's (`Common/V1.1`). When groups import different versions, `module_versions` (build_status,
+  review_coverage) says so: information, nothing to fix. An older build's working copy of a module is refused at
+  promotion: delete it and save the group again (build_translation_xslt) to make the new version.
 * **Forward only**, per group: a source type moved out of parked is translated from the next processing on. Tell the
   user its history isn't: backfilling means reprocessing the period's raw streams through the group's pipeline,
   which reruns only that group (Stroom supersedes that pipeline's Events streams; their documents stay in the index).

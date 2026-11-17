@@ -56,6 +56,9 @@ public final class SourceTypeProfiles {
     public static final String VALUES = "values";
     /// The state's key for the scope chosen: `source_types`, `build`, `by`, `at`.
     public static final String SCOPE = "scope";
+    /// The survey state's key for the rows proposed for a combination of readings ([SourceTypeCombinations#propose]),
+    /// as the registry keeps rows: kept when the user confirms the combination, for record_source_types to propose.
+    public static final String ROWS_PROPOSED = "rows_proposed";
     /// The state's key for each stream's scale: its parts' bytes over the bytes of its records read.
     public static final String STREAM_SCALE = "stream_scale";
     /// The suggested categories.
@@ -80,7 +83,8 @@ public final class SourceTypeProfiles {
     private static final int EXAMPLES = 3;
     private static final String OTHER = "(other values)";
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
-    private static final Pattern LEVEL_FIELD = Pattern.compile(
+    /// A field named for a record's level or severity.
+    static final Pattern LEVEL_FIELD = Pattern.compile(
             "(?i)(^|[._-])(level|log_?level|severity|sev|priority|loglevel)$");
     private static final Pattern LEVEL_WORD = Pattern.compile(
             "(?<![\\w.])(TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|SEVERE|FATAL|CRITICAL|ALERT|EMERG)(?![\\w.])");
@@ -290,6 +294,12 @@ public final class SourceTypeProfiles {
             }
         });
         return out;
+    }
+
+    /// @param state The survey state's source types.
+    /// @return The records the survey read with no value of the source type field (the `(no value)` source type's).
+    public static long noValueRecords(final Map<String, Object> state) {
+        return number(JsonValues.mapOrEmpty(JsonValues.mapOrEmpty(state.get(VALUES)).get("")).get("records"));
     }
 
     /// Each row's profile, its values' counts summed: the first row matching a value takes it.

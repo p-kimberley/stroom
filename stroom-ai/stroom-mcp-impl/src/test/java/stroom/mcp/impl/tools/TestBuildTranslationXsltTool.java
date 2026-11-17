@@ -92,6 +92,12 @@ class TestBuildTranslationXsltTool {
     private static final List<Map<String, Object>> SYSTEM = List.of(Map.of("path", "EventSource/System/Name",
             "value", "FortiOS"));
 
+    // A sample's first records, read only part way into its stream.
+    private static final String CUT_HEAD = """
+            {"ts": "2026-09-28T10:00:00.000Z", "host": "ws01", "user": "alice"}
+            {"ts": "2026-09-28T10:01:00.000Z", "host": "ws02", "user": "bob"}
+            """;
+
     private static final String FORK_NS = "file://xml/schema/test-fork/events";
     private static final String FORK_SYSTEM_ID = "file://xml/schema/test-fork/events";
 
@@ -107,6 +113,40 @@ class TestBuildTranslationXsltTool {
         // A table from the mapping alone shows how values are computed; it used to be copied into docs as it was.
         assertThat(result).doesNotContainKey("field_mapping");
         assertThat((String) result.get("field_mapping_needs")).contains("pipeline_uuid and stream_ids");
+    }
+
+    @Test
+    void aPromotedXsltIsNotChangedInPlaceButThroughACopyInABuild() {
+        // A promoted document is production's: its uuid given outside any build, it is refused, pointing at
+        // copy_pipeline (promotion takes the managed tag off, keeping the generated one).
+        world.world.add(XsltDoc.TYPE, "ACME-V1.0-XSLT", world.world.folder("System/Feeds/Acme").uuid, "promoted-x",
+                WriteGuard.GENERATED);
+        world.world.docs.put("promoted-x", XsltDoc.builder().uuid("promoted-x").name("ACME-V1.0-XSLT").version("v0")
+                .data("<xsl:stylesheet/>").build());
+
+        final Map<String, Object> refused = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "uuid", "promoted-x"));
+
+        assertThat(String.valueOf(refused.get("error"))).contains("was not created by this server")
+                .contains("copy_pipeline");
+        assertThat(world.xslt("promoted-x").getData()).isEqualTo("<xsl:stylesheet/>");
+    }
+
+    @Test
+    void anXsltOutsideEveryBuildIsNotWrittenWhateverItsTags() {
+        // Moved out of its build (or promoted with its tag left on): still production's, changed only through a copy
+        // in a build.
+        world.world.add(XsltDoc.TYPE, "ACME-V1.0-XSLT", world.world.folder("System/Feeds/Acme").uuid, "moved-x",
+                WriteGuard.MANAGED, WriteGuard.GENERATED);
+        world.world.docs.put("moved-x", XsltDoc.builder().uuid("moved-x").name("ACME-V1.0-XSLT").version("v0")
+                .data("<xsl:stylesheet/>").build());
+
+        final Map<String, Object> refused = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "uuid", "moved-x"));
+
+        assertThat(String.valueOf(refused.get("error"))).contains("is not in a build folder")
+                .contains("copy_pipeline");
+        assertThat(world.xslt("moved-x").getData()).isEqualTo("<xsl:stylesheet/>");
     }
 
     @Test
@@ -261,6 +301,66 @@ class TestBuildTranslationXsltTool {
                                                            + "too");
     }
 
+    @Test
+    void aSampleCutShortIsCheckedOutsideABuild() {
+        // Seen in testing: a translation checked with no build, its sample read only part way, failed with a
+        // NullPointerException looking for the build's survey.
+        Mockito.when(world.sampleStreamTexts.read(List.of(7L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 7", CUT_HEAD), List.of("stream 7 is read up to its first 172 characters"),
+                List.of(new SampleStreamTexts.Cut("stream 7", 7L, 0))));
+
+        final Map<String, Object> checked = world.call(tool, Map.of("mapping", JsonUtil.readValue(GOOD, Map.class),
+                "stream_ids", List.of(7)));
+
+        assertThat(checked).doesNotContainKey("error");
+        assertThat(checked.get("ok")).isEqualTo(true);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aSavedXsltChangedByItsUuidAloneReadsItsBuildsSurvey() {
+        // Seen in testing: a change to a saved XSLT given by its uuid, without build, and a sample cut short: the
+        // records the build's survey found past the cut are checked, as they are when build is given.
+        final Map<String, Object> mapping = JsonUtil.readValue(GOOD.replace(
+                "{\"path\": \"EventDetail/Authenticate/User/Id\", \"field\": \"user\"}",
+                "{\"path\": \"EventDetail/Authenticate/User/Id\", \"field\": \"user\"}, "
+                + "{\"path\": \"EventDetail/Authenticate/Data\", \"data_name\": \"fname\", \"field\": \"fname\"}"),
+                Map.class);
+        final Map<String, Object> saved = world.call(tool, Map.of("mapping", mapping, "build", "acme-v1", "name",
+                "ACME-Events"));
+        final String xsltUuid = String.valueOf(map(saved.get("saved")).get("uuid"));
+        final String surveyUuid = world.inBuild("acme-v1", DocumentationDoc.TYPE, SurveyDoc.docName("ACME"))
+                .getUuid();
+        final Map<String, Object> state = Map.of("feed", "ACME", "format", "json lines", "streams_read", List.of(7),
+                "surveys", List.of(), "shapes", Map.of("upload", Map.of("count", 1, "streams", List.of(7),
+                "examples", List.of(Map.of("text", "{\"ts\": \"2026-09-28T23:59:00.000Z\", \"host\": \"ws09\", "
+                                                   + "\"user\": \"erin\", \"fname\": \"report.pdf\"}",
+                        "location", Map.of("stream", 7, "part", 0, "record", 24_000))))));
+        world.world.docs.put(surveyUuid, ((DocumentationDoc) world.world.docs.get(surveyUuid)).copy()
+                .data(SurveyDoc.render(state)).build());
+        Mockito.when(world.sampleStreamTexts.read(List.of(7L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 7", CUT_HEAD), List.of("stream 7 is read up to its first 172 characters"),
+                List.of(new SampleStreamTexts.Cut("stream 7", 7L, 0))));
+
+        final Map<String, Object> checked = world.call(tool, Map.of("mapping", mapping, "stream_ids", List.of(7),
+                "uuid", xsltUuid));
+
+        assertThat(checked).doesNotContainKey("error");
+        assertThat(findings(checked)).noneMatch(p -> p.contains("'fname'"));
+        assertThat(list(checked.get("warnings"))).contains("sample: 1 record(s) the survey found further into "
+                                                           + "streams [7] than the sample is read to are checked "
+                                                           + "too");
+    }
+
+    @Test
+    void aGroupWithNeitherBuildNorUuidIsRefused() {
+        // It failed with a NullPointerException rather than saying what to give.
+        final Map<String, Object> result = world.call(tool, Map.of("mapping", JsonUtil.readValue(GOOD, Map.class),
+                "group", "Messaging"));
+
+        assertThat(String.valueOf(result.get("error"))).contains("give build");
+    }
+
     // A result's problems and warnings, as text.
     private static List<String> findings(final Map<String, Object> result) {
         assertThat(result).as("a result, not a refusal").doesNotContainKey("error");
@@ -310,6 +410,8 @@ class TestBuildTranslationXsltTool {
         final Map<String, Object> unknown = world.call(tool, Map.of("mapping", kept, "build", "acme-v1", "name",
                 "N", "sample", SAMPLE, "reviewed", shown.get("review_id")));
         assertThat(unknown.get("status")).isEqualTo("needs_review");
+        // Seen in chat 181: told "the same arguments plus reviewed=", the agent resent the changes already applied.
+        assertThat(String.valueOf(unknown.get("hint"))).contains("but no changes= (the mapping holds them already");
         assertThat((String) unknown.get("show_user")).contains("- Among them, kinds you confirmed:\n"
                                                                + "  - status check (2 records), confirmed as "
                                                                + "Authenticate, Action Logoff\n");

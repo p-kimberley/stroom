@@ -16,6 +16,8 @@
 
 package stroom.mcp.impl.tools;
 
+import stroom.ai.api.ElasticIndexPresence.Presence;
+import stroom.ai.api.ElasticIndexPresence.State;
 import stroom.ai.impl.tools.ToolCallContext;
 import stroom.ai.impl.tools.ToolResult;
 import stroom.docref.DocRef;
@@ -24,13 +26,18 @@ import stroom.pipeline.shared.TextConverterDoc;
 import stroom.pipeline.shared.XsltDoc;
 import stroom.pipeline.shared.data.PipelineProperty;
 import stroom.pipeline.shared.data.PipelinePropertyValue;
+import stroom.search.elastic.shared.ElasticIndexDoc;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,8 +45,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TestCopyPipelineTool {
 
     private static final String BUILD = PipelineWorld.BUILD;
-    private static final String CHANGE = "Change ACME-V1 - Indexing (its working copy is written back over it at "
-                                         + "promotion)";
+    private static final String ELASTIC_PIPELINE = "Acme-Events-V1.0-Indexing";
+    private static final DocRef CLUSTER = new DocRef("ElasticCluster", "c", "ES_DEV");
     private static final DocRef TEMPLATE = new DocRef(PipelineDoc.TYPE, PipelineWorld.TEMPLATE_UUID,
             "Event Data (Text)");
 
@@ -59,7 +66,7 @@ class TestCopyPipelineTool {
         assertThat(refused.text()).startsWith("'Event Data (Text)' is a template (it is one of the template "
                                               + "pipelines): templates are inherited, not copied.")
                 .contains("create_pipeline(name=..., template_uuid='" + TEMPLATE.getUuid() + "')");
-        assertThat(pipelines.world.created).isEmpty();
+        assertNothingCopied();
     }
 
     @Test
@@ -111,136 +118,267 @@ class TestCopyPipelineTool {
         // A new version, promoted alongside the original.
         assertThat(pipelines.world.records().entry(BUILD, copy.getUuid())).containsEntry("version_of", "p1");
         assertThat(pipelines.world.records().entry(BUILD, xslt.getUuid())).containsEntry("version_of", "x1");
-        assertThat(made).containsEntry("copy_of", "ACME-V1 - Indexing").containsEntry("working_copy", false)
-                .containsKey("next");
+        assertThat(made).containsEntry("copy_of", "ACME-V1 - Indexing").containsKey("next");
         assertThat(made.get("copied_documents")).isEqualTo(List.of(
                 Map.of("type", "XSLT", "uuid", xslt.getUuid(), "name", "ACME-V2-XSLT"),
                 Map.of("type", "TextConverter", "uuid", converter.getUuid(), "name", "ACME-V2")));
     }
 
     @Test
-    void aWorkingCopyRecordsWhatItIsACopyOf() {
+    void aPromotedPipelineIsAlwaysCopiedAsANewVersionWithoutAsking() {
+        // Decided by the user (2026-11-17): no change in place of a promoted pipeline, so nothing to choose; the
+        // names are proposed and confirmed in the one form.
         source();
-
-        call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \"ACME-V1 - Indexing\", "
-             + "\"working_copy\": true}", BuildToolCalls.answering(Map.of("value", true)));
-
-        final PipelineDoc copy = pipelines.world.docs.values().stream()
-                .filter(doc -> doc instanceof final PipelineDoc pipeline && !"p1".equals(pipeline.getUuid())
-                               && "ACME-V1 - Indexing".equals(pipeline.getName()))
-                .map(PipelineDoc.class::cast)
-                .findFirst()
-                .orElseThrow();
-        assertThat(pipelines.world.records().entry(BUILD, copy.getUuid())).containsEntry("copy_of", "p1");
-        // Its XSLT's copy records the version it was copied at, so promotion can tell if production has changed
-        // since (found reviewing the tools: a production edit made after the copy was lost on promotion).
-        final XsltDoc xsltCopy = pipelines.world.docs.values().stream()
-                .filter(doc -> doc instanceof final XsltDoc xslt && !"x1".equals(xslt.getUuid()))
-                .map(XsltDoc.class::cast)
-                .findFirst()
-                .orElseThrow();
-        assertThat(pipelines.world.records().entry(BUILD, xsltCopy.getUuid()))
-                .containsEntry("copy_of", "x1")
-                .containsEntry(BuildRecords.COPY_OF_VERSION, "v0");
-    }
-
-    @Test
-    void aGroupsPromotedPipelineIsCopiedAsTheUserChoosesNotAsTheFlagSays() {
-        // Seen in eval case 61: copy_pipeline working_copy=true on the Messaging group's promoted pipeline, before
-        // build_translation_xslt asked; the user saw only "working copy: True", the agent's choice.
-        source();
-        final SourceTypeGroups groups = groups(new SourceTypeGroups.PromotedGroup("Acme", "ACME-V1 - Indexing",
-                null, false));
-        final BuildToolCalls.FormUser user = BuildToolCalls.user(Map.of("value", true, "choice", CHANGE));
-
-        final Map<String, Object> made = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
-                                                                 + "\"p1\", \"new_name\": \"ACME-V1 - Indexing\", "
-                                                                 + "\"working_copy\": false}", user.context()));
-
-        // The plain-words question first, then the copy's confirmation.
-        assertThat(user.shown()).hasSize(2);
-        assertThat(user.shown().getFirst()).startsWith("Group 'Acme' runs in pipeline ACME-V1 - Indexing, in "
-                                                       + "production. This build changes the group");
-        assertThat(user.shown().getLast()).containsIgnoringCase("- working copy: true");
-        assertThat(made).containsEntry("working_copy", true);
-        assertThat(String.valueOf(made.get("note"))).contains("working_copy=false was overridden");
-        assertThat(pipelines.world.records().entry(BUILD, String.valueOf(made.get("uuid"))))
-                .containsEntry("copy_of", "p1");
-        Mockito.verify(groups).rememberPipelineChoice(BUILD, "Acme", SourceTypeGroups.CHANGE);
-    }
-
-    @Test
-    void aGroupsPipelineChoiceRecordedIsFollowedWithoutAsking() {
-        source();
-        final SourceTypeGroups groups = groups(new SourceTypeGroups.PromotedGroup("Acme", "ACME-V1 - Indexing",
-                SourceTypeGroups.NEW_VERSION, false));
         final BuildToolCalls.FormUser user = BuildToolCalls.user(Map.of("value", true));
 
-        // A new version needs a name of its own.
-        assertThat(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \"ACME-V1 - "
-                        + "Indexing\", \"working_copy\": true}", user.context()).text())
-                .startsWith("The user chose a new version of ACME-V1 - Indexing").contains("new_name");
         final Map<String, Object> made = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
-                                                                 + "\"p1\", \"new_name\": \"ACME-V2 - Indexing\", "
-                                                                 + "\"working_copy\": true}", user.context()));
+                                                                 + "\"p1\", \"new_name\": \"ACME-V1 - Indexing\"}",
+                user.context()));
 
-        assertThat(user.shown()).singleElement().asString().startsWith("Copy pipeline");
-        assertThat(made).containsEntry("working_copy", false);
+        assertThat(user.shown()).singleElement().asString().startsWith("Copy pipeline 'ACME-V1 - Indexing' as a "
+                                                                       + "new version, 'ACME-V2 - Indexing'");
+        assertThat(made).containsEntry("name", "ACME-V2 - Indexing");
         assertThat(pipelines.world.records().entry(BUILD, String.valueOf(made.get("uuid"))))
                 .containsEntry("version_of", "p1");
-        Mockito.verify(groups, Mockito.never()).rememberPipelineChoice(Mockito.any(), Mockito.any(),
-                Mockito.any());
     }
 
     @Test
-    void withoutFormsTheAgentIsToldToAskTheUserTheGroupsPipelineChoice() {
+    void aWorkingCopyOfAPromotedPipelineIsRefused() {
         source();
-        final SourceTypeGroups groups = groups(new SourceTypeGroups.PromotedGroup("Acme", "ACME-V1 - Indexing",
-                null, false));
+        final BuildToolCalls.FormUser user = BuildToolCalls.user(Map.of("value", true));
 
-        final ToolResult refused = call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", "
-                                        + "\"new_name\": \"ACME-V1 - Indexing\", \"working_copy\": true}",
-                BuildToolCalls.context());
+        final ToolResult refused = call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": "
+                                        + "\"ACME-V1 - Indexing\", \"working_copy\": true}", user.context());
 
         assertThat(refused.isError()).isTrue();
-        assertThat(refused.text()).contains("runs in pipeline ACME-V1 - Indexing, in production: ask the user",
-                "pipeline=");
-        Mockito.verify(groups, Mockito.never()).rememberPipelineChoice(Mockito.any(), Mockito.any(),
-                Mockito.any());
-        assertThat(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \"ACME-V1 - "
-                        + "Indexing\", \"pipeline\": \"sideways\"}", BuildToolCalls.context()).text())
-                .startsWith("pipeline is one of");
-
-        // The user's answer, passed by the agent: recorded, then the copy confirmed as usual.
-        call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \"ACME-V1 - Indexing\", "
-             + "\"pipeline\": \"change\"}", BuildToolCalls.context());
-        Mockito.verify(groups).rememberPipelineChoice(BUILD, "Acme", SourceTypeGroups.CHANGE);
+        assertThat(refused.text()).contains("is promoted", "only a new version of it is copied", "Nothing was copied");
+        assertThat(user.shown()).isEmpty();
+        assertThat(pipelines.pipelineNamed("ACME-V2 - Indexing")).isNull();
     }
 
     @Test
-    void anotherPipelineIsCopiedAsTheFlagSays() {
-        // No group's, or a group the build has decided already (it has a copy of its XSLT): today's behaviour.
+    void aNewVersionTheBuildMadeAlreadyUnderTheOriginalsNameIsRefused() {
+        // An aggregated feed's group XSLT made by build_translation_xslt before its new versions were named for
+        // them: run, not copied again, so its name would be the original's in the new version.
         source();
-        groups(new SourceTypeGroups.PromotedGroup("Acme", "ACME-V1 - Indexing", null, true));
+        final DocRef made = pipelines.world.inBuild(BUILD, XsltDoc.TYPE, "ACME-V1-XSLT", "x1-version");
+        pipelines.world.docs.put("x1-version", XsltDoc.builder().uuid("x1-version").name("ACME-V1-XSLT")
+                .version("v0").data("<xsl:stylesheet/>").build());
+        pipelines.world.records().update(BUILD, made, entry -> entry.put("version_of", "x1"));
+        final BuildToolCalls.FormUser user = BuildToolCalls.user(Map.of("value", true));
+
+        final ToolResult refused = call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": "
+                                        + "\"ACME-V2 - Indexing\"}", user.context());
+
+        assertThat(refused.isError()).isTrue();
+        assertThat(refused.text()).startsWith("A new version of ACME-V1 - Indexing needs names of its own")
+                .contains("'ACME-V1-XSLT' (x1-version)", "have the original's", "Rename each in Stroom",
+                        "Nothing was copied");
+        assertThat(user.shown()).isEmpty();
+        assertThat(pipelines.pipelineNamed("ACME-V2 - Indexing")).isNull();
+    }
+
+    @Test
+    void withoutFormsTheAgentIsGivenTheProposedNamesToPutToTheUser() {
+        source();
+
+        final Map<String, Object> asked = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
+                                                                  + "\"p1\", \"new_name\": \"ACME-V1 - Indexing\"}",
+                BuildToolCalls.context()));
+
+        assertThat(asked).containsEntry("status", "needs_names");
+        @SuppressWarnings("unchecked") final Map<String, Object> names = (Map<String, Object>) asked.get(
+                "new_version_names");
+        assertThat(names).containsEntry("pipeline", "ACME-V2 - Indexing");
+        assertThat(String.valueOf(asked.get("hint"))).contains("Nothing was copied");
+        assertThat(pipelines.pipelineNamed("ACME-V2 - Indexing")).isNull();
+    }
+
+    @Test
+    void aVersionTokenOfTheFeedsOwnNameIsLeftAndTheNewVersionIsV11() {
+        // Found in review (2026-11-18): CISCO-ASA-V9-EVENTS of feed CISCO-ASA-V9 was taken as V9, its next version
+        // V10, renaming the feed's part.
+        elasticSource("cisco-asa-v9-events", "CISCO-ASA-V9-EVENTS-Indexing", "CISCO-ASA-V9-EVENTS-XSLT",
+                "CISCO-ASA-V9-Events");
+        pipelines.world.records().addSourceFeeds(BUILD, List.of("CISCO-ASA-V9"));
+
+        final Map<String, Object> asked = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
+                                                                  + "\"p1\", \"new_name\": "
+                                                                  + "\"CISCO-ASA-V9-EVENTS-Indexing\"}",
+                BuildToolCalls.context()));
+
+        assertThat(asked).containsEntry("status", "needs_names");
+        @SuppressWarnings("unchecked") final Map<String, Object> names = (Map<String, Object>) asked.get(
+                "new_version_names");
+        assertThat(names).containsEntry("pipeline", "CISCO-ASA-V9-EVENTS-Indexing-V1.1")
+                .containsEntry("major_version_instead", "CISCO-ASA-V9-EVENTS-Indexing-V2.0")
+                .containsEntry("index_name", "cisco-asa-v9-events-v2")
+                .containsEntry("documents", List.of(Map.of("was", "CISCO-ASA-V9-EVENTS-XSLT",
+                        "name", "CISCO-ASA-V9-EVENTS-XSLT-V1.1")));
+    }
+
+    @Test
+    void aPromotedPipelineWithNoVersionInItsNameIsProposedV11AndItsIndexV2() {
+        // Seen in part B: promotion files a pipeline with no version token in V1.0, but its next version was
+        // proposed '-V2'. It is V1.1 (V2.0 for a major change), its index's next version -v2.
+        elasticSource("acme-events", "Acme-Events-Indexing", "Acme-Events-Indexing-XSLT", "Acme-Events");
+
+        final Map<String, Object> asked = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
+                                                                  + "\"p1\", \"new_name\": \"Acme-Events-Indexing\"}",
+                BuildToolCalls.context()));
+
+        assertThat(asked).containsEntry("status", "needs_names");
+        @SuppressWarnings("unchecked") final Map<String, Object> names = (Map<String, Object>) asked.get(
+                "new_version_names");
+        assertThat(names).containsEntry("pipeline", "Acme-Events-Indexing-V1.1")
+                .containsEntry("major_version_instead", "Acme-Events-Indexing-V2.0")
+                .containsEntry("index_name", "acme-events-v2")
+                .containsEntry("documents", List.of(Map.of("was", "Acme-Events-Indexing-XSLT",
+                        "name", "Acme-Events-Indexing-XSLT-V1.1")))
+                .containsEntry("elastic_index_docs", List.of(Map.of("beside", "Acme-Events",
+                        "name", "Acme-Events-V1.1")));
+        assertNothingCopied();
+    }
+
+    @ParameterizedTest
+    @MethodSource("originalNames")
+    void aNewVersionUnderAnyOfTheOriginalsNamesIsRefused(final String key, final String name, final String said) {
+        elasticSource("acme-events-v1");
+        final Map<String, Object> answer = new LinkedHashMap<>(Map.of("value", true));
+        answer.put(key, name);
+
+        final ToolResult refused = call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \""
+                                        + ELASTIC_PIPELINE + "\"}", BuildToolCalls.answering(answer));
+
+        assertThat(refused.isError()).isTrue();
+        assertThat(refused.text()).startsWith("A new version of " + ELASTIC_PIPELINE + " needs names of its own")
+                .contains(said)
+                .contains("Nothing was copied");
+        assertNothingCopied();
+    }
+
+    @Test
+    void aNewVersionOfAnElasticsearchIndexingPipelineGetsAnIndexOfItsOwnCheckedFree() {
+        elasticSource("acme-events-v1");
         final BuildToolCalls.FormUser user = BuildToolCalls.user(Map.of("value", true));
 
         final Map<String, Object> made = PipelineWorld.json(call("{\"build\": \"" + BUILD + "\", \"source_uuid\": "
-                                                                 + "\"p1\", \"new_name\": \"ACME-V1 - Indexing\", "
-                                                                 + "\"working_copy\": true, \"pipeline\": "
-                                                                 + "\"new_version\"}", user.context()));
+                                                                 + "\"p1\", \"new_name\": \"" + ELASTIC_PIPELINE
+                                                                 + "\"}", user.context()));
 
-        assertThat(user.shown()).singleElement().asString().startsWith("Copy pipeline");
-        assertThat(made).containsEntry("working_copy", true);
-        assertThat(String.valueOf(made.get("note"))).contains("pipeline was ignored");
+        assertThat(user.shown().getLast()).contains("- index: its own, 'acme-events-v2' (was 'acme-events-v1')")
+                .contains("Acme-Events-V2.0-Indexing instead");
+        final PipelineDoc copy = pipelines.pipelineNamed("Acme-Events-V1.1-Indexing");
+        assertThat(made).containsEntry("name", "Acme-Events-V1.1-Indexing")
+                .containsEntry("index_name", "acme-events-v2");
+        assertThat(PipelineDocs.addedProperties(copy)).contains(new PipelineProperty("elasticIndexingFilter",
+                "indexName", new PipelinePropertyValue("acme-events-v2")));
+        assertThat(docNamed("Acme-Events-V1.1-Indexing-XSLT")).isNotNull();
+        // An Elastic Index doc for the new index, beside the old one.
+        final ElasticIndexDoc indexDoc = (ElasticIndexDoc) docNamed("Acme-Events-V1.1");
+        assertThat(indexDoc.getIndexName()).isEqualTo("acme-events-v2");
+        assertThat(indexDoc.getClusterRef()).isEqualTo(CLUSTER);
+        assertThat(pipelines.world.records().entry(BUILD, indexDoc.getUuid())).containsEntry("version_of", "es1");
+        assertThat(((ElasticIndexDoc) pipelines.world.docs.get("es1")).getIndexName()).isEqualTo("acme-events-v1");
+        // Looked up before anything was copied.
+        assertThat(pipelines.lookedUp).containsExactly("acme-events-v2");
     }
 
-    // The tool's source type groups: the pipeline p1 the group given, as the registry names it.
-    private SourceTypeGroups groups(final SourceTypeGroups.PromotedGroup group) {
-        final SourceTypeGroups groups = Mockito.mock(SourceTypeGroups.class);
-        Mockito.when(groups.promotedGroup(BUILD, "p1")).thenReturn(Optional.of(group));
-        tool.setGroups(() -> groups);
-        return groups;
+    @ParameterizedTest
+    @MethodSource("takenIndexes")
+    void aNewVersionsIndexNameMatchingAnythingIsRefusedBeforeAnythingIsCopied(final String index,
+                                                                             final String lookedUp,
+                                                                             final Presence presence,
+                                                                             final boolean otherPipeline,
+                                                                             final String said,
+                                                                             final String free) {
+        elasticSource(index);
+        if (presence != null) {
+            pipelines.presences.put(lookedUp, presence);
+        }
+        if (otherPipeline) {
+            pipelines.productionPipeline("other", "Other-Indexing", TEMPLATE, PipelineLayers.layer("other")
+                    .property("elasticIndexingFilter", "indexName", "acme-events-v2"));
+        }
+
+        final ToolResult refused = call("{\"build\": \"" + BUILD + "\", \"source_uuid\": \"p1\", \"new_name\": \""
+                                        + ELASTIC_PIPELINE + "\"}", BuildToolCalls.answering(Map.of("value", true)));
+
+        assertThat(refused.isError()).isTrue();
+        assertThat(refused.text()).contains("(looked up as '" + lookedUp + "') is not free")
+                .contains(said)
+                .contains("Nothing was copied")
+                .contains("'" + free + "' is free")
+                .doesNotContain("DELETE");
+        assertNothingCopied();
     }
+
+    static Stream<Arguments> originalNames() {
+        return Stream.of(
+                Arguments.of(CopyPipelineTool.NEW_NAME_ARG, ELASTIC_PIPELINE, "pipeline name '" + ELASTIC_PIPELINE
+                                                                              + "'"),
+                Arguments.of("doc:x1", "Acme-Events-V1.0-Indexing-XSLT", "document name "
+                                                                         + "'Acme-Events-V1.0-Indexing-XSLT'"),
+                Arguments.of("index_name", "acme-events-v1", "index name 'acme-events-v1'"),
+                Arguments.of("index_doc:es1", "Acme-Events-V1.0", "Elastic Index doc name 'Acme-Events-V1.0'"));
+    }
+
+    static Stream<Arguments> takenIndexes() {
+        return Stream.of(
+                // Even an empty index.
+                Arguments.of("acme-events-v1", "acme-events-v2", new Presence(State.PRESENT, List.of(),
+                        List.of("acme-events-v2"), List.of(), 0L, null), false, "it matches an index "
+                                                                                + "(acme-events-v2), holding 0 "
+                                                                                + "document(s)", "acme-events-v3"),
+                // A data stream, through the name's variable.
+                Arguments.of("acme-{type}-v1", "acme-*-v2", new Presence(State.PRESENT, List.of("acme-web-v2"),
+                        List.of(), List.of(), 12L, null), false, "it matches a data stream (acme-web-v2), holding "
+                                                                 + "12 document(s)", "acme-{type}-v3"),
+                Arguments.of("acme-events-v1", "acme-events-v2", new Presence(State.PRESENT, List.of(), List.of(),
+                        List.of("acme-events-v2"), null, null), false, "it matches an alias (acme-events-v2), "
+                                                                       + "holding a number of documents that "
+                                                                       + "couldn't be counted", "acme-events-v3"),
+                // Another Stroom pipeline's index, though nothing is on the cluster yet.
+                Arguments.of("acme-events-v1", "acme-events-v2", null, true, "pipeline 'Other-Indexing' writes to "
+                                                                             + "'acme-events-v2'", "acme-events-v3"),
+                // Not known is never free.
+                Arguments.of("acme-events-v1", "acme-events-v2", Presence.unknown("unauthorized"), false,
+                        "couldn't be looked up on cluster ES_DEV (unauthorized)", "acme-events-v3"));
+    }
+
+    // p1, a promoted Elasticsearch indexing pipeline writing to the index on ES_DEV with its own XSLT, and the
+    // promoted Elastic Index doc naming the index.
+    private void elasticSource(final String index) {
+        elasticSource(index, ELASTIC_PIPELINE, "Acme-Events-V1.0-Indexing-XSLT", "Acme-Events-V1.0");
+    }
+
+    // p1 as above, under the names given.
+    private void elasticSource(final String index,
+                               final String pipeline,
+                               final String xsltName,
+                               final String indexDocName) {
+        pipelines.template(TEMPLATE.getUuid(), TEMPLATE.getName(), PipelineLayers.layer(TEMPLATE.getUuid())
+                .chain("xsltFilter", "XSLTFilter", "elasticIndexingFilter", "ElasticIndexingFilter"));
+        final String folder = pipelines.world.folder("System/Feeds/Acme").uuid;
+        pipelines.world.add(XsltDoc.TYPE, xsltName, folder, "x1");
+        pipelines.world.docs.put("x1", XsltDoc.builder().uuid("x1").name(xsltName)
+                .version("v0").data("<xsl:stylesheet/>").build());
+        pipelines.productionPipeline("p1", pipeline, TEMPLATE, PipelineLayers.layer("p1")
+                .property("xsltFilter", "xslt", new DocRef(XsltDoc.TYPE, "x1", xsltName))
+                .property("elasticIndexingFilter", "indexName", index)
+                .property("elasticIndexingFilter", "cluster", CLUSTER));
+        pipelines.world.add(ElasticIndexDoc.TYPE, indexDocName, folder, "es1");
+        pipelines.world.docs.put("es1", ElasticIndexDoc.builder().uuid("es1").name(indexDocName)
+                .version("v0").indexName(index).clusterRef(CLUSTER).build());
+    }
+
+    // No pipeline, XSLT or Elastic Index doc made (the build's record may be).
+    private void assertNothingCopied() {
+        assertThat(pipelines.world.created).noneMatch(made -> made.startsWith(PipelineDoc.TYPE + ":")
+                                                              || made.startsWith(XsltDoc.TYPE + ":")
+                                                              || made.startsWith(ElasticIndexDoc.TYPE + ":"));
+    }
+
 
     private void source() {
         pipelines.template(TEMPLATE.getUuid(), TEMPLATE.getName(), PipelineLayers.layer(TEMPLATE.getUuid())

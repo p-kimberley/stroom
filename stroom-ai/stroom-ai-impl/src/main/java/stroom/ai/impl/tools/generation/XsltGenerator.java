@@ -19,6 +19,7 @@ package stroom.ai.impl.tools.generation;
 import stroom.ai.impl.tools.ToolText;
 import stroom.ai.impl.tools.sample.SourceTypeFields;
 import stroom.ai.impl.tools.sample.SourceTypeMeta;
+import stroom.ai.impl.tools.sample.SourceTypeReading;
 import stroom.ai.impl.tools.sample.SourceTypeRows;
 import stroom.ai.impl.tools.sample.ToolJson;
 import stroom.ai.impl.tools.validation.EventSchema;
@@ -39,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -2439,6 +2441,10 @@ public final class XsltGenerator {
         final String group = "Source type group '" + module.name() + "'";
         if (!isSet(module.field())) {
             out.add(group + " has no source type field to tell its records by: record_source_types confirms it");
+        } else if (SourceTypeReading.isReading(module.field())) {
+            SourceTypeReading.problem(module.field()).ifPresent(why -> out.add(group + "'s source type reading '"
+                                                                               + module.field() + "' isn't one: "
+                                                                               + why));
         }
         if (module.sourceTypes().isEmpty()) {
             out.add(group + " translates no source type");
@@ -2454,7 +2460,8 @@ public final class XsltGenerator {
                 .filter(row -> SourceTypeRows.VALUE.equals(row.match()))
                 .map(SourceTypeModule.Row::value)
                 .toList();
-        SourceTypeRows.problems(rows, values).forEach(problem -> out.add("Registry row " + problem));
+        SourceTypeRows.problems(rows, values, SourceTypeReading.partsOf(module.field()))
+                .forEach(problem -> out.add("Registry row " + problem));
         if (isSet(module.common())) {
             mapping.shared().stream()
                     .filter(use -> !module.common().equals(use.href()))
@@ -2533,21 +2540,37 @@ public final class XsltGenerator {
         type.addElement(XSL, "variable", "name", "value", "select", groupFunction("source-type-value") + (byPart
                 ? "()"
                 : "($record)"));
+        final boolean combination = SourceTypeReading.isCombination(module.field());
+        if (combination) {
+            SourceTypeTupleXslt.declareParts(type);
+        }
         final XmlElement choose = type.addElement(XSL, "choose");
         for (final SourceTypeModule.Row row : module.rows()) {
-            choose.addElement(XSL, "when", "test", rowTest(row.match(), row.value(), row.separator()))
+            choose.addElement(XSL, "when", "test", rowTest(row.match(), row.value(), row.separator(), combination))
                     .addElement(XSL, "sequence", "select", XPathText.literal(row.name()));
         }
         choose.addElement(XSL, "otherwise").addElement(XSL, "sequence", "select", "''");
         // As the tools read it (SourceTypeFields.valueOf): stripped of XML's white space around it, '' for none or a
         // nil value, so processing and the survey count the same records as each source type.
-        sourceValueFunction(sheet, groupFunction("source-type-value"), module.field());
+        sourceValueFunction(sheet, this::groupFunction, module.field());
     }
 
     // A function reading the source type field's value as the tools read it (SourceTypeFields.valueOf): stripped of
     // XML's white space around it, '' for none or a nil value. A record's field takes the record; a part's meta
-    // attribute (stroom:meta(), the current part's) takes none.
-    private void sourceValueFunction(final XmlElement sheet, final String name, final String field) {
+    // attribute (stroom:meta(), the current part's) takes none; a reading into held values reads them as the tools
+    // do (SourceTypeReadingXslt).
+    private void sourceValueFunction(final XmlElement sheet,
+                                     final UnaryOperator<String> namer,
+                                     final String field) {
+        if (SourceTypeReading.isCombination(field)) {
+            SourceTypeTupleXslt.write(sheet, namer, SourceTypeReading.of(field), m.input());
+            return;
+        }
+        if (SourceTypeReading.isReading(field)) {
+            SourceTypeReadingXslt.write(sheet, namer, SourceTypeReading.of(field), m.input());
+            return;
+        }
+        final String name = namer.apply("source-type-value");
         final String attribute = SourceTypeMeta.attribute(field);
         final XmlElement value = sheet.addElement(XSL, "function", "name", name, "as", "xs:string");
         value.append(new XmlComment(XsltComments.comment((attribute == null
@@ -2570,8 +2593,19 @@ public final class XsltGenerator {
 
     // A registry row's test of $value: equal to the value, matched by the anchored pattern, or a list holding the
     // item (split on the separator, each item stripped of XML's white space, compared exactly), as the tools match it
-    // (SourceTypeRows.Row.matches).
-    private static String rowTest(final String match, final String value, final String separator) {
+    // (SourceTypeRows.Row.matches); a combination's key part by part, its parts in $parts (SourceTypeTupleXslt).
+    private static String rowTest(final String match,
+                                  final String value,
+                                  final String separator,
+                                  final boolean combination) {
+        if (SourceTypeRows.NONE.equals(match)) {
+            return combination
+                    ? SourceTypeTupleXslt.noValueTest()
+                    : "$value = ''";
+        }
+        if (SourceTypeRows.TUPLE.equals(match)) {
+            return SourceTypeTupleXslt.rowTest(value, separator);
+        }
         if (SourceTypeRows.PATTERN.equals(match)) {
             return "matches($value, " + XPathText.literal(value) + ")";
         }
@@ -2581,8 +2615,11 @@ public final class XsltGenerator {
         return "$value = " + XPathText.literal(value);
     }
 
-    // A list value's items, each stripped of XML's white space, as SourceTypeRows.items reads them.
-    private static String itemsOf(final String value, final String separator) {
+    /// @param value     An XPath expression of a value that may be a list.
+    /// @param separator Its separator, or null for [SourceTypeRows#DEFAULT_SEPARATOR].
+    /// @return An XPath expression of its items, each stripped of XML's white space, as [SourceTypeRows#items]
+    /// reads them.
+    static String itemsOf(final String value, final String separator) {
         final String split = SourceTypeRows.escape(separator == null || separator.isEmpty()
                 ? SourceTypeRows.DEFAULT_SEPARATOR
                 : separator);
@@ -2595,7 +2632,9 @@ public final class XsltGenerator {
     // Whether the XSLT logs the source type values its survey didn't see: a whole translation (no module) whose
     // mapping keeps those seen.
     private boolean watchesSourceTypes() {
-        return module == null && m.seenSourceTypes() != null && isSet(m.seenSourceTypes().field());
+        return module == null && m.seenSourceTypes() != null && isSet(m.seenSourceTypes().field())
+               && (!SourceTypeReading.isReading(m.seenSourceTypes().field())
+                   || SourceTypeReading.problem(m.seenSourceTypes().field()).isEmpty());
     }
 
     // Each value of the source type field in the document that none seen matches, logged (INFO) once a stream (a
@@ -2621,13 +2660,20 @@ public final class XsltGenerator {
     // read it, and whether a value is one seen (equal to a value, or matching an anchored pattern).
     private void seenFunctions(final XmlElement sheet) {
         final SeenSourceTypes seen = m.seenSourceTypes();
-        sourceValueFunction(sheet, seenFunction("source-type-value"), seen.field());
+        sourceValueFunction(sheet, this::seenFunction, seen.field());
         final XmlElement known = sheet.addElement(XSL, "function", "name", seenFunction("seen-source-type"), "as",
                 "xs:boolean");
         known.append(new XmlComment(XsltComments.comment("True for a value of " + seen.field() + " seen when the "
                                                          + "feed was surveyed")));
         known.addElement(XSL, "param", "name", "value", "as", "xs:string");
         final List<String> tests = new ArrayList<>();
+        if (SourceTypeReading.isCombination(seen.field())) {
+            // A key with a part of no value is a record of no value, never a new source type.
+            SourceTypeTupleXslt.declareParts(known);
+            tests.add("$" + SourceTypeTupleXslt.PARTS + " = ''");
+            seen.tuples().forEach(tuple -> tests.add("(" + SourceTypeTupleXslt.rowTest(tuple, seen.separator())
+                                                     + ")"));
+        }
         if (!seen.values().isEmpty()) {
             tests.add("$value = (" + literals(seen.values()) + ")");
         }

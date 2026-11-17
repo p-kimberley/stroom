@@ -19,18 +19,23 @@ package stroom.mcp.impl.tools;
 import stroom.ai.impl.tools.StroomLinks;
 import stroom.docref.DocRef;
 import stroom.meta.shared.Meta;
+import stroom.pipeline.shared.PipelineDoc;
+import stroom.processor.shared.ProcessorFilter;
 import stroom.query.api.ExpressionItem;
 import stroom.query.api.ExpressionOperator;
 import stroom.query.api.ExpressionOperator.Op;
 import stroom.query.api.ExpressionTerm;
 import stroom.query.api.ExpressionTerm.Condition;
+import stroom.search.elastic.shared.ElasticIndexDoc;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +52,58 @@ class TestPromotionProcessing {
     @BeforeEach
     void setUp() {
         w = new ProcessingWorld();
+    }
+
+    @Test
+    void aNewEventsVersionsFollowOnPipelinesGainADisabledFilterReadingItsEventsTheirOwnLeftAsTheyAre() {
+        // Decided by the user (2026-11-17): a CEF flattener (or an indexing pipeline) reading the predecessor's
+        // Events gains a new filter, disabled, of the same selection reading the new version's; its own filter is
+        // the admin's to disable or remove, never changed here.
+        final DocRef version = new DocRef(PipelineDoc.TYPE, "ev2", "Acme-V1.1-Events");
+        final DocRef cef = new DocRef(PipelineDoc.TYPE, "cef", "Acme-CEF");
+        w.pipeline(cef, false, null);
+        final ExpressionOperator reading = ProcessorFilterWrites.allOf(List.of(
+                ProcessorFilterWrites.term("Type", "Events"), PIPELINE_TERM));
+        final ProcessorFilter own = w.filter("cef", 5, true, reading, null);
+        // A sample's filter (by stream id) and one reading another pipeline's Events: not followed.
+        w.filter("cef", 6, true, ProcessorFilterWrites.allOf(List.of(ProcessorFilterWrites.term("Id", 8),
+                PIPELINE_TERM)), null);
+        w.filter("other", 7, true, ProcessorFilterWrites.allOf(List.of(ProcessorFilterWrites.term("Type",
+                "Events"), ProcessorFilterWrites.pipelineTerm(SP))), null);
+        final ProcessorFilters filters = Mockito.mock(ProcessorFilters.class);
+        Mockito.when(filters.all()).thenAnswer(inv -> w.filters.values().stream().flatMap(List::stream).toList());
+        w.promotion.setProcessorFilters(() -> filters);
+
+        final List<PromotionProcessing.FollowOn> found = w.promotion.followOns(Map.of(version, ProcessingWorld.EV),
+                pipeline -> true);
+
+        assertThat(found).extracting(followOn -> followOn.pipeline().getUuid() + ":" + followOn.reading().getId())
+                .containsExactly("cef:5");
+        assertThat(found.getFirst().said()).contains("'Acme-CEF': a new filter, disabled", "'Acme-V1.1-Events'",
+                "filter 5 is left as it is");
+        // A pipeline in a build is passed over: its build gives it its own filters.
+        assertThat(w.promotion.followOns(Map.of(version, ProcessingWorld.EV), pipeline -> false)).isEmpty();
+
+        w.nextFilterId = 30;
+        final List<Map<String, Object>> made = w.promotion.createFollowOnFilters(StroomLinks.CHAT, found,
+                List.of(Map.of("filter_id", 29, "pipeline", "Acme-V1.1-Events", "enabled", false)));
+
+        assertThat(w.created).hasSize(1);
+        assertThat(w.created.getFirst().isEnabled()).isFalse();
+        assertThat(w.lastExpression().getChildren()).containsExactly(ProcessorFilterWrites.term("Type", "Events"),
+                ProcessorFilterWrites.pipelineTerm(version));
+        assertThat(made.getFirst()).containsEntry("filter_id", 30).containsEntry("copied_from", 5)
+                .containsEntry("enabled", false).containsEntry("reads", "Acme-V1.1-Events")
+                .containsEntry("in_place_of", "Acme-Events");
+        assertThat(String.valueOf(made.getFirst().get("user_actions"))).contains("enable-30", "after=[enable-29]");
+        // Its own filter as it was: enabled, reading the predecessor's Events.
+        assertThat(w.filters.get("cef").getFirst()).isSameAs(own);
+        assertThat(own.isEnabled()).isTrue();
+        assertThat(ProcessorFilterWrites.expressionOf(own)).isEqualTo(reading);
+        // Promoted again: not made twice.
+        assertThat(w.promotion.createFollowOnFilters(StroomLinks.CHAT, found, List.of()).getFirst())
+                .containsEntry("existing", true).containsEntry("filter_id", 30);
+        assertThat(w.created).hasSize(1);
     }
 
     @Test
@@ -156,6 +213,45 @@ class TestPromotionProcessing {
         assertThat(actions.getLast().get("filter_id")).isEqualTo(23);
         assertThat(actions.getLast().get("after")).isEqualTo(List.of("drop-ecs-acme-v2"));
         assertThat(w.created.getLast().isEnabled()).isFalse();
+    }
+
+    @Test
+    void aNewVersionsOwnIndexIsDroppedOnlyWhileNothingElseClaimsIt() {
+        // Its own index (the free name the build made, holding only the sample), named by the promoted pipeline and
+        // the Elastic Index doc the build made for it: dropped first, as before.
+        promotedElastic();
+        w.world.add(ElasticIndexDoc.TYPE, "Acme-V2", w.world.folder("System/Feeds/Acme").uuid, "es-v2");
+        w.world.docs.put("es-v2", ElasticIndexDoc.builder().uuid("es-v2").name("Acme-V2").version("v0")
+                .indexName("ecs-acme-v2").build());
+        final PromotionProcessing.Entry entry = new PromotionProcessing.Entry(IP, null, "Events",
+                List.of(PIPELINE_TERM));
+
+        final List<Map<String, Object>> own = w.promotion.createPromotionFilters(StroomLinks.CHAT, List.of(entry),
+                Set.of("ip", "es-v2"));
+
+        assertThat(String.valueOf(own.getFirst().get("before_enabling"))).contains("drops 'ecs-acme-v2' first");
+
+        // Another pipeline outside the build writes to it too: production's, and not dropped.
+        w.productionPipeline(new DocRef("Pipeline", "other", "Other-Indexing"), PipelineLayers.layer("other")
+                .property("elasticIndexingFilter", "indexName", "ecs-acme-v2"));
+
+        final List<Map<String, Object>> claimed = w.promotion.createPromotionFilters(StroomLinks.CHAT,
+                List.of(entry), Set.of("ip", "es-v2"));
+
+        assertThat(String.valueOf(claimed.getFirst().get("before_enabling")))
+                .contains("'ecs-acme-v2' is not dropped: it is a production index")
+                .contains("pipeline 'Other-Indexing' writes to 'ecs-acme-v2'")
+                .doesNotContain("DELETE");
+        assertThat(TestCreateProcessorFilterTool.actions(claimed.getFirst())).singleElement()
+                .satisfies(action -> assertThat(action.get("action")).isEqualTo("enable_processor_filter"));
+    }
+
+    // IP, a promoted Elasticsearch indexing pipeline writing to ecs-acme-v2, with an agreed data stream template.
+    private void promotedElastic() {
+        w.listsEveryPipelineAndIndexDoc();
+        w.pipeline(IP, false, ProcessingWorld.withAgreed(ProcessingWorld.agreed(
+                "PUT _index_template/ecs-acme-v2\n{\"data_stream\": {}}")));
+        w.elastic("ip");
     }
 
     @Test

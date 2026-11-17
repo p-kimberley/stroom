@@ -39,8 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// feed, upload, template, converter and XSLT, pipeline, stepping, processing (exactly one Events stream per raw
 /// stream), validation and documentation; and 3, promotion of the CSV build (layout, created folders, version history,
 /// the emptied build folder, the disabled filter with no minimum creation time, tags), the documentation written again
-/// after promotion through a working copy, and an in-place fix through a working copy written back on promotion, with a
-/// backup.
+/// after promotion through a working copy, and a fix after promotion: a working copy of the promoted pipeline refused
+/// (a promoted pipeline and the code it runs are never changed in place, decided by the user 2026-11-17), the fix
+/// made in a new version under the names proposed for it, promoted beside the original, which is left as it was.
 ///
 /// Part 2 (the reported field fix, reprocessed once and superseded) and the CSV case's own steps are covered by
 /// `stroom.mcp.impl.TestOnboardingEndToEnd`. Left out: the build's record entry, and the promoted doc's
@@ -92,7 +93,7 @@ class TestE2eTranslation extends AbstractE2eTest {
     }
 
     @Test
-    void theCsvBuildIsPromotedThenFixedInPlaceThroughAWorkingCopy() {
+    void theCsvBuildIsPromotedThenFixedInANewVersion() {
         final Onboarded csv = onboard(CSV_CASE);
         final String dest = "System/E2E Promoted/Events";
         final Map<String, Object> everything = Map.of("Feed", dest, "Pipeline", dest, "XSLT", dest,
@@ -105,8 +106,12 @@ class TestE2eTranslation extends AbstractE2eTest {
         assertThat(result).doesNotContainKey("promoted_with_warnings");
         final List<String> promoted = strings(result, "promoted");
         assertThat(promoted).hasSizeGreaterThanOrEqualTo(5);
-        // Asked for by the user: the same layout they approved, and a link to open each folder in Stroom.
-        assertThat(String.valueOf(result.get("layout"))).startsWith(dest + "/");
+        // Asked for by the user: the same layout they approved, and a link to open each folder in Stroom. Role first,
+        // then version (decided by the user, 2026-11-17): the pipeline under the feed's folder, its name holding no
+        // version, so V1.0.
+        final String placed = dest + "/Events/V1.0";
+        assertThat(String.valueOf(result.get("layout"))).startsWith(dest + "/")
+                .contains("has no version in its name (e.g. -V1.0-): placed in V1.0.");
         assertThat(list(result, "folders")).anySatisfy(folder -> {
             final Map<String, Object> shown = (Map<String, Object>) folder;
             assertThat(shown).containsEntry("folder", dest);
@@ -136,7 +141,7 @@ class TestE2eTranslation extends AbstractE2eTest {
         // No minimum creation time (asked for by the user): enabled, it processes the feed's existing data too.
         assertThat(stored.isEnabled()).isFalse();
         assertThat(stored.getMinMetaCreateTimeMs()).isNull();
-        assertThat(folderOf(csv.pipelineUuid())).isEqualTo(dest);
+        assertThat(folderOf(csv.pipelineUuid())).isEqualTo(placed);
         assertThat(tags(csv.pipelineUuid())).containsExactly("mcp-generated");
 
         // Documented again after promotion (seen in VS Code): through a working copy, written back by promoting
@@ -159,15 +164,29 @@ class TestE2eTranslation extends AbstractE2eTest {
                 .hasSize(1);
         assertThat(strings(again, "promoted")).anySatisfy(line -> assertThat(line).contains("back over"));
 
-        // The in-place fix, through a working copy.
+        // The fix: a working copy of the promoted pipeline is refused, nothing copied.
         final String fixBuild = "e2e-fix";
-        final Map<String, Object> copy = json("copy_pipeline", args("build", fixBuild,
+        final String workingCopy = refusal("copy_pipeline", args("build", fixBuild,
                 "source_uuid", csv.pipelineUuid(), "new_name", csv.pipelineName() + "-WORKING",
                 "working_copy", true));
+        assertThat(workingCopy).contains("is promoted (in production)", "never a working copy",
+                "Nothing was copied");
+        assertThat(findFolder("System/MCP Workspace/" + fixBuild)).isEmpty();
+        // A new version instead, under the names proposed for it (the original's name given, the next version's
+        // taken), the user agreeing to them.
+        final Map<String, Object> copy = agreed("copy_pipeline", args("build", fixBuild,
+                "source_uuid", csv.pipelineUuid(), "new_name", csv.pipelineName()));
+        dump("copy_pipeline new version", copy);
+        final String versionName = csv.pipelineName() + "-V1.1";
+        assertThat(copy).containsEntry("name", versionName)
+                .containsEntry("copy_of", csv.pipelineName())
+                .doesNotContainKey("working_copy");
         final Map<String, Object> xsltCopy = ((List<Map<String, Object>>) copy.get("copied_documents")).stream()
                 .filter(doc -> "XSLT".equals(doc.get("type")))
                 .findFirst()
                 .orElseThrow();
+        assertThat(xsltCopy.get("uuid")).isNotEqualTo(csv.xsltUuid());
+        assertThat(String.valueOf(xsltCopy.get("name"))).endsWith("-V1.1");
         final String changed = readXslt((String) xsltCopy.get("uuid")).getData()
                 .replace("<Description>User logon</Description>", "<Description>Interactive user logon</Description>");
         final Map<String, Object> diff = json("compare_outputs", args("pipeline_uuid", csv.pipelineUuid(),
@@ -177,19 +196,25 @@ class TestE2eTranslation extends AbstractE2eTest {
                 .containsExactly("Event/EventDetail/Description");
         json("save_xslt", args("uuid", xsltCopy.get("uuid"), "code", changed));
         final String direct = refusal("save_xslt", args("uuid", csv.xsltUuid(), "code", changed));
-        assertThat(direct).containsAnyOf("not created by this server", "working copy");
+        assertThat(direct).contains("not created by this server", "new version");
         final List<String> before = strings(json("build_status", args("build", fixBuild)), "before_promotion");
-        assertThat(before).as("the working copy's changed code was compared but never stepped clean")
-                .singleElement()
-                .satisfies(warning -> assertThat(warning).contains("no clean step"));
+        // A new pipeline: its changed code compared but never stepped clean, and no documentation of its own yet.
+        assertThat(before).as("the new version's warnings").hasSize(2)
+                .anySatisfy(warning -> assertThat(warning).contains("'" + versionName + "'", "no clean step"))
+                .anySatisfy(warning -> assertThat(warning).contains("'" + versionName + "'", "no documentation"));
         final Map<String, Object> fixed = promote(fixBuild, Map.of());
         dump("promote_build fix", fixed);
         assertThat(findFolder("System/MCP Workspace/" + fixBuild)).isEmpty();
         assertThat(list(fixed, "promoted_with_warnings")).isEqualTo(before);
-        assertThat(readXslt(csv.xsltUuid()).getData()).contains("Interactive user logon");
-        final List<DocRef> backups = documentsNamed(csv.pipelineName() + " backup", "XSLT");
-        assertThat(backups).isNotEmpty().allSatisfy(backup ->
-                assertThat(tags(backup.getUuid())).contains("mcp-generated"));
+        // Beside the original, which is left as it was: nothing written back, nothing backed up.
+        assertThat(readXslt((String) xsltCopy.get("uuid")).getData()).contains("Interactive user logon");
+        assertThat(readXslt(csv.xsltUuid()).getData()).contains("<Description>User logon</Description>")
+                .doesNotContain("Interactive user logon");
+        // A sibling version folder of the original's, in its role's folder.
+        // The original's name holds no version, so it was filed in V1.0 and its next version is V1.1.
+        assertThat(folderOf(copy.get("uuid").toString())).isEqualTo(dest + "/Events/V1.1");
+        assertThat(folderOf(csv.pipelineUuid())).isEqualTo(placed);
+        assertThat(documentsNamed(csv.pipelineName() + " backup", "XSLT")).isEmpty();
     }
 
     /// promote_build names every document without a destination in one refusal (seen in testing: one failed call
@@ -202,18 +227,22 @@ class TestE2eTranslation extends AbstractE2eTest {
         final String feedUuid = (String) createFeed(build, feed).get("uuid");
         json("save_text_converter", args("build", build, "name", feed, "converter_type", "DATA_SPLITTER",
                 "code", CSV_SPLITTER));
-        json("save_xslt", args("build", build, "name", feed + "-Events", "code", CSV_XSLT));
-        final String refused = refusal("promote_build", args("build", build,
-                "destinations", Map.of("Feed", "Feeds/Places")));
+        final Map<String, Object> xslt = json("save_xslt", args("build", build, "name", feed + "-Events", "code",
+                CSV_XSLT));
+        // With no folder for the feed, nothing has a place (with one, each role's documents are laid out under it:
+        // decided by the user, 2026-11-17).
+        final String refused = refusal("promote_build", args("build", build, "destinations", Map.of()));
         dump("promote_build refused", refused);
-        assertThat(refused).as("both, in one refusal").contains("No destination for", "TextConverter '" + feed
-                + "'", "XSLT '" + feed + "-Events'");
+        assertThat(refused).as("all, in one refusal").contains("No destination for", "Feed '" + feed + "'",
+                "TextConverter '" + feed + "'", "XSLT '" + feed + "-Events'");
         // Given without System/, as find_documents gives folders.
         final Map<String, Object> destinations = Map.of("Feed", "Feeds/Places", "TextConverter", "/Feeds/Places",
                 "XSLT", "Feeds/Places");
         final Map<String, Object> promoted = promote(build, destinations);
         dump("promote_build", promoted);
         assertThat(folderOf(feedUuid)).isEqualTo("System/Feeds/Places");
+        // Role first, then version: the build's XSLT under the feed's folder, whatever folder its type was given.
+        assertThat(folderOf(uuidOf(xslt))).isEqualTo("System/Feeds/Places/Events/V1.0");
     }
 
     // promote_build: the layout shown first (needs_review), then promoted once the user agrees in the form.

@@ -40,6 +40,7 @@ import stroom.explorer.shared.ExplorerConstants;
 import stroom.feed.shared.FeedDoc;
 import stroom.index.shared.LuceneIndexDoc;
 import stroom.pipeline.shared.PipelineDoc;
+import stroom.pipeline.shared.TextConverterDoc;
 import stroom.pipeline.shared.XsltDoc;
 import stroom.processor.shared.ProcessorFilter;
 import stroom.query.api.ExpressionTerm;
@@ -68,11 +69,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /// `promote_build` - promotes a build out of the workspace once the user has seen where everything goes and approved
 /// it. New documents are moved to their destination folders, working copies written back over their originals after a
 /// backup, and feed-wide processor filters made, disabled, for the promoted pipelines: all through Stroom's explorer
-/// and stores as the user, once they approve the layout in a short form bound to it.
+/// and stores as the user, once they approve the layout in a short form bound to it. Then it tidies up after itself
+/// ([PromotionTidyUp], unless the user turns it off).
 class PromoteBuildTool extends AbstractBuiltInTool {
 
     private static final LambdaLogger LOGGER = LambdaLoggerFactory.getLogger(PromoteBuildTool.class);
@@ -81,16 +85,18 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     static final String BUILD_ARG = "build";
     static final String DESTINATIONS_ARG = "destinations";
     static final String REVIEWED_ARG = "reviewed";
-    static final String ROLE_SUBFOLDERS_ARG = "role_subfolders";
     /// What a working copy's write-back takes from it.
     static final List<String> WRITTEN_BACK = List.of("data", "converterType", "documentation", "description");
     // A discarded step's target: a working copy the same as its original, discarded rather than written back.
+    // A promoted pipeline and the code it runs: never written back from a working copy.
+    private static final Set<String> CODE_TYPES = Set.of(PipelineDoc.TYPE, XsltDoc.TYPE, TextConverterDoc.TYPE);
     private static final String UNCHANGED_COPY = "unchanged working copy, discarded";
 
     private static final String KEEP = "keep";
     // What becomes of a build's test feed.
     private static final String TEST_FEED_KEPT = "left in the workspace: the build's test feed, never promoted";
     private static final String TEST_INDEX_KEPT = "left in the workspace: the build's test index, never promoted";
+    private static final String TEST_DASHBOARD_KEPT = "left in the workspace: it searches the build's test index";
     static final String OVERWRITE_ORIGINAL = "Overwrite production with the working copy";
     static final String KEEP_ORIGINAL = "Keep production as it is";
     // In a working copy's record entry: what the user chose for an original changed since, and at which version.
@@ -117,6 +123,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     private final DocumentAccess documentAccess;
     private final XsltHistory history;
     private final PendingDocumentation pendingDocs;
+    private final PromotionTidyUp tidyUp;
     // An aggregated feed's modules and the reference data its pipelines load; none in tests that make the tool
     // themselves.
     private Provider<SourceTypeGroups> groupsProvider;
@@ -139,7 +146,8 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                      final DocumentWrites writes,
                      final DocumentAccess documentAccess,
                      final XsltHistory history,
-                     final PendingDocumentation pendingDocs) {
+                     final PendingDocumentation pendingDocs,
+                     final PromotionTidyUp tidyUp) {
         this.facts = facts;
         this.layout = layout;
         this.places = places;
@@ -153,9 +161,11 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         this.documentAccess = documentAccess;
         this.history = history;
         this.pendingDocs = pendingDocs;
+        this.tidyUp = tidyUp;
     }
 
-    /// An aggregated feed's modules, put beside the feed and pointed at the originals of their working copies, and
+    /// An aggregated feed's modules, put beside the feed (pointed at the originals of an older build's unchanged
+    /// working copies, which are discarded), and
     /// the reference data its group pipelines load (set by injection; none in tests that make the tool themselves).
     ///
     /// @param groups     The feed's source type groups.
@@ -225,35 +235,44 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                              + "Documents with no destination are named all at once, to ask the user about "
                              + "together. A build's documents go in a folder of the source's own: a folder given by "
                              + "type that holds other sources' folders becomes <it>/<feed>, as the siblings have. The "
-                             + "build's test feed is never promoted: don't offer it. New documents are moved to their "
-                             + "destination folders (UUIDs are kept, so "
-                             + "filters and references keep working); a new version of a production pipeline "
-                             + "(copy_pipeline) goes in a version subfolder beside its predecessor, with its index, "
-                             + "documentation and dashboard; destination folders that don't exist yet are created "
+                             + "build's test feeds and test indexes are never promoted (don't offer them); once it is "
+                             + "promoted they are tidied up as the review lists (on unless the user unticks it, or "
+                             + "tidy_up=false): their streams marked deleted, shards deleted, then the test docs and "
+                             + "their -VERIFY dashboards deleted. New documents are moved to their destination "
+                             + "folders (UUIDs are kept, so filters and references keep working), role first, then "
+                             + "version: "
+                             + "<root>/<feed>/<Role>/<version> (e.g. Feeds/App-Logs/Events/V1.0, the version from the "
+                             + "pipeline's name), or <root>/<feed>/<version> for a role whose location is elsewhere "
+                             + "(e.g. Elastic Indices/App-Logs/V1.0); a pipeline's XSLTs, converter, index, "
+                             + "documentation and dashboard with it. Each role's location is proposed (where sibling "
+                             + "feeds' pipelines of that role are, or a new version's predecessor's) and chosen by "
+                             + "the user. A new version (copy_pipeline) goes in a sibling version folder of its "
+                             + "predecessor's (Events/V1.1); a promoted pipeline reading the predecessor's Events "
+                             + "gains a new filter, disabled, reading the new version's (its own filters are left "
+                             + "for the admin). Destination folders that don't exist yet are created "
                              + "first. A working copy is written back over its original after the original is "
                              + "backed up to <workspace>/backups, then the copy is deleted. The build's workspace "
                              + "folder is removed afterwards if nothing is left in it. An aggregated feed's helpers "
-                             + "and common module go beside the feed, with its registry and source notes; a source "
-                             + "type group's documents (its XSLT, output feed, pipelines, index, documentation and "
-                             + "dashboard) in <feed's folder>/<group>/, under their role subfolders (Events, "
-                             + "Indexing); working copies of modules are written back with every "
-                             + "module importing the originals again (each group importing the common module, "
-                             + "which imports the helpers), and each pipeline running a group's XSLT gains the "
-                             + "reference data the group looks up (a pipeline change, in the approval). What "
-                             + "build_status says "
-                             + "is "
-                             + "missing goes in the approval, except documentation the build's own change left "
-                             + "behind: write_documentation again first (once promoted, documentation only changes "
-                             + "through a working copy).")
+                             + "and common module go in <feed's folder>/Helpers/<version> and Common/<version>, its "
+                             + "registry and source notes beside the feed; a source type group's documents in "
+                             + "<feed's folder>/<group>/<Role>/<version> (its output feed in <group>/); nothing "
+                             + "promoted is rewritten (the feed's other groups keep importing the versions they "
+                             + "import); a working copy of a pipeline's code or of a module is refused. Each pipeline "
+                             + "running a group's XSLT gains the reference data the group looks up (a pipeline "
+                             + "change, in the approval). What build_status says is missing goes in the approval, "
+                             + "except documentation the build's own change left behind: write_documentation again "
+                             + "first (once promoted, documentation only changes through a working copy).")
                 .parameters(ObjectSchema.builder()
                         .addStringProperty(BUILD_ARG, "Build name, e.g. 'acme-door-v1.3'.")
                         .addProperty(DESTINATIONS_ARG, TranslationArgs.object(
-                                "Destination folder per document type or per document UUID, e.g. {'Feed': "
-                                + "'/Feeds/Events/Acme', 'Pipeline': '/Feeds/Events/Acme', 'XSLT': ...}: an "
-                                + "explorer path, with or without the root System ('System / Feeds / Events' works "
-                                + "too). Working copies ignore this: they are written back over their originals. A "
-                                + "new version of a production document (copy_pipeline) goes in a version subfolder "
-                                + "beside it unless given here. 'keep' for a document UUID leaves it in the build's "
+                                "Destination folder per document type, per role or per document UUID, e.g. "
+                                + "{'Feed': '/Feeds/Acme', 'Indexing': '/Elastic Indices'}: an explorer path, with "
+                                + "or without the root System ('System / Feeds' works too). By type: where the "
+                                + "feed goes (and documents of no role). By role (Events, Records, Indexing, CEF, "
+                                + "Reference): the folder holding the feed's folders of that role, as the user "
+                                + "chose (the review's role_locations). By UUID: exactly that folder for that "
+                                + "document. Working copies ignore this: they are written back over their originals. "
+                                + "'keep' for a document UUID leaves it in the build's "
                                 + "workspace folder, not promoted (a test feed made while fixing, say). Documents "
                                 + "with no destination are named all at once."))
                         .addStringProperty(REVIEWED_ARG, "The review_id of the needs_review reply, once the user has "
@@ -261,12 +280,10 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                                          + "then approve it in a short form. Not true: a layout "
                                                          + "that changes (other destinations) gets a new id, to "
                                                          + "show again.")
-                        .addBooleanProperty(ROLE_SUBFOLDERS_ARG, "Keep the build's role subfolders (Events or "
-                                                                 + "Records, Indexing, CEF, Reference) under each "
-                                                                 + "destination, as the layout shows them by "
-                                                                 + "default; false puts each document straight in "
-                                                                 + "its destination folder. The user decides when "
-                                                                 + "they review the layout.")
+                        .addBooleanProperty(PromotionTidyUp.TIDY_UP, "False keeps the build's test feeds, test "
+                                                                     + "indexes and their dashboards in the "
+                                                                     + "workspace after promotion (default true: "
+                                                                     + "tidied up, as the review lists).")
                         .required(BUILD_ARG)
                         .build())
                 .build();
@@ -294,25 +311,21 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     private Map<String, Object> promote(final ToolCall call, final ToolCallContext context, final String build) {
         final Map<String, String> destinations = destinations(call);
         final Object reviewed = argsMap(call).get(REVIEWED_ARG);
-        final String roleArg = stringArg(call, ROLE_SUBFOLDERS_ARG);
-        final boolean roleSubfolders = roleArg == null || Boolean.parseBoolean(roleArg);
         final List<Map<String, Object>> docs = facts.buildDocs(build);
         if (docs.isEmpty()) {
             throw new ToolRefusal("Build '" + build + "' has no documents");
         }
         // An aggregated feed's build's source type group: its documents in a folder of its own beside the feed.
         final Map<String, ModuleChecks.Marker> markers = markers(docs);
+        refuseCodeWorkingCopies(docs, sharedModules(markers));
         final GroupPlace group = group(build, docs, markers);
-        final PromotionLayout.VersionFolders versions = layout.versionFolders(docs, destinations, group == null
-                ? null
-                : group.name());
-        final Map<String, String> joins = PromotionLayout.joining(versions.beside());
         // A build on data already in Stroom: its own feeds are test feeds, which stay in the workspace, and its
         // pipelines' filters name the feeds it works from (seen in VS Code: the promoted filter selected the test
         // feed).
         final List<String> sources = facts.sourceFeeds(build, docs);
-        // The build's test feeds stay in the workspace, whatever the destinations say.
-        final Set<String> testFeeds = testFeeds(build, docs);
+        // The build's test feeds (and test indexes, and their dashboards) stay in the workspace, whatever the
+        // destinations say.
+        final Set<String> testFeeds = tidyUp.testDocs(build, docs, testIndexes(build));
         // The folder of the source's own its documents go in: the feed's, or one named for it where the feed's
         // folder is a parent of sources (the siblings' convention).
         final SourceFolders sourceFolders = new SourceFolders(guard, documentAccess);
@@ -321,13 +334,19 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         final Map<String, String> besideFeeds = besideFeeds(docs, destinations, sourceFolders);
         // An aggregated feed's modules and a group's output feed of its own: beside the feed (the group's own in its
         // group's folder there).
-        modulesBeside(build, docs, destinations, versions.proposed(), sourceFolders, markers)
-                .forEach(besideFeeds::putIfAbsent);
-        final List<PromotionLayout.Step> plan = plan(docs, destinations, versions.proposed(), joins, sources,
-                besideFeeds, new Placed(testFeeds, source, sourceFolders, group));
+        modulesBeside(build, docs, destinations, sourceFolders, markers).forEach(besideFeeds::putIfAbsent);
+        final Placed placed = new Placed(testFeeds, source, sourceFolders, group, sources);
+        final List<PromotionLayout.Step> plan = plan(docs, destinations, sources, besideFeeds, placed, markers);
         // Before the layout is shown, so it shows what the user chose (found reviewing the change: asked after
         // the review, a copy kept still showed as written back).
         askAboutChangedOriginals(call, context, build, plan);
+        // Role first, then version (decided by the user, 2026-11-17): each role's root chosen, then every document
+        // of a role in its version's folder there, and what documents or searches another beside it.
+        final List<RoleRoot> roots = roleRoots(call, context, build, plan, destinations, placed, reviewed == null);
+        final List<String> layoutWarnings = layOut(plan, roots, placed, markers);
+        besideWhatItDocuments(plan, destinations);
+        withWhatItSearches(plan, destinations);
+        refuseUnplaced(plan, placed);
         // A working copy the user kept stays in the build: the modules promoted import its original, which must
         // have what they need of it.
         final Set<String> keptCopies = keptCopies(plan);
@@ -338,18 +357,6 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                       + "the working copy, or change the modules importing it, then promote_build "
                                       + "again. Nothing was changed.");
             }
-        }
-        // The build's role subfolders kept in production (asked for by the user), unless they say otherwise: where
-        // they tell stages apart, so only when it promotes documents of more than one role (an index documented,
-        // or a new indexing version, is all Indexing: a subfolder there only adds a level).
-        final Set<Object> rolesMoved = new LinkedHashSet<>();
-        plan.stream()
-                .filter(p -> PromotionLayout.MOVE.equals(p.action()) && p.doc().get("role") != null)
-                .forEach(p -> rolesMoved.add(p.doc().get("role")));
-        if (roleSubfolders && rolesMoved.size() > 1) {
-            plan.replaceAll(p -> p.role() != null
-                    ? p.withTarget(p.target() + "/" + p.role())
-                    : p);
         }
         // Every destination is resolved before approval, so a missing folder can't stop a promotion halfway.
         final Map<String, WriteGuard.Folder> folders = new LinkedHashMap<>();
@@ -373,9 +380,17 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 .filter(p -> PromotionLayout.KEEP.equals(p.action()) && FeedDoc.TYPE.equals(p.doc().get("type")))
                 .map(p -> String.valueOf(p.doc().get("name")))
                 .toList();
-        // New versions' predecessors, read before promotion clears the build's record: their filters may be
-        // disabled once the new version takes over (the user's to decide).
+        // New versions' predecessors, read before promotion clears the build's record: the next steps name their
+        // filters, for the admin to disable or remove once the new version's output is right (decided by the user,
+        // 2026-11-17: never done by the tools).
         final Map<String, String> predecessors = predecessors(build, moving);
+        // The promoted pipelines outside the build reading a predecessor's Events (CEF flatteners, indexing): each
+        // gains a filter, disabled, reading the new version's Events instead (decided by the user, 2026-11-17). One
+        // with a new version of its own in this build is passed over: its new version reads the new Events.
+        final List<PromotionProcessing.FollowOn> followOns = promotionProcessing.followOns(eventsVersions(plan,
+                predecessors), pipeline -> guard.buildOf(pipeline).isEmpty() && !BuildDocumentation.inBuild(docs,
+                pipeline.getUuid()) && !predecessors.containsValue(pipeline.getUuid()));
+        final List<String> followOnSaid = followOns.stream().map(PromotionProcessing.FollowOn::said).toList();
         // A working copy of a promoted pipeline is deleted at promotion, its original going on: an index reading the
         // copy's Events in the build reads the original's once promoted.
         final Map<String, String> originals = new LinkedHashMap<>();
@@ -414,11 +429,24 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 .map(FeedIndexDecisions.IndexChange::said)
                 .toList());
         fieldAdditions.forEach(addition -> indexSaid.add(addition.said()));
-        final String tree = layout.promotionTree(plan, creating) + testFeedNote(plan, testFeeds);
-        // The question applies: documents of several roles.
-        final boolean roles = rolesMoved.size() > 1;
-        if (!Consent.wasReviewed(reviewed, tree)) {
-            final Map<String, Object> review = review(build, tree, warnings, processed, roles, reviewed);
+        // What is tidied up once promoted (decided by the user, 2026-11-17): in the layout, so the approval bound to
+        // it is bound to the tidy-up too.
+        final PromotionTidyUp.Plan tidy = PromotionTidyUp.wanted(argsMap(call).get(PromotionTidyUp.TIDY_UP))
+                ? tidyUp.plan(build, docs, plan, testFeeds, sources)
+                : PromotionTidyUp.Plan.OFF;
+        final String laidOut = layout.promotionTree(plan, creating) + rootsNote(roots)
+                               + PromotionLayout.warningsNote(layoutWarnings);
+        // Shown with the tidy-up's counts, bound to its items alone (found in review, 2026-11-18).
+        final String tree = laidOut + PromotionTidyUp.layoutNote(plan, testFeeds, tidy, true);
+        final String bound = laidOut + PromotionTidyUp.layoutNote(plan, testFeeds, tidy, false);
+        if (!Consent.wasReviewed(reviewed, bound)) {
+            final Map<String, Object> review = review(build, tree, bound, warnings, processed, roots, reviewed);
+            if (!followOnSaid.isEmpty()) {
+                review.put("follow_on_filters", followOnSaid);
+                review.put("hint", review.get("hint") + " Say the follow_on_filters too: each promoted pipeline "
+                                   + "reading the earlier version's Events gains a new filter, disabled, reading the "
+                                   + "new version's; its own filters are left as they are.");
+            }
             if (!pipelineChanges.isEmpty()) {
                 review.put("pipeline_changes", pipelineChanges);
                 review.put("hint", review.get("hint") + " Say the pipeline_changes too: the reference data each "
@@ -431,6 +459,11 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                    + "own, unless the user chose to share one) and the fields this build adds to it "
                                    + "(forward only).");
             }
+            if (!tidy.items().isEmpty()) {
+                review.put("tidy_up", tidy.said());
+                review.put("hint", review.get("hint") + " Say the tidy_up too: once promoted, the build's test data "
+                                   + "listed is tidied up, unless the user unticks it in the approval.");
+            }
             return review;
         }
         // The form stays short; the approval is bound to the exact layout shown, by its review id, which the form
@@ -442,10 +475,10 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         shortForm.put("build", build);
         shortForm.put("layout", promoting + " document(s), as shown in the chat");
         shortForm.put("folders", new ArrayList<>(new TreeSet<>(moveTargets(plan))));
-        if (roles) {
-            shortForm.put("role subfolders", roleSubfolders
-                    ? "kept under each destination"
-                    : "not kept");
+        if (!roots.isEmpty()) {
+            final List<String> where = new ArrayList<>();
+            roots.forEach(root -> where.add(root.role() + ": " + root.root()));
+            shortForm.put("role locations", where);
         }
         if (!warnings.isEmpty()) {
             shortForm.put("warnings", warnings);
@@ -459,8 +492,13 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         if (!indexSaid.isEmpty()) {
             shortForm.put("index changes", indexSaid);
         }
-        consent.require(call, context, Consent.Request.approval(NAME,
-                "Promote build '" + build + "' as shown in the chat", shortForm).boundTo(tree));
+        if (!followOnSaid.isEmpty()) {
+            shortForm.put("follow-on filters", followOnSaid);
+        }
+        // The tidy-up, a choice in the form, ticked to start: the user unticks it to keep the test data.
+        consent.require(call, context, tidy.offeredIn(Consent.Request.approval(NAME,
+                "Promote build '" + build + "' as shown in the chat", tidy.inForm(shortForm)).boundTo(bound)));
+        final boolean tidying = !tidy.items().isEmpty() && consent.option(context, PromotionTidyUp.TIDY_UP, true);
         final List<String> done = new ArrayList<>();
         if (groupsProvider != null) {
             // An aggregated feed's modules import the originals their working copies are written back over.
@@ -521,12 +559,74 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 .filter(p -> !PromotionLayout.KEEP.equals(p.action()))
                 .map(p -> String.valueOf(p.doc().get("uuid")))
                 .toList());
+        // Streams, then shards, then documents: never a reason for the promotion, done now, to fail.
+        final List<Map<String, Object>> tidied = tidying
+                ? tidyUp.apply(build, tidy)
+                : List.of();
         if (guard.removeBuildFolderIfEmpty(build)) {
             done.add("removed the build's workspace folder, now empty");
         }
+        // What was moved: a production index is never put up for dropping.
+        final Set<String> moved = plan.stream()
+                .filter(p -> PromotionLayout.MOVE.equals(p.action()))
+                .map(p -> String.valueOf(p.doc().get("uuid")))
+                .collect(Collectors.toSet());
         final List<Map<String, Object>> filters = promotionProcessing.createPromotionFilters(context.links(),
-                processing);
-        return promoted(context, build, plan, folders, tree, done, warnings, filters, predecessors);
+                processing, moved);
+        final List<Map<String, Object>> followOnFilters = followOns.isEmpty()
+                ? List.of()
+                : promotionProcessing.createFollowOnFilters(context.links(), followOns, filters);
+        final Map<String, Object> result = promoted(context, build, plan, folders, tree, done, warnings, filters,
+                followOnFilters, predecessors);
+        tidy.report(result, tidying, tidied);
+        return result;
+    }
+
+    // An aggregated feed's shared modules among the build's XSLTs (its common module and helpers, by their marks),
+    // by UUID: a new version of one goes in a version folder of its own.
+    private static Set<String> sharedModules(final Map<String, ModuleChecks.Marker> markers) {
+        final Set<String> out = new LinkedHashSet<>();
+        markers.forEach((uuid, marker) -> {
+            if (ModuleChecks.HELPERS.equals(marker.kind()) || SourceTypeModule.COMMON.equals(marker.kind())) {
+                out.add(uuid);
+            }
+        });
+        return out;
+    }
+
+    // A working copy of a promoted pipeline, or of the code it runs (its XSLTs, text converters, an aggregated
+    // feed's shared modules), from a build opened before new versions became the only way (decided by the user,
+    // 2026-11-17: no change in place of a promoted pipeline or the code it runs, nor of a feed's common module or
+    // helpers): refused, not written back. Documentation is updated in place as before; an unchanged XSLT or
+    // converter copy is only discarded.
+    private void refuseCodeWorkingCopies(final List<Map<String, Object>> docs, final Set<String> shared) {
+        final List<String> refused = new ArrayList<>();
+        boolean modules = false;
+        for (final Map<String, Object> doc : docs) {
+            final Object copyOf = doc.get("working_copy_of");
+            final String type = String.valueOf(doc.get("type"));
+            if (copyOf == null || !CODE_TYPES.contains(type)) {
+                continue;
+            }
+            if (!PipelineDoc.TYPE.equals(type) && unchangedCopy(doc, String.valueOf(copyOf))) {
+                continue;
+            }
+            refused.add(type + " '" + doc.get("name") + "'");
+            modules |= shared.contains(String.valueOf(doc.get("uuid")));
+        }
+        if (!refused.isEmpty()) {
+            throw new ToolRefusal("Not promoted: " + String.join(", ", refused) + (refused.size() == 1
+                    ? " is a working copy"
+                    : " are working copies") + " of a promoted pipeline's code, which changes only by a new "
+                                  + "version, never written back in place. In this build, make a new version "
+                                  + "instead: copy_pipeline of the promoted pipeline (it copies its code under the "
+                                  + "new version's names), carry the change over to the new version's XSLT, and "
+                                  + "delete the working copies (in Stroom); then promote_build again." + (modules
+                ? " An aggregated feed's common module or helpers changes the same way: delete its working copy, "
+                  + "and build_translation_xslt of the build's group makes the new version of it that the group "
+                  + "imports."
+                : "") + " Nothing was changed.");
+        }
     }
 
     // The working copies the plan keeps in the build, by UUID: their originals stay as they are in production.
@@ -539,17 +639,304 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         return out;
     }
 
-    // Where each document goes.
+    // The role a document is laid out under: its build role subfolder's, or for a pipeline at the build's top, its
+    // stage's. None for a feed (beside its source, never in a version's folder) or a working copy.
+    private String roleOf(final Map<String, Object> doc) {
+        if (FeedDoc.TYPE.equals(doc.get("type")) || doc.get("working_copy_of") != null) {
+            return null;
+        }
+        if (doc.get("role") != null) {
+            return String.valueOf(doc.get("role"));
+        }
+        if (PipelineDoc.TYPE.equals(doc.get("type"))) {
+            final String stage = stageOrNone(String.valueOf(doc.get("uuid")));
+            return stage == null
+                    ? null
+                    : PipelineShapes.STAGE_ROLES.get(stage);
+        }
+        return null;
+    }
+
+    // An aggregated feed's module's role: a shared module's own (Common, Helpers: decided by the user, 2026-11-17),
+    // a group's XSLT its pipeline's; null for anything else.
+    private static String moduleRole(final Map<String, Object> doc, final ModuleChecks.Marker marker) {
+        if (marker == null) {
+            return null;
+        }
+        if (SourceTypeModule.COMMON.equals(marker.kind())) {
+            return PromotionLayout.MODULE_ROLES.getFirst();
+        }
+        if (ModuleChecks.HELPERS.equals(marker.kind())) {
+            return PromotionLayout.MODULE_ROLES.get(1);
+        }
+        if (SourceTypeModule.GROUP.equals(marker.kind())) {
+            return NullSafe.nonBlankStringElse((String) doc.get("role"), WriteGuard.STAGE_ROLES.get("translation"));
+        }
+        return null;
+    }
+
+    // Each role's root, for a build whose source's folder is known (decided by the user, 2026-11-17): a destination
+    // keyed by the role, else what the user chose in a form before (kept in the build's record, so the approval's
+    // layout is the one reviewed), else asked now in one form on the review's call, else the proposal: a new
+    // version's predecessor's root, else where the sibling feeds' pipelines of the role are, else the feed's own.
+    private List<RoleRoot> roleRoots(final ToolCall call,
+                                     final ToolCallContext context,
+                                     final String build,
+                                     final List<PromotionLayout.Step> plan,
+                                     final Map<String, String> destinations,
+                                     final Placed placed,
+                                     final boolean asking) {
+        if (placed.source() == null || placed.source().own() == null) {
+            return List.of();
+        }
+        final String feedFolder = placed.source().own();
+        final String feedRoot = PromotionLayout.parentOf(feedFolder);
+        final Set<String> roles = new LinkedHashSet<>();
+        plan.stream()
+                .filter(step -> PromotionLayout.MOVE.equals(step.action()) && isRole(WriteGuard.ROLES, step.role()))
+                .forEach(step -> roles.add(step.role()));
+        if (roles.isEmpty()) {
+            return List.of();
+        }
+        final Map<String, String> byPredecessor = predecessorRoots(plan, feedFolder, placed.group());
+        Map<String, String> bySiblings = null;
+        final Map<String, Object> recorded = buildRecords.promotionRoots(build);
+        final List<RoleRoot> out = new ArrayList<>();
+        final Map<String, Consent.Question> questions = new LinkedHashMap<>();
+        for (final String role : roles) {
+            String proposed = byPredecessor.get(role);
+            String why = "proposed: where its earlier version is";
+            if (proposed == null) {
+                if (bySiblings == null) {
+                    bySiblings = siblingRoots(feedFolder, placed.source().name());
+                }
+                proposed = bySiblings.get(role);
+                why = "proposed: where the sibling feeds' " + role + " pipelines are";
+            }
+            if (proposed == null) {
+                proposed = feedRoot;
+                why = "proposed: the feed's own location";
+            }
+            final List<String> options = new ArrayList<>(List.of(proposed));
+            if (!PromotionLayout.sameFolder(proposed, feedRoot)) {
+                options.add(feedRoot);
+            }
+            final String given = roleKeyed(destinations, role);
+            final Object chosen = recorded.get(role);
+            if (given != null) {
+                out.add(new RoleRoot(role, PromotionLayout.normalised(given), "as given", options, false));
+            } else if (chosen instanceof final String root && !root.isBlank()) {
+                out.add(new RoleRoot(role, root, "as the user chose", options, false));
+            } else {
+                out.add(new RoleRoot(role, proposed, why, options, true));
+                if (asking) {
+                    questions.put(role, new Consent.Question("Where " + role + " goes: the folder holding the "
+                                                             + "feed's " + role + " folders (or type another)",
+                            options));
+                }
+            }
+        }
+        if (!questions.isEmpty()) {
+            final Optional<Map<String, String>> answered = consent.answerEach(call, context, NAME, "Where the "
+                    + "build's documents of each role go: the first is proposed (" + String.join("; ", out.stream()
+                    .filter(RoleRoot::toAsk)
+                    .map(root -> root.role() + ": " + root.root() + ", " + root.why().replace("proposed: ", ""))
+                    .toList()) + "); the feed's own location keeps them in " + feedFolder + "/<role>/<version>.",
+                    questions);
+            answered.ifPresent(answers -> answers.forEach((role, answer) -> {
+                final String root = PromotionLayout.normalised(answer);
+                buildRecords.rememberPromotionRoot(build, role, root);
+                out.replaceAll(each -> each.role().equals(role)
+                        ? new RoleRoot(role, root, "as the user chose", each.options(), false)
+                        : each);
+            }));
+        }
+        return out;
+    }
+
+    // Whether a role (or null) is one of these.
+    private static boolean isRole(final List<String> roles, final String role) {
+        return role != null && roles.contains(role);
+    }
+
+    // A destination keyed by a role (any case), or null.
+    private static String roleKeyed(final Map<String, String> destinations, final String role) {
+        return destinations.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(role) && NullSafe.isNonBlankString(entry.getValue()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
+    }
+
+    // The roots of the roles of the build's new versions, from their predecessors' folders.
+    private Map<String, String> predecessorRoots(final List<PromotionLayout.Step> plan,
+                                                 final String feedFolder,
+                                                 final GroupPlace group) {
+        final Map<String, String> out = new LinkedHashMap<>();
+        for (final PromotionLayout.Step step : plan) {
+            if (PromotionLayout.MOVE.equals(step.action()) && isRole(WriteGuard.ROLES, step.role())
+                && PipelineDoc.TYPE.equals(step.doc().get("type"))) {
+                layout.predecessorFolder(step.doc()).ifPresent(folder -> out.putIfAbsent(step.role(),
+                        PromotionLayout.rootOf(PromotionLayout.predecessor(folder), feedFolder, group == null
+                                ? null
+                                : group.name())));
+            }
+        }
+        return out;
+    }
+
+    // Where the sibling feeds' production pipelines of each role are (none in a build or a template another inherits
+    // from). Never a reason for promotion to fail: without them, the feed's own location is proposed.
+    private Map<String, String> siblingRoots(final String feedFolder, final String source) {
+        try {
+            final Set<String> siblings = new SourceFolders(guard, documentAccess).siblings(
+                    PromotionLayout.parentOf(feedFolder), feedFolder, source);
+            if (siblings.isEmpty()) {
+                return Map.of();
+            }
+            final Map<String, PipelineIndex.Entry> pipelines = places.pipelines();
+            final Set<String> parents = new LinkedHashSet<>();
+            pipelines.values().forEach(entry -> {
+                if (entry.parentUuid() != null) {
+                    parents.add(entry.parentUuid());
+                }
+            });
+            final String workspace = PipelineIndex.SYSTEM + "/" + guard.workspaceFolder();
+            return PromotionLayout.siblingRoots(pipelines.values(), siblings, uuid -> {
+                final String stage = stageOrNone(uuid);
+                return stage == null
+                        ? null
+                        : PipelineShapes.STAGE_ROLES.get(stage);
+            }, entry -> parents.contains(entry.uuid()) || entry.path().equals(workspace)
+                        || entry.path().startsWith(workspace + "/"));
+        } catch (final RuntimeException e) {
+            LOGGER.debug(() -> LogUtil.message("No sibling feeds' pipelines read for {}: {}", feedFolder,
+                    e.getMessage()));
+            return Map.of();
+        }
+    }
+
+    // Each document of a role put in its role's and version's folder (PromotionLayout.layOut), each role's root as
+    // chosen. What the layout warns of, for the user.
+    private List<String> layOut(final List<PromotionLayout.Step> plan,
+                                final List<RoleRoot> roots,
+                                final Placed placed,
+                                final Map<String, ModuleChecks.Marker> markers) {
+        final Map<String, String> rootByRole = new LinkedHashMap<>();
+        roots.forEach(root -> rootByRole.put(root.role(), root.root()));
+        // The names a pipeline's name may hold whose version tokens are theirs (found in review, 2026-11-18).
+        final List<String> held = Stream.concat(placed.sources().stream(), Stream.ofNullable(placed.source())
+                .map(Source::name)).toList();
+        return layout.layOut(plan, rootByRole, placed.source() == null
+                ? null
+                : placed.source().own(), placed.group() == null
+                ? null
+                : placed.group().name(), step -> groupOf(step, placed, markers), held);
+    }
+
+    // The source type group a document of a role is laid out under: a group XSLT's own (by its mark: another
+    // group's, the build may hold), else the build's group's; null in a build of none.
+    private static String groupOf(final PromotionLayout.Step step,
+                                  final Placed placed,
+                                  final Map<String, ModuleChecks.Marker> markers) {
+        final ModuleChecks.Marker marker = markers.get(String.valueOf(step.doc().get("uuid")));
+        if (marker != null && SourceTypeModule.GROUP.equals(marker.kind())
+            && NullSafe.isNonBlankString(marker.name())) {
+            return marker.name().strip().replace('/', '-');
+        }
+        return placed.group() != null && isRole(WriteGuard.ROLES, step.role())
+                ? placed.group().name()
+                : null;
+    }
+
+    // What the layout says of each role's location, so the review (and the approval bound to it) covers them.
+    private static String rootsNote(final List<RoleRoot> roots) {
+        if (roots.isEmpty()) {
+            return "";
+        }
+        return "\n\nWhere each role goes (destinations keyed by the role change it):\n" + String.join("\n",
+                roots.stream().map(root -> "- " + root.role() + ": " + root.root() + " (" + root.why() + ")")
+                        .toList());
+    }
+
+    // The new events (or records) versions promoted, each with its predecessor: their follow-on pipelines read the
+    // predecessor's Events.
+    private Map<DocRef, DocRef> eventsVersions(final List<PromotionLayout.Step> plan,
+                                               final Map<String, String> predecessors) {
+        final Map<DocRef, DocRef> out = new LinkedHashMap<>();
+        for (final PromotionLayout.Step step : plan) {
+            final String uuid = String.valueOf(step.doc().get("uuid"));
+            if (PromotionLayout.MOVE.equals(step.action()) && PipelineDoc.TYPE.equals(step.doc().get("type"))
+                && isRole(WriteGuard.SOURCE_ROLES, step.role()) && predecessors.containsKey(uuid)) {
+                places.find(predecessors.get(uuid)).ifPresent(before -> out.put(ref(step.doc()),
+                        new DocRef(PipelineDoc.TYPE, before.getUuid(), before.getName())));
+            }
+        }
+        return out;
+    }
+
+    // What the user does once a new version is promoted (decided by the user, 2026-11-17): enable the new version's
+    // filters, then, once its output is right, the admin disables or removes the earlier version's and those still
+    // reading its Events. Never a reason for promotion to fail.
+    private List<String> nextSteps(final List<Map<String, Object>> filters,
+                                   final List<Map<String, Object>> followOnFilters,
+                                   final Map<String, String> predecessors) {
+        if (predecessors.isEmpty()) {
+            return List.of();
+        }
+        final List<String> enable = new ArrayList<>();
+        filters.stream()
+                .filter(filter -> !Boolean.TRUE.equals(filter.get("enabled")))
+                .forEach(filter -> enable.add("filter " + filter.get("filter_id") + " ('" + filter.get("pipeline")
+                                              + "')"));
+        followOnFilters.stream()
+                .filter(filter -> !Boolean.TRUE.equals(filter.get("enabled")))
+                .forEach(filter -> enable.add("filter " + filter.get("filter_id") + " ('" + filter.get("pipeline")
+                                              + "', reading the Events of '" + filter.get("reads") + "')"));
+        final List<String> earlier = new ArrayList<>();
+        for (final String predecessor : new LinkedHashSet<>(predecessors.values())) {
+            try {
+                places.find(predecessor).ifPresent(found -> {
+                    final DocRef before = new DocRef(PipelineDoc.TYPE, found.getUuid(), found.getName());
+                    final List<String> ids = filterWrites.filters(before).stream()
+                            .map(filter -> String.valueOf(filter.getId()))
+                            .toList();
+                    if (!ids.isEmpty()) {
+                        earlier.add("'" + found.getName() + "': filter " + String.join(", ", ids));
+                    }
+                });
+            } catch (final RuntimeException e) {
+                LOGGER.debug(() -> LogUtil.message("No filters of the earlier version {}: {}", predecessor,
+                        e.getMessage()));
+            }
+        }
+        final Map<String, List<String>> following = new LinkedHashMap<>();
+        followOnFilters.forEach(filter -> following.computeIfAbsent("'" + filter.get("pipeline") + "'",
+                ignored -> new ArrayList<>()).add(filter.get("copied_from") + " (reading the Events of '"
+                                                  + filter.get("in_place_of") + "')"));
+        following.forEach((pipeline, ids) -> earlier.add(pipeline + ": filter " + String.join(", ", ids)));
+        final List<String> steps = new ArrayList<>();
+        if (!enable.isEmpty()) {
+            steps.add("1. Enable the new version's filters when ready: " + String.join("; ", enable) + ".");
+        }
+        if (!earlier.isEmpty()) {
+            steps.add((steps.isEmpty()
+                    ? "1"
+                    : "2") + ". Once the new version's output is right, the admin disables or removes the earlier "
+                      + "version's filters (the tools never do): " + String.join("; ", earlier) + ".");
+        }
+        return steps;
+    }
+
+    // Where each document goes: its folder, and the role it is laid out under there (layOut puts it in its role's
+    // and version's folders below).
     private List<PromotionLayout.Step> plan(final List<Map<String, Object>> docs,
                                             final Map<String, String> destinations,
-                                            final Map<String, String> proposed,
-                                            final Map<String, String> joins,
                                             final List<String> sources,
                                             final Map<String, String> besideFeeds,
-                                            final Placed given) {
+                                            final Placed given,
+                                            final Map<String, ModuleChecks.Marker> markers) {
         final List<PromotionLayout.Step> plan = new ArrayList<>();
-        // Every document with no destination, said at once.
-        final List<Map<String, Object>> unplaced = new ArrayList<>();
         for (final Map<String, Object> doc : docs) {
             final String uuid = String.valueOf(doc.get("uuid"));
             final String type = String.valueOf(doc.get("type"));
@@ -569,27 +956,21 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 // test index, likewise, holds only the sample's documents.
                 plan.add(new PromotionLayout.Step(doc, PromotionLayout.KEEP, FeedDoc.TYPE.equals(type)
                         ? TEST_FEED_KEPT
-                        : TEST_INDEX_KEPT, null));
+                        : DashboardDoc.TYPE.equals(type)
+                                ? TEST_DASHBOARD_KEPT
+                                : TEST_INDEX_KEPT, null));
             } else if (!destinations.containsKey(uuid) && KEEP.equals(besideFeeds.get(uuid))) {
                 plan.add(new PromotionLayout.Step(doc, PromotionLayout.KEEP, "left in the workspace: a survey doc "
                                                                              + "stays in its build", null));
             } else if (!destinations.containsKey(uuid) && besideFeeds.containsKey(uuid)) {
                 String target = String.join("/", WriteGuard.folderParts(besideFeeds.get(uuid)));
-                // The group's own XSLT and output feed: in the group's folder beside the feed, its XSLT in the
-                // Events folder with its pipeline (asked for by the user: seen placed at the feed's folder, beside
-                // the common module and helpers, apart from its pipeline).
-                final boolean groups = given.group() != null && given.group().docs().contains(uuid);
-                if (groups) {
+                // The group's own output feed: in the group's folder beside the feed. A module XSLT is laid out under
+                // its role: a shared module's (Common, Helpers) in the feed's folder, a group's with its pipeline in
+                // the group's (asked for by the user: seen placed at the feed's folder, beside the common module and
+                // helpers, apart from its pipeline).
+                final String role = moduleRole(doc, markers.get(uuid));
+                if (role == null && given.group() != null && given.group().docs().contains(uuid)) {
                     target = target + "/" + given.group().name();
-                }
-                String role = groups && XsltDoc.TYPE.equals(type)
-                        ? (String) doc.get("role")
-                        : null;
-                if (doc.get("version_of") != null && joins.containsKey(target)) {
-                    // A new version of a group's XSLT goes in its pipeline's version folder, not beside the old one
-                    // (seen in e2e: two XSLTs of one name in the feed's folder, the new pipeline's in v2/).
-                    target = joins.get(target);
-                    role = null;
                 }
                 plan.add(new PromotionLayout.Step(doc, PromotionLayout.MOVE, target, role));
             } else if (KEEP.equals(NullSafe.string(destinations.get(uuid)).strip().toLowerCase(Locale.ROOT))) {
@@ -602,36 +983,46 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 plan.add(new PromotionLayout.Step(doc, PromotionLayout.KEEP, "left in the workspace: a test feed",
                         null));
             } else {
-                final Placing placing = target(doc, docs, destinations, proposed, given.source());
-                if (placing.target() == null) {
-                    unplaced.add(doc);
+                final Placing placing = target(doc, docs, destinations, given.source());
+                // A document of a role is laid out under its source's folder, whatever folder its type was given:
+                // the role's location is chosen by role (destinations keyed by role), one document's by its uuid. A
+                // new version with nowhere else to go is laid out beside its predecessor.
+                final String role = destinations.containsKey(uuid) || placing.besideProduction()
+                        ? null
+                        : firstGiven(roleOf(doc), moduleRole(doc, markers.get(uuid)));
+                final String placeTarget = role != null && given.source() != null && given.source().own() != null
+                        ? given.source().own()
+                        : firstGiven(placing.target(), role == null
+                                ? null
+                                : layout.predecessorFolder(doc)
+                                        .map(folder -> PromotionLayout.predecessor(folder).base())
+                                        .orElse(null));
+                if (placeTarget == null) {
+                    // A document of a role may yet go with its pipeline (laid out below); else it is named with the
+                    // others that have no destination.
+                    plan.add(new PromotionLayout.Step(doc, PromotionLayout.MOVE, null, role));
                     continue;
                 }
-                String target = String.join("/", WriteGuard.folderParts(placing.target()));
-                if (!destinations.containsKey(uuid) && !FeedDoc.TYPE.equals(type) && joins.containsKey(target)) {
-                    // With the version it belongs to.
-                    target = joins.get(target);
-                } else if (!destinations.containsKey(uuid) && !placing.besideProduction()
-                           && !proposed.containsKey(uuid) && given.source() != null) {
+                String target = String.join("/", WriteGuard.folderParts(placeTarget));
+                if (!destinations.containsKey(uuid) && !placing.besideProduction() && given.source() != null) {
                     // In a folder of the source's own, never straight into a parent of other sources (whose role
                     // subfolders every source would share).
                     target = given.folders().ownFolder(target, given.source().name());
-                    if (given.group() != null && doc.get("role") != null && target.equals(given.source().own())) {
-                        // An aggregated feed's build: its source type group's documents in a folder of the group's
-                        // own in the feed's (asked for by the user), the feed's shared documents beside the feed.
-                        target = target + "/" + given.group().name();
-                    }
                 }
-                plan.add(new PromotionLayout.Step(doc, PromotionLayout.MOVE, target,
-                        !destinations.containsKey(uuid) && !placing.besideProduction()
-                                ? (String) doc.get("role")
-                                : null));
+                plan.add(new PromotionLayout.Step(doc, PromotionLayout.MOVE, target, role));
             }
         }
-        besideWhatItDocuments(plan, destinations);
+        return plan;
+    }
+
+    // Every document with no destination, said at once (seen, Delinea SecretServer: raised one document at a time,
+    // the Dashboard's, then the TextConverter's, a failed call each).
+    private static void refuseUnplaced(final List<PromotionLayout.Step> plan, final Placed given) {
+        final List<Map<String, Object>> unplaced = plan.stream()
+                .filter(step -> PromotionLayout.MOVE.equals(step.action()) && step.target() == null)
+                .map(PromotionLayout.Step::doc)
+                .toList();
         if (!unplaced.isEmpty()) {
-            // Seen (Delinea SecretServer): raised one document at a time, the Dashboard's, then the TextConverter's,
-            // a failed call each.
             final Set<String> placed = new TreeSet<>(moveTargets(plan));
             final Set<String> types = new TreeSet<>();
             unplaced.forEach(doc -> types.add(String.valueOf(doc.get("type"))));
@@ -648,7 +1039,6 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                     : ". The source's own folder, as its siblings have one: " + given.source().own()
                       + " (a parent of other sources given by type is read as it)") + ". Nothing was changed.");
         }
-        return plan;
     }
 
     // A pipeline's or index's Documentation (or evaluation report), not given a destination of its own, goes
@@ -676,6 +1066,30 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 return step;
             }
             return new PromotionLayout.Step(step.doc(), PromotionLayout.MOVE, of.target(), of.role());
+        });
+    }
+
+    // A verification dashboard, not given a destination of its own, goes wherever the index it searches goes (decided
+    // by the user, 2026-11-17: dashboards with the index they search).
+    private void withWhatItSearches(final List<PromotionLayout.Step> plan, final Map<String, String> destinations) {
+        final Map<String, String> indexes = new LinkedHashMap<>();
+        plan.stream()
+                .filter(step -> PromotionLayout.MOVE.equals(step.action())
+                                && INDEX_TYPES.contains(String.valueOf(step.doc().get("type"))))
+                .forEach(step -> indexes.put(String.valueOf(step.doc().get("uuid")), step.target()));
+        if (indexes.isEmpty()) {
+            return;
+        }
+        plan.replaceAll(step -> {
+            if (!PromotionLayout.MOVE.equals(step.action()) || !DashboardDoc.TYPE.equals(step.doc().get("type"))
+                || destinations.containsKey(String.valueOf(step.doc().get("uuid")))) {
+                return step;
+            }
+            return searched(ref(step.doc())).stream()
+                    .filter(indexes::containsKey)
+                    .findFirst()
+                    .map(index -> step.withTarget(indexes.get(index)))
+                    .orElse(step);
         });
     }
 
@@ -716,13 +1130,12 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     }
 
     // An aggregated feed's modules (its helpers, common module and groups, by the marker the generator
-    // writes in each) and its groups' output feeds of their own: beside the feed, where a later build finds them
-    // through the registry. Not working copies (written back where their originals are), nor a new version's
-    // documents (in its version folder), nor any given a destination.
+    // writes in each) and its groups' output feeds of their own: under the feed, where a later build finds them
+    // through the registry (each module laid out in its role's version folder there). Not working copies (written
+    // back where their originals are), nor any given a destination.
     private Map<String, String> modulesBeside(final String build,
                                               final List<Map<String, Object>> docs,
                                               final Map<String, String> destinations,
-                                              final Map<String, String> proposed,
                                               final SourceFolders folders,
                                               final Map<String, ModuleChecks.Marker> markers) {
         final Optional<String> feed = docs.stream()
@@ -739,7 +1152,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
         final Map<String, String> out = new LinkedHashMap<>();
         for (final Map<String, Object> doc : docs) {
             final String uuid = String.valueOf(doc.get("uuid"));
-            if (destinations.containsKey(uuid) || proposed.containsKey(uuid) || doc.get("working_copy_of") != null) {
+            if (destinations.containsKey(uuid) || doc.get("working_copy_of") != null) {
                 continue;
             }
             if (markers.containsKey(uuid) || (FeedDoc.TYPE.equals(doc.get("type")) && groupOutput(build, doc))) {
@@ -834,12 +1247,11 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     private Placing target(final Map<String, Object> doc,
                            final List<Map<String, Object>> docs,
                            final Map<String, String> destinations,
-                           final Map<String, String> proposed,
                            final Source source) {
         final String uuid = String.valueOf(doc.get("uuid"));
         final String type = String.valueOf(doc.get("type"));
         final String name = String.valueOf(doc.get("name"));
-        String target = firstGiven(destinations.get(uuid), proposed.get(uuid), destinations.get(type));
+        String target = firstGiven(destinations.get(uuid), destinations.get(type));
         if (target == null && DocumentationDoc.TYPE.equals(type)
             && (name.endsWith(" source notes") || name.contains(" reference - "))) {
             // The source's notes and reference documents: beside the feed, where later work on it looks (in the
@@ -863,10 +1275,10 @@ class PromoteBuildTool extends AbstractBuiltInTool {
             target = same == null
                     ? null
                     : firstGiven(destinations.get(String.valueOf(same.get("uuid"))),
-                            proposed.get(String.valueOf(same.get("uuid"))), destinations.get(PipelineDoc.TYPE));
+                            destinations.get(PipelineDoc.TYPE));
         }
         if (target == null && DashboardDoc.TYPE.equals(type)) {
-            target = dashboardTarget(doc, docs, destinations, proposed);
+            target = dashboardTarget(doc, docs, destinations);
         }
         if (target == null && DocumentationDoc.TYPE.equals(type)) {
             target = besideProductionDoc(docs, name);
@@ -894,50 +1306,11 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                 : null;
     }
 
-    // The build's test feeds: named as the tools name one (OutputFeeds.TEST_FEED), or recorded as the Events
-    // output of the feeds the build works from (not a source type group's own output feed).
-    private Set<String> testFeeds(final String build, final List<Map<String, Object>> docs) {
-        final Set<String> out = new LinkedHashSet<>();
-        for (final Map<String, Object> feed : ofType(docs, FeedDoc.TYPE)) {
-            final String uuid = String.valueOf(feed.get("uuid"));
-            if (feed.get("working_copy_of") != null) {
-                continue;
-            }
-            final Map<String, Object> entry = buildRecords.entry(build, uuid);
-            final boolean named = String.valueOf(feed.get("name")).toUpperCase(Locale.ROOT)
-                    .endsWith(OutputFeeds.TEST_FEED);
-            final boolean recorded = entry.get(BuildFeeds.OUTPUT_FOR) != null
-                                     && entry.get(BuildFeeds.GROUP_OUTPUT) == null;
-            if (named || recorded) {
-                out.add(uuid);
-            }
-        }
-        // The build's test indexes (BuildTestIndexes), standing in for production indexes while it was open.
-        final Set<String> listed = new LinkedHashSet<>();
-        docs.forEach(doc -> listed.add(String.valueOf(doc.get("uuid"))));
-        testIndexes(build).keySet().stream().filter(listed::contains).forEach(out::add);
-        return out;
-    }
-
     // The build's test indexes, each with the production index doc's UUID it stands in for; none without the tool.
     private Map<String, String> testIndexes(final String build) {
         return testIndexesProvider == null
                 ? Map.of()
                 : testIndexesProvider.get().testIndexes(build);
-    }
-
-    // What the layout says of the test feeds kept, for the user and the agent: never promoted, nothing to offer.
-    private static String testFeedNote(final List<PromotionLayout.Step> plan, final Set<String> testFeeds) {
-        final List<String> kept = plan.stream()
-                .filter(step -> PromotionLayout.KEEP.equals(step.action())
-                                && FeedDoc.TYPE.equals(step.doc().get("type"))
-                                && testFeeds.contains(String.valueOf(step.doc().get("uuid"))))
-                .map(step -> String.valueOf(step.doc().get("name")))
-                .toList();
-        return kept.isEmpty()
-                ? ""
-                : "\n\nThe build's test feed " + String.join(", ", kept) + " stays in the build's workspace: it holds "
-                  + "only the sample's Events and is never promoted.";
     }
 
     // The source the build's documents are of (the feed it works from, its registry's, or its only new feed) and
@@ -983,8 +1356,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     // of its destination), else beside the pipelines.
     private String dashboardTarget(final Map<String, Object> doc,
                                    final List<Map<String, Object>> docs,
-                                   final Map<String, String> destinations,
-                                   final Map<String, String> proposed) {
+                                   final Map<String, String> destinations) {
         final Set<String> searched = searched(ref(doc));
         final Map<String, Object> index = docs.stream()
                 .filter(d -> INDEX_TYPES.contains(String.valueOf(d.get("type")))
@@ -1005,7 +1377,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                     .toList();
             if (feeding.size() == 1) {
                 final String feedingUuid = String.valueOf(feeding.getFirst().get("uuid"));
-                target = firstGiven(destinations.get(feedingUuid), proposed.get(feedingUuid));
+                target = destinations.get(feedingUuid);
             }
         }
         return target != null
@@ -1084,32 +1456,46 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     // call, and the user approved a form whose layout was never shown).
     private static Map<String, Object> review(final String build,
                                               final String tree,
+                                              final String bound,
                                               final List<String> warnings,
                                               final List<String> processed,
-                                              final boolean roles,
+                                              final List<RoleRoot> roots,
                                               final Object reviewed) {
         final Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", "needs_review");
         result.put("build", build);
         result.put("layout", tree);
-        result.put("review_id", Consent.reviewId(tree));
+        result.put("review_id", Consent.reviewId(bound));
         if (!warnings.isEmpty()) {
             result.put("warnings", warnings);
         }
         if (!processed.isEmpty()) {
             result.put("processing_after_promotion", processed);
         }
+        final List<Map<String, Object>> locations = new ArrayList<>();
+        for (final RoleRoot root : roots) {
+            final Map<String, Object> location = new LinkedHashMap<>();
+            location.put("role", root.role());
+            location.put("location", root.root());
+            location.put("why", root.why());
+            location.put("options", root.options());
+            locations.add(location);
+        }
+        if (!locations.isEmpty()) {
+            result.put("role_locations", locations);
+        }
+        final boolean asked = roots.stream().allMatch(root -> !root.toAsk());
         result.put("hint", "Show the user the layout in the chat exactly as it is (a code block), with any warnings "
                            + "and the processing after promotion, and ask them to confirm it or say what to change "
-                           + "(a folder: destinations by type or document uuid)"
-                           + (roles
-                ? "; and whether to keep the build's role subfolders under each destination, as shown "
-                  + "(role_subfolders=false puts each document straight in its folder: show the tree again)"
-                : "")
-                           + ". Once they confirm it, promote_build again with the same destinations"
-                           + (roles
-                ? " and role_subfolders"
-                : "") + " and reviewed='" + Consent.reviewId(tree) + "' (this layout's review_id): they approve it "
+                           + "(a folder: destinations by type or document uuid; a role's location: destinations "
+                           + "keyed by the role, e.g. {'Indexing': '/Elastic Indices'})"
+                           + (asked
+                ? ""
+                : "; and where each role's documents go (role_locations: the first option is proposed, the "
+                  + "others are the feed's own location or a folder the user names): their answer goes in "
+                  + "destinations keyed by the role, then show the tree again")
+                           + ". Once they confirm it, promote_build again with the same destinations and reviewed='"
+                           + Consent.reviewId(bound) + "' (this layout's review_id): they approve it "
                            + "in a short form. If they change something, call again with their changes and no "
                            + "reviewed: the new layout is shown the same way." + Consent.reviewNote(reviewed));
         return result;
@@ -1413,6 +1799,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                          final List<String> done,
                                          final List<String> warnings,
                                          final List<Map<String, Object>> filters,
+                                         final List<Map<String, Object>> followOnFilters,
                                          final Map<String, String> predecessors) {
         final List<Map<String, Object>> links = new ArrayList<>();
         for (final String path : new TreeSet<>(moveTargets(plan))) {
@@ -1459,16 +1846,24 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                                 + "offer if it finds none, or if the folder's AGENTS doc says them "
                                                 + "already.");
         }
+        // No buttons disabling an earlier version's filters (decided by the user, 2026-11-17): disabling and
+        // removing them is the admin's, once the new version's output is right; the next steps say which.
         final List<Object> buttons = new ArrayList<>();
-        for (final Map<String, Object> filter : filters) {
+        for (final Map<String, Object> filter : Stream.concat(filters.stream(), followOnFilters.stream()).toList()) {
             final Object actions = filter.remove(UserActionEntries.USER_ACTIONS);
             if (actions instanceof final List<?> list) {
                 buttons.addAll(list);
             }
         }
-        predecessors.values().forEach(predecessor -> buttons.addAll(disableEarlier(context, predecessor)));
         if (!buttons.isEmpty()) {
             result.put(UserActionEntries.USER_ACTIONS, buttons);
+        }
+        if (!followOnFilters.isEmpty()) {
+            result.put("follow_on_filters", followOnFilters);
+        }
+        final List<String> nextSteps = nextSteps(filters, followOnFilters, predecessors);
+        if (!nextSteps.isEmpty()) {
+            result.put("next_steps", nextSteps);
         }
         if (!filters.isEmpty()) {
             result.put("processing_filters", filters);
@@ -1478,39 +1873,15 @@ class PromoteBuildTool extends AbstractBuiltInTool {
                                + "Processors tab when ready. Enabled, it processes everything on its feed, existing "
                                + "data included, and what the build processed again: if an earlier version still "
                                + "processes the same feed, it processes that history again, so decide with them "
-                               + "first (disable the earlier one, or limit the filter in Stroom)."
+                               + "first (limit the filter in Stroom, say). Give them the next_steps as they are: "
+                               + "disabling or removing the earlier version's filters is the admin's, never the "
+                               + "tools'."
                                + (filters.stream().anyMatch(f -> f.get("before_enabling") != null)
                     ? " A filter with before_enabling indexes into an index that must start fresh: ask the user to "
                       + "have it done first, as it says (an index left as it is holds the build's events twice)."
                     : ""));
         }
         return result;
-    }
-
-    // A suggestion: never a reason for promotion to fail.
-    private List<Map<String, Object>> disableEarlier(final ToolCallContext context, final String predecessor) {
-        try {
-            final DocRef earlier = places.find(predecessor)
-                    .map(found -> new DocRef(PipelineDoc.TYPE, found.getUuid(), found.getName()))
-                    .orElse(null);
-            if (earlier == null) {
-                return List.of();
-            }
-            final List<Map<String, Object>> buttons = new ArrayList<>();
-            for (final ProcessorFilter filter : filterWrites.filters(earlier)) {
-                if (filter.isEnabled()) {
-                    buttons.add(UserActionEntries.disableFilter(context.links(), filter.getId(), earlier,
-                            "the earlier version; once the new one takes over, if you choose", true));
-                }
-            }
-            return buttons;
-        } catch (final RuntimeException e) {
-            LOGGER.debug(() -> LogUtil.message(
-                    "No filters of the earlier version {}: {}",
-                    predecessor,
-                    e.getMessage()));
-            return List.of();
-        }
     }
 
     private static Map<String, String> destinations(final ToolCall call) {
@@ -1537,7 +1908,7 @@ class PromoteBuildTool extends AbstractBuiltInTool {
 
     private static List<String> moveTargets(final List<PromotionLayout.Step> plan) {
         return plan.stream()
-                .filter(p -> PromotionLayout.MOVE.equals(p.action()))
+                .filter(p -> PromotionLayout.MOVE.equals(p.action()) && p.target() != null)
                 .map(PromotionLayout.Step::target)
                 .toList();
     }
@@ -1572,6 +1943,20 @@ class PromoteBuildTool extends AbstractBuiltInTool {
 
     }
 
+    /// A role's root: the folder holding the feed's folders of that role (the feed's own location keeps them in
+    /// `<feed>/<Role>/<version>`; another, `<root>/<feed>/<version>`).
+    ///
+    /// @param role    The role, e.g. `Indexing`.
+    /// @param root    The root chosen, from System.
+    /// @param why     Where it came from, for the user.
+    /// @param options The roots offered: the proposal first, then the feed's own location where it differs (the user
+    ///                may name another).
+    /// @param toAsk   True if it is the proposal, the user not asked yet.
+    record RoleRoot(String role, String root, String why, List<String> options, boolean toAsk) {
+
+    }
+
+
     /// The source a build's documents are of.
     ///
     /// @param name The source feed's name.
@@ -1586,7 +1971,9 @@ class PromoteBuildTool extends AbstractBuiltInTool {
     /// @param source    The source, or null.
     /// @param folders   Tells a folder of the source's own from a parent of sources.
     /// @param group     An aggregated feed's build's source type group, or null.
-    private record Placed(Set<String> testFeeds, Source source, SourceFolders folders, GroupPlace group) {
+    /// @param sources   The feeds the build works from.
+    private record Placed(Set<String> testFeeds, Source source, SourceFolders folders, GroupPlace group,
+                          List<String> sources) {
 
     }
 

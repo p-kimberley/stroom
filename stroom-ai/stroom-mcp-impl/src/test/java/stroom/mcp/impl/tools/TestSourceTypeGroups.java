@@ -47,7 +47,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,12 +70,27 @@ class TestSourceTypeGroups {
              {"path": "EventSource/Generator", "value": "Pega"},
              {"path": "EventSource/Device/HostName", "field": "hostname"}]""";
 
+    // The build's sample records, a line each, by source type: a security login, an integration call, and a DB
+    // record written as a login (as the security group reads it).
+    private static final String SECURITY_LOGIN = record("PegaSecurityEvent",
+            "{\\\"eventType\\\": \\\"login\\\", \\\"operatorId\\\": \\\"alice\\\"}");
+    private static final String INTEGRATION_CALL = record("PegaIntegration",
+            "Request: <Envelope><Header><CorrelationId>c-1</CorrelationId></Header></Envelope>");
+    private static final String DB_LOGIN = record("PegaDB",
+            "{\\\"eventType\\\": \\\"login\\\", \\\"operatorId\\\": \\\"bob\\\"}");
+
     private final TranslationWorld world = new TranslationWorld();
     private final BuildTranslationXsltTool tool = world.buildTool();
     private final List<String> written = new ArrayList<>();
+    // The text of the build's sample stream, which each save is checked against.
+    private String sample = SECURITY_LOGIN + INTEGRATION_CALL + DB_LOGIN;
 
     @BeforeEach
     void setUp() {
+        // The build's own sample stream: a save given neither sample nor stream_ids is checked against it.
+        world.facts.ownRaw = List.of(1L);
+        Mockito.when(world.sampleStreamTexts.read(List.of(1L))).thenAnswer(inv -> new SampleStreamTexts.Texts(
+                Map.of("stream 1", sample), List.of()));
         // The build holds the feed's registry, as record_source_types made it.
         world.world.inBuild(BUILD, DocumentationDoc.TYPE, "PEGA source types", "r");
         // The registry as last written, as the build holds it.
@@ -302,7 +316,7 @@ class TestSourceTypeGroups {
                 doc(docs.get("PEGA helpers"), "PEGA helpers", "o-helpers"),
                 doc(docs.get("PEGA common"), "PEGA common", "o-common"));
 
-        final List<String> done = world.groups.toOriginals(world.context(), BUILD, listed, Set.of());
+        final List<String> done = world.groups.toOriginals(world.context(), BUILD, listed);
 
         assertThat(done).anySatisfy(line -> assertThat(line).contains("pointed 'PEGA security' at the originals"));
         // The group (new) imports the common module's original, which imports the helpers' original; the kept
@@ -556,6 +570,28 @@ class TestSourceTypeGroups {
     }
 
     @Test
+    void whereANewGroupsEventsGoIsTakenAsTheUserSaidOnceItsFormCouldntBeShown() {
+        // Seen over /mcp: the client answered the placement form with an error, and as own_output_feed was read
+        // only after asking, every call was refused the same way.
+        world.forms = true;
+        world.unshowable.add("Source type group 'PEGA security'");
+        final Map<String, Object> asked = new LinkedHashMap<>(args(security(), "PEGA security",
+                List.of("PegaSecurityEvent")));
+        asked.remove("own_output_feed");
+
+        final Map<String, Object> refused = world.call(tool, asked);
+
+        assertThat(String.valueOf(refused.get("error"))).contains("The client couldn't show the form",
+                "Ask the user where its Events go", "own_output_feed=false (the same feed)", "Nothing was saved");
+        assertThat(placementForms()).hasSize(1);
+        asked.put("own_output_feed", true);
+        final Map<String, Object> saved = world.call(tool, asked);
+        assertThat(saved.get("problems")).as("%s", saved).isEqualTo(List.of());
+        assertThat(placementForms()).as("not asked again").hasSize(1);
+        assertThat(rowNamed(written.getLast(), "PegaSecurityEvent")).containsEntry("output_feed", "");
+    }
+
+    @Test
     void anOwnOutputFeedGivenForAGroupPlacedAlreadyIsSaidToBeIgnored() {
         world.call(tool, args(security(), "PEGA security", List.of("PegaSecurityEvent")));
         final Map<String, Object> given = new LinkedHashMap<>(args(security(), "PEGA security",
@@ -756,37 +792,6 @@ class TestSourceTypeGroups {
         assertThat(world.groups.groupOf(BUILD, xsltsInBuild().get("PEGA security"))).hasValueSatisfying(found ->
                 assertThat(found.group()).isEqualTo("PEGA security"));
         assertThat(world.groups.groupOf(BUILD, xsltsInBuild().get("PEGA common"))).isEmpty();
-    }
-
-    @Test
-    void promotionLeavesAWorkingCopyTheUserKeptAsItIs() {
-        world.call(tool, args(security(), "PEGA security", List.of("PegaSecurityEvent")));
-        final Map<String, String> docs = xsltsInBuild();
-        // The common module's original, in production, as the kept copy's: it has the parts the group calls.
-        final String groupCode = world.xslt(docs.get("PEGA security")).getData();
-        final String commonCode = world.xslt(docs.get("PEGA common")).getData();
-        world.world.add(XsltDoc.TYPE, "PEGA common", world.world.folder("System/Feeds/PEGA").uuid, "o-common");
-        world.world.docs.put("o-common", XsltDoc.builder().uuid("o-common").name("PEGA common")
-                .data(commonCode).build());
-        final List<Map<String, Object>> listed = List.of(
-                doc(docs.get("PEGA security"), "PEGA security", null),
-                doc(docs.get("PEGA helpers"), "PEGA helpers", "o-helpers"),
-                doc(docs.get("PEGA common"), "PEGA common", "o-common"));
-
-        assertThat(world.groups.keptProblems(BUILD, listed, Set.of(docs.get("PEGA common")))).isEmpty();
-        world.groups.toOriginals(world.context(), BUILD, listed, Set.of(docs.get("PEGA common")));
-
-        // The kept copy is as it was; the group promoted imports the original.
-        assertThat(world.xslt(docs.get("PEGA common")).getData()).isEqualTo(commonCode);
-        assertThat(world.xslt(docs.get("PEGA security")).getData()).isNotEqualTo(groupCode)
-                .contains("uuid='o-common'");
-
-        // An original lacking a part the group calls: promotion would break it, so it is refused.
-        world.world.docs.put("o-common", XsltDoc.builder().uuid("o-common").name("PEGA common")
-                .data(commonCode.replace("pega_common_device", "pega_common_old")).build());
-        assertThat(world.groups.keptProblems(BUILD, listed, Set.of(docs.get("PEGA common"))))
-                .singleElement().satisfies(problem -> assertThat(problem).contains("PEGA security",
-                        "PEGA common", "pega_common_device"));
     }
 
     @Test
@@ -1007,9 +1012,17 @@ class TestSourceTypeGroups {
                  "ignored_fields": ["app"],
                  "events": [{"name": "call",
                              "fields": [{"path": "EventDetail/TypeId", "field": "direction"},
-                                        {"path": "EventDetail/Unknown/Data", "data_name": "correlation",
+                                        {"path": "EventDetail/Authenticate/Action", "value": "Logon"},
+                                        {"path": "EventDetail/Authenticate/Device/HostName", "field": "hostname"},
+                                        {"path": "EventDetail/Authenticate/Data", "data_name": "correlation",
                                          "field": "soap/Envelope/Header/CorrelationId"}]}]}"""
                 .formatted(WRAPPER.replace("\"PEGA\"", "\"PEGA Integration\"")));
+    }
+
+    // A sample record of the source type, its message as given (escaped for a JSON string).
+    private static String record(final String sourceType, final String message) {
+        return "{\"timestamp\": \"2026-09-28T10:00:00.000Z\", \"hostname\": \"h1\", \"sourcetype\": \""
+               + sourceType + "\", \"app\": \"pega\", \"message\": \"" + message + "\"}\n";
     }
 
     @SuppressWarnings("unchecked")

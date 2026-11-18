@@ -606,6 +606,94 @@ class TestDraftMapping extends DraftFixtures {
     }
 
     @Test
+    void aKeyValueQuoteEscapedWithABackslashStaysEscapedAsInStroomAndTheDraftUnescapesIt() {
+        // Found testing awkward values (2026-11-18): key=value values quoted with backslash escapes (\" and \\)
+        // were read whole by the converter but kept their backslashes, so the events said 'say \"hi\"'.
+        final String text = String.join("\n",
+                "ts=2026-11-18T10:00:00Z user=alice msg=\"say \\\"hi\\\" from C:\\\\temp\" action=login",
+                "ts=2026-11-18T10:01:00Z user=bob msg=\"plain words\" action=logout",
+                "ts=2026-11-18T10:02:00Z user=carol msg=\"no escapes\" action=login") + "\n";
+        final Map<String, Object> drafted = draft(List.of(text), "");
+        final Map<String, Object> message = JsonValues.maps(mappingOf(drafted).get("common")).stream()
+                .filter(f -> "msg".equals(f.get("field")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(message.get("transform")).isEqualTo("unescape_backslashes");
+        assertThat(String.valueOf(drafted.get("notes"))).contains("unescape_backslashes");
+        // Fields with no escape are left alone.
+        assertThat(JsonValues.maps(mappingOf(drafted).get("common")).stream()
+                .filter(f -> "user".equals(f.get("field"))).findFirst().orElseThrow()).doesNotContainKey("transform");
+    }
+
+    @Test
+    void aSyslogBodysKeyValueQuoteEscapedWithABackslashIsUnescapedToo() {
+        // Seen in the agent eval (case 25): the splitter a syslog header with a key_value body, msg="say \"hi\"",
+        // and the draft read msg with no transform, so the events said 'say \"hi\"'.
+        final String text = String.join("\n",
+                "<134>1 2026-10-02T11:00:00.000Z wf01 webfilter 2211 - - user=alice action=allow msg=\"ok\"",
+                "<134>1 2026-10-02T11:01:00.000Z wf01 webfilter 2211 - - user=bob action=block "
+                + "msg=\"say \\\"hi\\\" to phishing\"",
+                "<134>1 2026-10-02T11:02:00.000Z wf01 webfilter 2211 - - user=carol action=block "
+                + "msg=\"saved to C:\\\\temp\"") + "\n";
+        final SplitterSpec splitter = specOf("""
+                {"kind": "syslog", "rfc": "rfc5424", "body": {"kind": "key_value", "quote": "\\""}}""");
+        final Map<String, Object> drafted = DraftMapping.draft(List.of(text), "Web filter", "Web filter", "Prod",
+                null, null, splitter);
+        final List<Map<String, Object>> entries = new ArrayList<>(JsonValues.maps(mappingOf(drafted).get("common")));
+        JsonValues.maps(mappingOf(drafted).get("events")).forEach(rule -> entries.addAll(JsonValues.maps(
+                rule.get("fields"))));
+        assertThat(entries).filteredOn(entry -> "msg".equals(entry.get("field"))).isNotEmpty()
+                .allSatisfy(entry -> assertThat(entry.get("transform")).isEqualTo("unescape_backslashes"));
+        assertThat(entries).filteredOn(entry -> "user".equals(entry.get("field"))).isNotEmpty()
+                .allSatisfy(entry -> assertThat(entry).doesNotContainKey("transform"));
+        assertThat(String.valueOf(drafted.get("notes"))).contains("['msg'] hold quotes escaped with a backslash");
+    }
+
+    @Test
+    void aSyslogBodysCsvDoubledQuoteIsUnescapedButNotTheHeadersFields() {
+        // A delimited spec nested in a splitter spec (here a syslog header's body) was passed over: only a top-level
+        // one had its doubled quotes read with unescape_quotes, so the events said 'say ""hi""'.
+        final String text = String.join("\n",
+                "<134>1 2026-10-02T11:00:00.000Z wf01 webfilter 2211 - - alice,allow,\"ok\"",
+                "<134>1 2026-10-02T11:01:00.000Z wf01 webfilter 2211 - - bob,block,\"say \"\"hi\"\" to phishing\"",
+                "<134>1 2026-10-02T11:02:00.000Z wf01 webfilter 2211 - - carol,block,\"quoted \"\"x\"\"\"") + "\n";
+        final SplitterSpec splitter = specOf("""
+                {"kind": "syslog", "rfc": "rfc5424", "body": {"kind": "delimited", "quote": "\\"",
+                 "header": ["user", "action", "msg"]}}""");
+        final Map<String, Object> drafted = DraftMapping.draft(List.of(text), "Web filter", "Web filter", "Prod",
+                null, null, splitter);
+
+        final List<Map<String, Object>> entries = draftedEntries(drafted);
+        assertThat(entries).filteredOn(entry -> "msg".equals(entry.get("field"))).isNotEmpty()
+                .allSatisfy(entry -> assertThat(entry.get("transform")).isEqualTo("unescape_quotes"));
+        assertThat(entries).filteredOn(entry -> entry.get("transform") != null)
+                .allSatisfy(entry -> assertThat(entry.get("field")).isEqualTo("msg"));
+        assertThat(String.valueOf(drafted.get("notes"))).contains("['msg'] hold doubled quotes");
+    }
+
+    @Test
+    void anAlternativesPartsBodysCsvDoubledQuoteIsUnescaped() {
+        // The delimited spec two deep: an alternatives part's syslog header's body.
+        final String text = String.join("\n",
+                "<134>1 2026-10-02T11:00:00.000Z wf01 webfilter 2211 - - alice,allow,\"say \"\"hi\"\"\"",
+                "PLAIN bob block",
+                "<134>1 2026-10-02T11:01:00.000Z wf01 webfilter 2211 - - carol,block,\"ok\"") + "\n";
+        final SplitterSpec splitter = specOf("""
+                {"kind": "alternatives", "variant_field": "format",
+                 "parts": [{"kind": "syslog", "rfc": "rfc5424", "variant": "syslog",
+                            "body": {"kind": "delimited", "quote": "\\"", "header": ["user", "action", "msg"]}},
+                           {"kind": "regex", "variant": "plain", "pattern": "^PLAIN (\\\\S+) (\\\\S+)$",
+                            "names": ["user", "action"]}]}""");
+        final Map<String, Object> drafted = DraftMapping.draft(List.of(text), "Web filter", "Web filter", "Prod",
+                null, null, splitter);
+
+        assertThat(draftedEntries(drafted)).filteredOn(entry -> "msg".equals(entry.get("field"))).isNotEmpty()
+                .allSatisfy(entry -> assertThat(entry.get("transform")).isEqualTo("unescape_quotes"));
+        assertThat(draftedEntries(drafted)).filteredOn(entry -> "user".equals(entry.get("field"))).isNotEmpty()
+                .allSatisfy(entry -> assertThat(entry).doesNotContainKey("transform"));
+    }
+
+    @Test
     void syslogNilValuesAreLeftOutAndNeverNameTheKind() {
         final Map<String, Object> drafted = draft(List.of(format("syslog5424_kv")), "");
         assertThat(mappingOf(drafted).get("nil_values")).isEqualTo(List.of("-"));
@@ -1356,5 +1444,13 @@ class TestDraftMapping extends DraftFixtures {
                     : "outbound"));
         }
         return String.join("\n", lines) + "\n";
+    }
+
+    // The draft's common entries and its rules' fields.
+    private static List<Map<String, Object>> draftedEntries(final Map<String, Object> drafted) {
+        final List<Map<String, Object>> entries = new ArrayList<>(JsonValues.maps(mappingOf(drafted).get("common")));
+        JsonValues.maps(mappingOf(drafted).get("events")).forEach(rule -> entries.addAll(JsonValues.maps(
+                rule.get("fields"))));
+        return entries;
     }
 }

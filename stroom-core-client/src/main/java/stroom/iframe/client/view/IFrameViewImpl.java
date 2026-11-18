@@ -117,8 +117,10 @@ public class IFrameViewImpl extends ViewWithUiHandlers<IFrameLoadUiHandlers> imp
     /// each below those of the sections it is in, so the headings of every section the view is in show, and any
     /// of them can be collapsed from there (asked for by the user). The frame's document has no script of its
     /// own, so each heading's place is measured from here: again when the frame is resized, its fonts load, or a
-    /// section opens (a closed one's headings have no size). Does nothing for a document this page can't see
-    /// into, or one with no sections.
+    /// section opens (a closed one's headings have no size), at most once a frame, however many sections
+    /// open or close at once (e.g. Expand all on a document of hundreds of headings, each measuring them all).
+    /// As it scrolls, only the few sections at the top of the view are measured, found from where the sections
+    /// were when last placed. Does nothing for a document this page can't see into, or one with no sections.
     private native void pinHeadings(Element frameElement) /*-{
         var doc = null;
         try {
@@ -135,14 +137,55 @@ public class IFrameViewImpl extends ViewWithUiHandlers<IFrameLoadUiHandlers> imp
                 ? container
                 : doc.scrollingElement || doc.documentElement;
         };
+        // Where the scroller's content is, in the frame's view: an element's top less this is its place in the
+        // content, however far it has scrolled.
+        var contentOrigin = function (box) {
+            var page = box === doc.scrollingElement || box === doc.documentElement;
+            return (page ? 0 : box.getBoundingClientRect().top) - box.scrollTop;
+        };
+        // The shown sections (none in a closed one), in document order, so in the order they start, each with where
+        // it starts and ends in the scroller's content and the shown section it is in, as last placed: the lowest
+        // pinned heading is looked for among the few at the top of the view, rather than by measuring every heading
+        // each time it scrolls.
+        var extents = [];
         var lowest = null;
         // The lowest heading pinned has a shadow beneath it, for a sense of depth (asked for by the user).
         var markLowest = function () {
+            var box = scroller();
+            var viewTop = box.scrollTop;
+            var viewBottom = viewTop + box.clientHeight;
+            // The first section starting in the view or below it.
+            var low = 0;
+            var high = extents.length;
+            while (low < high) {
+                var middle = (low + high) >> 1;
+                if (extents[middle].top < viewTop) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            // A pinned heading's section is one the top of the view is in, or one starting in the view (below
+            // headings pinned above it): the section starting last above the view and those it is in, and those
+            // starting in the view.
+            var candidates = [];
+            for (var above = low > 0 ? extents[low - 1] : null; above; above = above.outer) {
+                if (above.bottom > viewTop) {
+                    candidates.push(above);
+                }
+            }
+            for (var i = low; i < extents.length && extents[i].top < viewBottom; i++) {
+                candidates.push(extents[i]);
+            }
+            // All of them measured before the shadow moves, so the layout is worked out once, if at all.
             var found = null;
-            Array.prototype.forEach.call(doc.querySelectorAll('.markdown-section__heading'), function (summary) {
-                var top = summary.getBoundingClientRect().top;
-                if (summary.parentElement.getBoundingClientRect().top < top - 0.5) {
+            var foundIndex = -1;
+            candidates.forEach(function (extent) {
+                var summary = extent.summary;
+                if (extent.index > foundIndex
+                    && summary.parentElement.getBoundingClientRect().top < summary.getBoundingClientRect().top - 0.5) {
                     found = summary;
+                    foundIndex = extent.index;
                 }
             });
             if (found !== lowest) {
@@ -165,40 +208,82 @@ public class IFrameViewImpl extends ViewWithUiHandlers<IFrameLoadUiHandlers> imp
                 });
             }
         };
+        var placing = false;
+        var placeSoon = function () {
+            if (!placing) {
+                placing = true;
+                doc.defaultView.requestAnimationFrame(function () {
+                    placing = false;
+                    place();
+                });
+            }
+        };
+        // A style set only when it changes, so placing them again as they were leaves the layout as it was.
+        var setStyle = function (element, name, value) {
+            if (element.style[name] !== value) {
+                element.style[name] = value;
+            }
+        };
         var place = function () {
             // Pinned at the very top, over the page's own padding, rather than leaving a gap above the headings.
-            var padding = parseFloat(doc.defaultView.getComputedStyle(scroller()).paddingTop) || 0;
+            var box = scroller();
+            var padding = parseFloat(doc.defaultView.getComputedStyle(box).paddingTop) || 0;
             var sections = doc.querySelectorAll('details.markdown-section');
-            // Every height first, then every place, so the layout is worked out once.
+            // Everything measured first, then every place, so the layout is worked out once.
+            var origin = contentOrigin(box);
             var heights = Array.prototype.map.call(sections, function (section) {
                 return section.firstElementChild.getBoundingClientRect().height;
             });
+            var rects = Array.prototype.map.call(sections, function (section) {
+                return section.getBoundingClientRect();
+            });
             var placed = new Map();
+            extents = [];
             Array.prototype.forEach.call(sections, function (section, i) {
                 var outer = section.parentElement.closest('details.markdown-section');
-                var above = outer ? placed.get(outer) : {bottom: 0, depth: -1};
+                var above = outer ? placed.get(outer) : {bottom: 0, depth: -1, shown: true, open: true};
                 var top = above.bottom;
                 var depth = above.depth + 1;
-                placed.set(section, {bottom: top + heights[i], depth: depth});
                 var summary = section.firstElementChild;
-                summary.style.top = (top - padding) + 'px';
+                // A section in a closed one isn't shown.
+                var shown = above.shown && above.open;
+                var extent = null;
+                if (shown) {
+                    extent = {
+                        index: extents.length,
+                        summary: summary,
+                        top: rects[i].top - origin,
+                        bottom: rects[i].bottom - origin,
+                        outer: outer ? placed.get(outer).extent : null
+                    };
+                    extents.push(extent);
+                }
+                placed.set(section, {
+                    bottom: top + heights[i],
+                    depth: depth,
+                    shown: shown,
+                    open: section.open,
+                    extent: extent
+                });
+                setStyle(summary, 'top', (top - padding) + 'px');
                 // An outer heading over an inner one that is scrolling away beneath it.
-                summary.style.zIndex = String(Math.max(2, 20 - depth));
+                setStyle(summary, 'zIndex', String(Math.max(2, 20 - depth)));
                 if (summary.firstElementChild) {
                     // A link to a heading puts it below the headings pinned above it.
-                    summary.firstElementChild.style.scrollMarginTop = (top - padding) + 'px';
+                    setStyle(summary.firstElementChild, 'scrollMarginTop', (top - padding) + 'px');
                 }
             });
             doc.documentElement.classList.add('markdown-pinned-headings');
             markSoon();
         };
         place();
-        doc.addEventListener('toggle', place, true);
+        // Each section opened or closed has its own toggle event (and an open one each as it loads).
+        doc.addEventListener('toggle', placeSoon, true);
         doc.addEventListener('scroll', markSoon, {capture: true, passive: true});
         // As the page's width changes (the frame resized, or its edge dragged), its headings wrap differently.
-        new doc.defaultView.ResizeObserver(place).observe(doc.querySelector('.markdown') || doc.body);
+        new doc.defaultView.ResizeObserver(placeSoon).observe(doc.querySelector('.markdown') || doc.body);
         if (doc.fonts && doc.fonts.ready) {
-            doc.fonts.ready.then(place);
+            doc.fonts.ready.then(placeSoon);
         }
         // A section collapsed from its pinned heading: scrolled to where it starts, its heading staying where it
         // was, rather than leaving the view further down the page, past it.

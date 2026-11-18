@@ -141,6 +141,72 @@ class PromotionProcessing {
         return out;
     }
 
+    /// Never two filters handed over that index the same Events into the same index. Seen in an eval (case 61): the
+    /// build's indexing pipeline, made afresh rather than as a new version of the production one, was promoted with
+    /// a filter reading the new events version's Events, and the production indexing pipeline gained a follow-on
+    /// filter reading them too, both indexing into the same index: enabled, each event would be indexed twice. A
+    /// follow-on is passed over where a pipeline the build promotes ([#promotionProcessing]) already reads the new
+    /// version's Events and writes to the same index (a build's test index taken as the production index it stands
+    /// in for), or where an earlier follow-on does.
+    ///
+    /// @param followOns   What [#followOns] found.
+    /// @param processing  What [#promotionProcessing] planned for the build's pipelines.
+    /// @param testIndexes The build's test indexes, each with the UUID of the production index it stands in for.
+    /// @return The follow-ons to make, and what is said of each one passed over.
+    Followed withoutDoubleIndexing(final List<FollowOn> followOns,
+                                   final List<Entry> processing,
+                                   final Map<String, String> testIndexes) {
+        final Map<List<String>, String> indexedBy = new LinkedHashMap<>();
+        for (final Entry entry : processing) {
+            final Optional<String> index = indexKey(entry.pipeline().getUuid(), testIndexes);
+            if (index.isEmpty()) {
+                continue;
+            }
+            for (final String source : ProcessorFilterWrites.pipelineUuids(entry.extraTerms())) {
+                indexedBy.putIfAbsent(List.of(index.get(), NullSafe.string(source)), entry.pipeline().getName());
+            }
+        }
+        final List<FollowOn> kept = new ArrayList<>();
+        final List<String> passedOver = new ArrayList<>();
+        for (final FollowOn followOn : followOns) {
+            final Optional<String> index = indexKey(followOn.pipeline().getUuid(), testIndexes);
+            if (index.isEmpty()) {
+                kept.add(followOn);
+                continue;
+            }
+            final List<String> key = List.of(index.get(), followOn.version().getUuid());
+            final String already = indexedBy.get(key);
+            if (already != null) {
+                passedOver.add("'" + followOn.pipeline().getName() + "': no new filter, as '" + already + "' "
+                               + "already indexes the Events of '" + followOn.version().getName() + "' into the "
+                               + "same index: a second filter would index each event twice (filter "
+                               + followOn.reading().getId() + " is left as it is)");
+            } else {
+                indexedBy.put(key, followOn.pipeline().getName());
+                kept.add(followOn);
+            }
+        }
+        return new Followed(List.copyOf(kept), List.copyOf(passedOver));
+    }
+
+    // The index a pipeline writes to, as `lucene:<index doc UUID>` (a build's test index as the production index it
+    // stands in for) or `elasticsearch:<index name>`; empty for a pipeline that indexes nothing, or can't be read.
+    private Optional<String> indexKey(final String pipelineUuid, final Map<String, String> testIndexes) {
+        try {
+            final Optional<Map<String, Object>> elastic = agreements.elasticDestination(pipelineUuid);
+            if (elastic.isPresent()) {
+                return Optional.ofNullable(elastic.get().get("index name"))
+                        .map(name -> "elasticsearch:" + String.valueOf(name).toLowerCase(Locale.ROOT));
+            }
+            return indexingRuns.luceneIndex(pipelineUuid)
+                    .map(DocRef::getUuid)
+                    .map(uuid -> "lucene:" + testIndexes.getOrDefault(uuid, uuid));
+        } catch (final RuntimeException e) {
+            // Unread: its follow-on is made, as before.
+            return Optional.empty();
+        }
+    }
+
     // A filter's pipeline's name, as the filter has it or read; its UUID when neither says.
     private String pipelineName(final ProcessorFilter filter) {
         if (NullSafe.isNonBlankString(filter.getPipelineName())) {
@@ -352,8 +418,9 @@ class PromotionProcessing {
     }
 
     /// As [#createPromotionFilters(StroomLinks, List)], with what the promotion moved, so a production index is never
-    /// put up for dropping: a new index is dropped only while nothing but this promotion's documents writes to it or
-    /// names it.
+    /// put up for dropping or emptying: a new Elasticsearch index is dropped only while nothing but this promotion's
+    /// documents writes to it or names it, and a Lucene index only when it is an index doc the promotion moved out of
+    /// the build (the build's own).
     ///
     /// @param links    How the caller links to Stroom.
     /// @param plan     What [#promotionProcessing] planned.
@@ -384,7 +451,7 @@ class PromotionProcessing {
             final ProcessorFilter created = filterWrites.createFilter(entry.pipeline(),
                     ProcessorFilterWrites.allOf(children), ProcessorFilterWrites.DEFAULT_PRIORITY,
                     ProcessorFilterWrites.MAX_FEED_FILTER_TASKS, null, false);
-            final BeforeEnabling before = beforePromotedIndexing(links, entry.pipeline(), promoted);
+            final BeforeEnabling before = beforePromotedIndexing(links, entry, promoted);
             final String selects = entry.feed() != null
                     ? "processes feed " + entry.feed() + " (" + entry.streamType() + "), existing data included"
                     : "processes " + entry.streamType() + " from its source pipeline, existing data included";
@@ -475,10 +542,12 @@ class PromotionProcessing {
     // What a promoted indexing pipeline's index needs before its filter is enabled, dropped or emptied so it starts
     // fresh, and the button for it; nothing for any other pipeline. A production index is never put up for dropping
     // (seen in a user's test: the production index of a promoted feed was dropped at the tools' prompt): a new
-    // version's own index is dropped only while nothing but this promotion's documents writes to it or names it.
+    // version's own index is dropped only while nothing but this promotion's documents writes to it or names it. A
+    // production Lucene index (one this promotion didn't move out of the build) is never put up for emptying either.
     private BeforeEnabling beforePromotedIndexing(final StroomLinks links,
-                                                  final DocRef pipeline,
+                                                  final Entry entry,
                                                   final Set<String> promoted) {
+        final DocRef pipeline = entry.pipeline();
         final Optional<Map<String, Object>> destination = agreements.elasticDestination(pipeline.getUuid());
         if (destination.isPresent()) {
             final String index = String.valueOf(destination.get().get("index name"));
@@ -502,6 +571,9 @@ class PromotionProcessing {
                                                                           + "fresh"));
         }
         final Optional<DocRef> lucene = indexingRuns.luceneIndex(pipeline.getUuid());
+        if (lucene.isPresent() && !promoted.contains(lucene.get().getUuid())) {
+            return new BeforeEnabling(productionLucene(lucene.get(), entry), null);
+        }
         if (lucene.isPresent()) {
             return new BeforeEnabling("delete the shards of index '" + lucene.get().getName() + "' first (its Shards "
                                       + "tab), so it starts fresh with what this pipeline indexes, the Events "
@@ -510,6 +582,35 @@ class PromotionProcessing {
                             "delete its shards on the Shards tab, so it starts fresh"));
         }
         return new BeforeEnabling(null, null);
+    }
+
+    /// What a promoted indexing pipeline's filter into a production Lucene index says before it is enabled, in place
+    /// of emptying the index (never done for a promotion). Seen in an eval (case 61, a source type joining its
+    /// promoted group as V1.1): the handover asked the user to delete the shards of the group's production index, its
+    /// V1.0 history with them, as it asks of a new index holding the build's sample. The build never wrote to the
+    /// production index (it indexed into its test index), and the filter reads only the new version's Events, which
+    /// the index doesn't hold: what can be indexed twice is the history the new version translates again, which is
+    /// the user's to decide.
+    ///
+    /// @param index The production Lucene index.
+    /// @param entry The filter's entry: its source pipelines name the new version.
+    /// @return What the approval and the result say of it.
+    static String productionLucene(final DocRef index, final Entry entry) {
+        final List<String> sources = entry.extraTerms().stream()
+                .filter(term -> ProcessorFilters.PIPELINE.equals(term.getField()))
+                .map(term -> "'" + NullSafe.nonBlankStringElse(NullSafe.get(term.getDocRef(), DocRef::getName),
+                        NullSafe.get(term.getDocRef(), DocRef::getUuid)) + "'")
+                .toList();
+        final String reads = sources.isEmpty()
+                ? "what its filter selects"
+                : "the Events of " + String.join(", ", sources);
+        return "'" + index.getName() + "' is not emptied: it is a production index, never emptied or dropped for a "
+               + "promotion (the build indexed only into its test index). Enabled, this filter indexes " + reads
+               + " into it beside what it holds; none of those Events are in it yet. Where the new version's own "
+               + "filter translates streams an earlier version translated and this index holds already (existing "
+               + "data included), their events are indexed again beside the earlier ones: the user decides with "
+               + "the admin whether that is meant, or limits that filter in Stroom to the streams arriving from now "
+               + "on";
     }
 
     // A test feed: one of the build's, or one the tools named.
@@ -564,6 +665,14 @@ class PromotionProcessing {
                    + " selects but reading the Events of '" + version.getName() + "' in place of '"
                    + predecessor.getName() + "' (filter " + reading.getId() + " is left as it is)";
         }
+    }
+
+    /// The follow-ons to make once those indexing Events twice are passed over ([#withoutDoubleIndexing]).
+    ///
+    /// @param followOns  The follow-ons to make.
+    /// @param passedOver What is said of each one passed over.
+    record Followed(List<FollowOn> followOns, List<String> passedOver) {
+
     }
 
     // A feed and a stream type a pipeline's sample came from.

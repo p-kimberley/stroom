@@ -2744,7 +2744,7 @@ destinations; unlocked by Manage Processors (the promoted pipelines' filters are
 approve) · confirms itself · chat group build · Classes: `PromoteBuildTool`, `PromotionLayout`, `PromotionProcessing`,
 `DocumentPlaces`, `DocumentWrites`, `WriteGuard`, `BuildRecords`, `BuildChecks`, `Consent`, `IndexingRuns`,
 `OutputFeeds`, `XsltHistory`, `DocumentationVersions`, `SurveyDocuments`, `SourceTypeGroups`, `GroupReferences`,
-`FeedIndexDecisions`, `SourceFolders`, `PromotionTidyUp`
+`FeedIndexDecisions`, `SourceFolders`, `PromotionTidyUp`, `PromotionUses`, `ChangedOriginals`
 
 An aggregated feed's indexes (`FeedIndexDecisions.changes`, `apply`): each indexing plan kept in the build is
 matched to its source type group and output feed (as `draft_index_mapping` recorded them in the build record's
@@ -2784,10 +2784,7 @@ moves (forward only: none is removed): the build's pipelines (a new one, a new v
 original), and the production pipelines running a group's XSLT the build changes through a working copy (found
 through the content index, `PipelineIndex.containing`). After approval and before anything is written back or moved
 (`SourceTypeGroups.toOriginals`), every module of the build imports the originals its working copies are written back
-over (imports rewritten by text, in the code and the kept mapping) and the registry names the originals. A working
-copy the user kept (production changed since, below) is left as it is, and the modules promoted import its original;
-promotion is refused, before the review, when that original lacks a template, function, variable or mode they use of
-the copy (`keptProblems`).
+over (imports rewritten by text, in the code and the kept mapping) and the registry names the originals.
 
 Promotes a build out of the workspace in two calls. The first works out the whole layout and returns it without
 changing anything (`status: needs_review`, a `layout` tree from `PromotionLayout.promotionTree`, and a `review_id`,
@@ -2808,8 +2805,10 @@ Where each document goes (`plan`):
   version the group imports); an unchanged one is only discarded. A working copy of Documentation is
   **written back**: the original is copied into
   `<workspace>/backups` as `<name> backup <yyyyMMddHHmmss>` (UTC, tagged `mcp-generated`), then the copy's `data`,
-  `converterType`, `documentation` and `description` are written over it, and the copy deleted. An unchanged copy is
-  just deleted. A copy whose original was changed since it was taken is put to the user first (below).
+  `converterType`, `documentation` and `description` are written over it, and the copy deleted. No backup made (the
+  explorer copy gives back no document), nothing is written over the original: the promotion stops there, saying
+  what was done before it. An unchanged copy is just deleted. A copy whose original was changed since it was taken is
+  written back all the same, the approval saying so (below).
 * `keep` for a document UUID leaves it in the workspace (seen: a test feed made while fixing had nowhere to go but
   production, and the agent never promoted the fix). A build on existing feeds keeps its feeds there unless given a
   folder. The build's test feed (named `-MCP-TEST`, or recorded `output_for` the feeds it works from), its test
@@ -2845,11 +2844,36 @@ Where each document goes (`plan`):
   (`SourceFolders.siblings`: feeds in the feed's root and the folders there holding a feed; `PromotionLayout.siblingRoots`
   reads, from `PipelineIndex.read()`, pipelines in a folder named for a sibling, not templates others inherit from nor
   in the workspace, at most 200, by stage role, and takes the root most are under), else the feed's own root. Options:
-  the proposal, then the feed's own location where it differs; the user may type another. With forms, all roles in one
-  form on the review's call (`Consent.answerEach`: suggested answers as buttons, a blank one taking the proposal),
-  recorded so the approval call lays out what was reviewed; without, the reply's `role_locations` (`role`,
+  the proposal, then the feed's own location where it differs; the user may type another. The feed's own folder given
+  (or chosen) as a role's root is the feed's own location (`PromotionLayout.ownRoot`, in `rolePath`, `layOut`'s
+  predecessor check and `roleRoots`): seen in a user test (2026-11-18), the feed in a folder named after it
+  (`.../ABC/ABC-FEED`), its own folder given back for "the folder holding the feed's Events folders", as the question
+  then put it, was read as a root elsewhere, and every role went in `ABC-FEED/ABC-FEED/V1.0` with no role folders. The
+  question now asks for the folder holding the feed's folder, naming the feed's own location. With forms, all roles
+  in one form on the review's call (`Consent.answerEach`: suggested answers as buttons, a blank one taking the
+  proposal), recorded so the approval call lays out what was reviewed; without, the reply's `role_locations` (`role`,
   `location`, `why`, `options`) for the agent to ask in the chat. The tree ends with `Where each role goes ...: -
   <Role>: <root> (<why>)`, so the review id and the approval cover them.
+* **Only what is used** (`PromotionUses`; decided by the user 2026-11-18, seen in a user test: an older Data Splitter
+  the build had replaced was promoted with the rest): promotion moves only what the build's pipelines need. Walked
+  from everything always promoted (pipelines, the parent pipelines they inherit from, feeds, indexes, working copies,
+  an aggregated feed's modules, an indexing XSLT holding its index plan, documentation of its own) through each
+  pipeline's own properties' documents and its reference lookups' pipelines and feeds, each XSLT's imports, includes
+  and dictionary lookups (a build XSLT's or dictionary's name quoted, or its UUID, in the code), and each dictionary's
+  imports. A build XSLT, text converter or dictionary nothing reaches (one used only by another unused one included),
+  and the Documentation named after only those, stay in the build untouched (a `keep` step, target `not promoted:
+  nothing uses it`: no version consolidation, marked `kept_at_promotion` like any document left, never tidied up).
+  The tree ends `Not promoted, left in the build (nothing uses them): ...`, the review lists `not_promoted`, the
+  approval `not promoted (nothing uses them)`. A folder given by the document's UUID promotes it all the same. Where
+  the walk can't be sure, nothing is left out: a build of no pipeline (seen in e2e: a converter and XSLT promoted on
+  their own), a build pipeline (or XSLT, dictionary) unreadable, or an element picking its document by a name
+  pattern (`xsltNamePattern`, `namePattern`). The registry, source notes, reference documents and survey doc are
+  placed as before. A Lucene index doc whose name marks it as one to test with (a word `TEST`, numbered or not:
+  `-TEST`, `-TEST2`, `-MCP-TEST`) is walked too: nothing promoted writing to it, and no index plan of the build (by
+  its `index_name`) nor the feed's registry (by UUID) naming it, it is the agent's own test index, kept and tidied up
+  with the build's test indexes, and so are the `-VERIFY` dashboards searching only such indexes (seen in an eval,
+  case 61: an agent's `-TEST` and `-TEST2` indexes and their dashboards were promoted beside the new version's
+  pipeline). Any other index is promoted, whatever writes to it.
 * **A folder of the source's own** (`SourceFolders`): the source is the feed the build works from, else its
   registry's feed, else its one new feed. Where that feed's folder is a parent of sources (a subfolder of it, not a
   role or version subfolder, holds a feed: the siblings' convention), the build's documents go in
@@ -2872,27 +2896,17 @@ Where each document goes (`plan`):
   `<role root>/<feed>/<group>/<version>` for a role whose root is elsewhere.
 
 **Production changed since the copy.** `copy_pipeline` records in each working copy's build record entry the version
-its original had when copied (`BuildRecords.COPY_OF_VERSION`, `copy_of_version`). Before the layout is built (on the
-first call, so the reviewed tree shows the choice), each document to be written back whose original's version is now
-different (`changedSinceCopied`; e.g. edited by hand in production) is put to the user in a form of its own
-(`askAboutChangedOriginals`, through `Consent.choose`): who changed production and when (the original's
-`updateUser` and `updateTimeMs`), then, for a document with code, what overwriting would lose from production and
-what the working copy brings (`CodeDiff`, at most six lines of each, at most 1,000 characters, so the form can
-always be shown). The choices:
-
-* "Overwrite production with the working copy": written back as below; the production change is then only in the
-  backup.
-* "Keep production as it is": the step becomes a keep, so production isn't touched; the working copy, and the
-  working-copy pipelines that would have been discarded, stay in the build, for the change to be made again on a
-  fresh working copy.
-
-The choice is kept in the copy's build record entry (`original_choice`) against the original's version, so the
-approval call doesn't ask again; it is cleared once the promotion is carried out, so promoting the build again asks
-afresh, and a further change in production asks again. Promotion already needs a client that can show forms (its
-approval), so a client without them is refused. A copy taken before the version was recorded has none, and is
-written back without asking. Asked for by the user: before, the copy was written over a production edit made after
-it was taken, and the edit survived only in the backup; they chose a question that explains the difference over a
-refusal.
+its original had when copied (`BuildRecords.COPY_OF_VERSION`, `copy_of_version`). Each document to be written back
+whose original's version is now different (`ChangedOriginals.said`; e.g. edited by hand in production) is overwritten
+all the same, after its backup (decided by the user, 2026-11-18): never a question of its own. The review lists each
+as `changed_in_production` (its hint says to tell the user), and the approval form the user confirms anyway shows
+them in full under `changed in production since copied` (a `Consent.Listed` detail), e.g. `Documentation 'ACME
+notes' was changed in production by john.smith on 2026-10-21 09:30 UTC since it was copied: it is overwritten, its
+earlier version kept as a backup in System/MCP Workspace/backups ('ACME notes backup <date and time>')` (who and when
+from the original's `updateUser` and `updateTimeMs`, each left out when unknown). Declined, nothing is promoted. A
+copy taken before the version was recorded has none, and is written back without saying so. Before, the user was
+asked to overwrite or keep production in a form of its own, answered in the chat through a `changed_originals`
+argument where it couldn't be shown; both are gone (an old `changed_originals` is dropped as an unknown argument).
 
 Every destination is resolved before approval (`WriteGuard.resolveFolder`), and the folders to create are listed in
 the tree, so a missing folder can't stop a promotion half way. On approval, in order: pending changes are consolidated
@@ -2925,8 +2939,11 @@ feeds. A failure is kept to its item: its later steps are skipped and it stays (
 searches does); the others carry on, and the promotion, already done, never fails. Only what the build provably
 made is tidied: in the build's own workspace folder, tagged `mcp-managed`, left there by the plan, not a feed the build
 works from, used by nothing outside the build (Stroom's dependencies: a pipeline or dashboard naming it; for a feed,
-any pipeline whose processor filter reads it, `ProcessorFilters.pipelinesReading`; without Manage Processors that
-check fails closed), nor by a document of the build the plan moves to production other than a pipeline (a dashboard
+any pipeline whose processor filter reads it, `ProcessorFilters.pipelinesReading`, but a filter selecting stream ids
+with no Feed term whose streams are all deleted or gone, which reads nothing: seen in an eval, case 61, an earlier
+build's sample filter left on its promoted pipeline picked a stream of that build's test feed, deleted by its tidy-up,
+and a later build's test feed of the same name was never tidied up; without Manage Processors that check fails
+closed), nor by a document of the build the plan moves to production other than a pipeline (a dashboard
 not named `-VERIFY` searching the test index, say: `used outside the build, by Dashboard '<name>' (the promotion moves
 it to production)`). What uses each item is checked again once the build is promoted, before its first step: a
 promoted document naming it now (a pipeline property naming the test feed that `restoreOutputFeed` doesn't rewrite,
@@ -2941,12 +2958,13 @@ feed the build works from, the survey doc and the build record.
   path, in any form `WriteGuard.folderParts` takes, or `keep`), `reviewed` (a `review_id`), `tidy_up` (boolean,
   default true; false keeps the test data).
 * **Returns**: first call `{status: needs_review, build, layout, review_id, warnings?, processing_after_promotion?,
-  role_locations?, follow_on_filters?, pipeline_changes?, index_changes?, tidy_up?, hint}`. After approval: `build`,
+  role_locations?, follow_on_filters?, follow_on_filters_passed_over?, pipeline_changes?, index_changes?, changed_in_production?, not_promoted?,
+  tidy_up?, hint}`. After approval: `build`,
   `tidied_up` (per item: `document`, `streams_marked_deleted` or `shards_deleted`, `deleted`, and `failed` or
   `skipped` where it was left; or `tidy_up: not done ...` when the user unticked it), `layout`,
   `folders` (each with a link to open it), `updated_in_place`, `promoted` (what was done), `promoted_with_warnings`,
-  `processing_filters` (each with `pipeline_link`, and `before_enabling` for an index that must start fresh) with a
-  `next` telling the user to review and enable them, `follow_on_filters`, `next_steps` and `user_actions` (buttons:
+  `processing_filters` (each with `pipeline_link`, and `before_enabling` for an index that must start fresh, or for a production index what the user decides instead) with a
+  `next` telling the user to review and enable them, `follow_on_filters`, `follow_on_filters_passed_over`, `next_steps` and `user_actions` (buttons:
   enabling the new filters; none disables a filter).
 * **Follow-on filters** (`PromotionProcessing.followOns`, `createFollowOnFilters`; decided by the user 2026-11-17): for
   each new events (or records) version promoted, every filter outside the build and every other build with a
@@ -2954,7 +2972,14 @@ feed the build works from, the survey doc and the build record.
   gets a sibling on its pipeline: the same selection, priority, task limit and minimum creation time, the Pipeline
   term naming the new version, created **disabled** (`copied_from`, `reads`, `in_place_of`; its enable button after
   the new version's own filter). One already made (promoted again) isn't made twice. The filter it follows is never
-  changed, disabled or removed. The review lists them (`follow_on_filters`) and so does the approval form. The
+  changed, disabled or removed. A follow-on pipeline with a new version of its own in the build (`version_of`) is
+  passed over, and so is one writing to the index (a test index taken as the production index it stands in for; an
+  Elasticsearch index by name) that a pipeline the build promotes indexes the new version's Events into already, or
+  an earlier follow-on does (`withoutDoubleIndexing`): never two filters handed over indexing the same Events into
+  the same index (seen in an eval, case 61: the build's indexing pipeline, made afresh, and a follow-on on the
+  production one both indexed the V1.1 Events into the group's index). Those are said in
+  `follow_on_filters_passed_over`, in the review, the approval form and the result. The review lists the follow-ons
+  made (`follow_on_filters`) and so does the approval form. The
   result's `next_steps`: `1. Enable the new version's filters when ready: filter <id> ('<pipeline>'); ...` then `2.
   Once the new version's output is right, the admin disables or removes the earlier version's filters (the tools
   never do): '<old>': filter <ids>; '<follow-on>': filter <id> (reading the Events of '<old>').` The buttons that
@@ -2981,7 +3006,15 @@ feed the build works from, the survey doc and the build record.
   working copy was written back over keeps its live index (no drop or empty), and a new version's own Elasticsearch
   index is dropped only while nothing but this promotion's documents writes to it or names it
   (`ProductionIndexes.claimsBesides`); otherwise `before_enabling` says it is a production index, not dropped, and
-  why.
+  why. A Lucene index is emptied (its shards deleted, with a button) only when it is an index doc this promotion
+  moved out of the build, the build's own; a production Lucene index (any other: a joined group's, say) is never put
+  up for emptying (seen in an eval, case 61: the handover asked the user to delete the shards of the group's
+  production index, its V1.0 history with them, before the V1.1 indexing filter). Its `before_enabling` says instead
+  (`PromotionProcessing.productionLucene`) that it is a production index, never emptied or dropped for a promotion
+  (the build indexed only into its test index); that the filter indexes only the new version's Events, none of which
+  it holds yet, beside what it holds; and that where the new version's own filter translates streams an earlier
+  version translated and the index holds already, their events are indexed again: the user decides with the admin
+  whether that is meant, or limits that filter in Stroom to the streams arriving from now on. No button.
 
 ## Samples, surveys and feeds
 
@@ -3031,7 +3064,14 @@ addresses or times, is chosen without asking. Where none is, but fields with a f
 be, they are put to the user in a short form (each as `field (value, value...)`, or "All one kind of event", or a
 field they name); without forms the call reads nothing and returns `status: needs_kind_field` with the candidates,
 and the agent asks in the chat and calls again with `kind_field`. A `kind_field` other than the one kept starts the
-survey afresh (`kind_field_changed`). The head read to choose is the one the survey reads on from.
+survey afresh (`kind_field_changed`). The head read to choose is the one the survey reads on from. An aggregated
+feed (a source type field of any reading: a field, a held value, a combination, a meta attribute) is asked no kind
+field and has none chosen over its records together (2026-11-18: 65 source types, a held reading, and only the epoch
+times they shared put to the user): `kind_fields` is `{fields: [], by: "source_types", within: <field>}`, the survey
+doc says the kinds are told apart within each source type, and classify_kinds chooses the kind field over the
+build's scope. A `kind_field` the user names is still kept (`by: user`). `KindFields` never offers a field named as a
+time (`time`, `timestamp`, `ts`, `date`, `*_time`, `*_ts`, `*_rt`, `eventTime`...) nor one whose values are all
+epoch times (seconds to nanoseconds, 1990 to 2100, as `TimePatterns` reads them; refused as a given kind field too).
 
 **Settling the survey.** A stream read only in part that a call can't read deeper (past the parts a call reads,
 records over several lines, or the most a call reads), once the survey has had to read it whole (given by id, or
@@ -3039,8 +3079,9 @@ the feed's last), is put to the user: "Stop and accept them as read" or "Step re
 (`read_deeper` without forms); a stop is kept as `stopped_streams` and settles it, and no hint says to raise
 `max_chars_per_stream` for it. `accept_as_is` (asked for by the user: a survey that couldn't be covered and a user
 who wanted to go ahead with a limited sample) reads nothing: the user confirms going ahead with the survey as it is
-(in a form, or as they said in the chat), and the state is covered as far as they chose (`accepted`) until the
-survey reads on. The gate on create_processor_filter (`BuildPlan.uncovered(build, streamIds)`) lets a filter over
+(in a form, or as they said in the chat: where no form can be shown, or its form couldn't be, `accept_as_is` is
+their answer, and `true` their yes once the agent was told to ask them; seen: `true` sent back for the user's yes
+asked for it again, for ever), and the state is covered as far as they chose (`accepted`) until the survey reads on. The gate on create_processor_filter (`BuildPlan.uncovered(build, streamIds)`) lets a filter over
 stream_ids the survey read whole (or stopped at) go ahead uncovered, and a build on an existing feed with no survey
 record has its `covered` step still to do (seen: the agent deleted the record to get past the gate). Streams are picked in bisection order (newest, oldest, middle,
 quarters ...) by `FeedSampling.pickSpread`, skipping those already read; with `stream_ids` exactly those streams are
@@ -3144,7 +3185,7 @@ in a form (`Which field says which source a record came from?`, the candidates b
 feed: one source`); without forms, `status: needs_source_type_field` with the candidates, nothing surveyed.
 `source_type_field` gives the user's answer (`none` for one source); `aggregated: true` says the user called the feed
 aggregated (weaker separation is enough, and a field of one shape a value is offered). The choice is kept in the
-survey state (`source_types`); the kind fields are then chosen with the source type field left out. A field named for
+survey state (`source_types`); no kind field is then chosen or asked for feed-wide (see **Kind fields**). A field named for
 kinds of event (an event type, action, operation, `SourceTypeFields.mayName`) is never a candidate. Each record read
 is counted by its value (`SourceTypeProfiles`: records, bytes, days, streams, message formats and parse failures,
 fields, shapes, kinds, levels, signals); the result's `source_types` gives the field and the records read of each
@@ -3287,9 +3328,14 @@ and `group` (the name the agent suggests), the user chooses in a form which sour
 group and what it is called (decided 2026-11-13: one source type group a build, any number of source types). The form
 (plain text): "Which of feed 'x''s source types go in this build's source type group? A build makes one group,
 translated by one pipeline. ... Those you leave out are parked for a later build." (and, where the registry has
-groups, "Naming an existing group (...) adds them to it."), a yes per source type offered ("Put x in the group",
-with its share and formats), and one text field, "What is the group called?", filled with the suggested name, which
-the user keeps or changes (left empty, the suggestion stands). A call with forms and no `group` is refused before
+groups, "Naming an existing group (...) adds them to it."), one list to tick, "Source types to put in the group"
+(`Consent.pick`: a multi-select of every source type offered, each with its share and formats under it, none ticked
+to start; one field however many source types, so 65 of them fit, where a yes/no field each could never be shown),
+and one text field, "What is the group called?", filled with the suggested name, which the user keeps or changes
+(left empty, the suggestion stands). A scope form that still can't be shown (too large, or the client couldn't show
+it) says so in the `needs_user` hint, and the next call takes `scope=` and `group=` as the user said them in the chat
+(`Consent.takesChatAnswer`), never asking the form again (decided by the user, 2026-11-18). The patterns' and list
+items' forms name the first five rows and how many more ("And 60 more (all are in the table shown in the chat)."). A call with forms and no `group` is refused before
 anything is asked. The name matching an existing group's (any case) is that group's: the source types join it (its
 pipeline and output feed, when `build_translation_xslt` builds it; a promoted one through a working copy of its XSLT),
 said in `joins`; with none chosen, the build changes that group alone (without forms, `scope=[]`, an explicit empty
@@ -3311,9 +3357,10 @@ pipeline, output feed, `references` and profile. A registry recorded again (a la
 over. The review is bound to the table (`Consent.wasReviewed`): other rows, or changed profiles, show it again.
 
 * **Arguments**: `feed` (required), `build`, `reviewed`, `rows` (the `rows` a `needs_review` reply gave back, or as
-  the user says), `remove` (rows to remove, by name, on the user's word), `patterns` (no forms: `use` or `exact`),
-  `group` (the group's name: the suggestion the form shows, or, without forms, the user's), `scope` and `reason` (no
-  forms; `scope=[]` with an existing group's name changes that group alone), `dropped`, `drop_reason`, `system_name`, `system_names` (by source type), `environment`.
+  the user says), `remove` (rows to remove, by name, on the user's word), `patterns` (no forms, or its form couldn't
+  be shown: `use` or `exact`), `group` (the group's name: the suggestion the form shows, or, without forms, the
+  user's), `scope` and `reason` (no forms, or the scope form couldn't be shown; `scope=[]` with an existing group's
+  name changes that group alone), `dropped`, `drop_reason`, `system_name`, `system_names` (by source type), `environment`.
 * **Returns**: `status: needs_review` (`feed`, `field`, `table`, `review_id`, `rows`, `to_confirm`, `hint`); `status: needs_user`
   with `proposed_rows` (each `name`, `match`, `values`, `records`: the patterns, without forms) or `offered` and
   `groups` (the source types for the scope and the registry's groups, without forms); or `feed`, `field`, `registry`
@@ -3468,7 +3515,11 @@ them in the notes block as `pending`. The kinds are told apart by the kind field
 and `KindFields` finds candidates, the user is asked which (as survey_feed asks; without forms `status:
 needs_kind_field`), and the answer is kept in the notes as `kind_fields`, which the draft follows
 (`SourceNotes.KIND_FIELDS`; `TranslationBuilds.notesInBuild` adds the survey's when the notes have none). The draft
-itself never takes a field by its values alone. The records are read as the draft reads them, inner messages unpacked (the
+itself never takes a field by its values alone. The candidates are judged over the build's scope's records with
+the fields inside their held values as the draft reads them (`HeldKindRecords`: a JSON string's keys as
+`event.logger_name`, XML text's elements as `event/Header/Op`, the pairs the draft extracts), so a kind field inside
+a held value can be chosen and the draft's rules read it; one given as a source type reading writes it
+(`event>logger_name`) is spelt as the draft reads it. The records are read as the draft reads them, inner messages unpacked (the
 keys of JSON text, the elements of XML text, the values the draft's extractions take from text), so a kind told apart
 inside a message field has its records, sample and actor; records a JSON or XML parser reads need no splitter. A kind
 told apart by its format alone is marked `catch_all` when it is a format's leftovers (its `other` rule, listed with
@@ -3487,7 +3538,10 @@ classification and the draft has no rule of its own, the draft makes its rule th
 condition: `SourceNotes.applyToDraft`), so another value of that field isn't left out. With no such field, or
 none left, nothing is pending and the plan's `classify` step is done. Called with `proposals` (one catalogue entry a pending kind: `field`, `value`,
 `description`, `event_detail`, `action`, `success`, `type_id`, `actor`, `affected`, `affected_as`, `confidence`), each
-is checked as a catalogue event and kept in the notes block (`proposed`, with its `title` and `product` and the
+is checked as a catalogue event (an `action` or `success` its action element has no Action or Outcome for is
+refused, and so is an `action` its Action's enumeration doesn't hold, naming the values it allows, e.g. Authorise's
+Request and Modify: seen in the agent eval, "Add member to role" confirmed as an Authorise Action, the draft's Modify
+then refused as not confirmed; one differing only in case is corrected to the schema's spelling) and kept in the notes block (`proposed`, with its `title` and `product` and the
 kind's sample record kept from the listing, and its place among those of its confidence); the reply's `table`
 (Markdown, which the chat renders, where a form's fields are plain text: asked for by the user, no Markdown in a
 form) comes with status `needs_showing`: Stroom AI's chat shows it itself, after the call, and the agent is told not
@@ -3629,6 +3683,11 @@ with its own index (`copy_pipeline`). Seen in a user's test: the build's own Ela
 made the index count as the build's, and the user was asked to drop the production index, and did. `freshIndex` and
 the existing-index lookup refuse it again, so `drop_first` and `delete_first` never name one. A new version's first
 run (`version_of`, no filter yet) looks its own index up again: anything it matches, or a failed lookup, refuses it.
+`copy_pipeline` of such a pipeline points its copy at the test index at once and says so (`test_index`,
+`test_index_note`: make no test index of your own), so the agent never makes one of its own (seen in an eval, case
+61: the copy said nothing of a test index, made only once it processed, and the agent made `-TEST` indexes that
+promotion took to production). Processing then gives that test index any field the plan gained since
+(`test_index`, `made: false`).
 At promotion the test index isn't promoted (the tidy-up deletes its shards, then it, unless the user unticks it),
 the pipeline is written back pointed at production, and the production index gains the plan's missing fields (said in the
 review's `index_changes`), for any build.
@@ -3924,7 +3983,9 @@ Shared behaviour:
   XSLT step and no parser, so there is no output of it to look at`).
 * **Triage.** Errors and warnings from every element are triaged by `ErrorTriage` (the environment's error rules
   and Stroom's own) into blocking, review and benign groups, with up to three examples each, the errors the user
-  accepted for the pipeline (`AcceptedErrors`) counted as benign. Output with no XML elements is a marker of its own
+  accepted for the pipeline (`AcceptedErrors`) counted as benign. The JSON parser's cut of a string longer than its
+  `stringTruncateLength` is for review, with the property to raise (it was a benign Warning from an inherited
+  element, so stepping was clean and the value lost; found testing awkward values, 2026-11-18). Output with no XML elements is a marker of its own
   (`SteppingVerdicts.emptyOutput`): when no template matches (usually a wrong `xpath-default-namespace`), XSLT's
   built-in rules copy text through, nothing errors, and processing silently writes nothing. CEF lines and Kafka
   records are not empty output (`SteppingVerdicts.sendsOn`), nor is text that isn't only the input's own text (CSV
@@ -4314,7 +4375,10 @@ Events are read as the XML version they declare: Stroom writes Events streams as
 in a source's value (a form feed, bell or escape) is written as a character reference (`&#xc;`) XML 1.0 forbids.
 The merged events of `stream_ids` keep the 1.1 declaration when any record has it, and an `events_xml` with a 1.1
 declaration is read as 1.1. Seen in chat 181: a Teams message's form feed, passed by Stroom's schema filter, was
-refused as "not well-formed (line 1)" of the merged one-line document, and the agent spent about 30 calls looking.
+refused as "not well-formed (line 1)" of the merged one-line document, and the agent spent about 30 calls looking. The
+declared schema is read from `xsi:schemaLocation` up to its closing quote (found testing awkward values, 2026-11-18:
+Events with no white space whose first Description held compact JSON were read as declaring a system id running into
+the JSON, and refused: "Stroom has no XML schema").
 
 * **Arguments**: `events_xml` (an `<Events>` document, e.g. step output) or `stream_ids` (Events streams processing
   wrote, as `wait_for_processing` lists them); exactly one of the two. `schema_version` (default the version the
@@ -4549,7 +4613,10 @@ nothing it matches is offered for deletion.
   (refused when true: a copy is always a new version).
 * **Returns**: `type`, `uuid`, `name`, `copy_of`, `copied_documents`, `source_types` (a new version of a group's
   pipeline: the registry rows moved to it), `index_name` and `index_docs` (a new version's own index and its Elastic
-  Index docs), `note`, and `next`; or `needs_names` (see above).
+  Index docs), `test_index` and `test_index_note` (a copy whose indexing filter names a production Lucene index:
+  pointed at the build's test index `<INDEX>-MCP-TEST` at once, made now, `BuildTestIndexes.redirect`; seen in an
+  eval, case 61, the copy said nothing of one and the agent made test indexes of its own), `note`, and `next`; or
+  `needs_names` (see above).
 * **Refuses**: a missing required argument; a template (`PipelineTemplates.templateReason`: `... is a template
   (...): templates are inherited, not copied ...`, pointing at `create_pipeline`); an owned document the user can't
   read; a new version under the original's names (`A new version of X needs names of its own, and ... are the
@@ -4654,7 +4721,13 @@ input kind and layout from the profile, the obvious event-logging homes for fiel
 host, client and server addresses and ports, user, event type, message: `FieldHomes`), one rule per kind of event
 the naming field shows, a text field's key/value pairs read as one extract entry a key, every other field carried
 as Data, and notes on what is left to decide (the action element per kind, System Name and Environment, a time
-zone). `ActionRules` reads each kind's own records for its action: connections allowed or denied become
+zone). A quoted value's escapes that Stroom's Data Splitter keeps are undone by the field's transform: a CSV's
+doubled quote by `unescape_quotes`, a key=value quote or backslash escaped with a backslash by
+`unescape_backslashes` (`EscapedQuotes`; found testing awkward values, 2026-11-18, the events holding
+`say \"hi\"`), wherever the splitter spec holds the quoted delimited or key_value spec: its own, a syslog (or other)
+header's `body`, an alternatives part or a part's body (seen in the agent eval, case 25: a syslog body's escapes
+kept; the delimited spec's doubled quotes likewise since 2026-11-19), never the header's fields or the body's text it
+was read from. `ActionRules` reads each kind's own records for its action: connections allowed or denied become
 Network/Permit or Deny, logons and logoffs Authenticate, configuration changes Update, a service started or
 stopped Process, health and state records Alert. With `build`, the build's source notes (record_source_notes) are
 followed: catalogued events become rules with their action element, checked against the schema
@@ -4834,7 +4907,15 @@ through the model. A call runs in this order:
    line where its records follow one (`SurveyExamples`), and a warning says how many; only for records a line each,
    not XML or a JSON array, whose records can't stand apart from their text. Seen in testing: a sample read to its
    4,004th record of 25,000 refused the fields of the rare kinds near the end (a file upload's name and size), and
-   the agent read them through raw XPath to get past the check, which then checked none of them.
+   the agent read them through raw XPath to get past the check, which then checked none of them. `sample: []` is
+   no sample. A save (`build`, or `uuid`) given neither `sample` nor `stream_ids` is checked against the build's own
+   sample streams (`BuildPlan.rawSampleStreams`, the newest five), else the newest five streams its survey read
+   (`SurveyDoc.streams`), a warning naming them; a build with neither is refused, asking for `stream_ids` or
+   `sample`. A save whose check read no record is a problem (`no sample record was checked`, with the reader's
+   note), so nothing is saved: a check over no records says nothing of the mapping. Seen in the agent eval (case 36
+   on Haiku): saved with `"sample": []` and no `stream_ids`, 0 records were checked, the save returned ok, and every
+   form the check drives (domain split, placeholders, confirmed kinds, rules kept as Unknown) was skipped. An XSLT in
+   no build is never saved (WriteGuard refuses it), so it takes no fallback.
 5. **The user's choices** (only when saving): a user's Id whose values carry a domain (`DomainSplits`: split into
    Id and Domain, or keep whole; one question for all fields not answered before), and values that stand for none
    (`PlaceholderChoices`: leave each out, as `nil_values`, or keep as written; one form, at most 20 questions, 19
@@ -4846,7 +4927,8 @@ through the model. A call runs in this order:
    a mapping that keeps none of the current translation's lookups (warning); kinds the user confirmed
    (classify_kinds, `user_confirmed`) that the mapping translates otherwise (`ConfirmedKinds`: the sample records
    holding the kind's field=value taken by no rule, dropped, or by a rule writing another action element, Unknown
-   among them, or another Action), a warning each, and on saving put to the user (below).
+   among them, or another Action; not another Action the schema allows where the confirmed one is not, since that
+   can't be written), a warning each, and on saving put to the user (below).
 7. **The field-mapping preview** (`field_mapping=true` with `pipeline_uuid` and `stream_ids`): the pipeline is
    stepped with a marked copy of the XSLT (up to `max_records`) and the section rendered by `EventFieldDocs`.
    Without it `field_mapping` is null and `field_mapping_needs` says why: a table from the mapping alone showed how
@@ -4907,10 +4989,16 @@ of an object or of a JSON string holding one, `parse-xml` of a text holding no `
 `tokenize()` counting pairs; held JSON is JSON itself, `ToolJson.loadsStrict` in the tools: no `NaN` or `Infinity`,
 each number read as written, `2.10` and `1e10`, as `json-to-xml` keeps it), then
 stepped into as the tools step (JSON keys; XML elements and attributes by local name, the first in document order;
-a key's first `key=` value; a syslog field), each reading's value normalised, the first with a value taken; the
+a key's first `key=` value; a syslog field), each reading's value normalised (control characters but tab, new line
+and CR taken out, and U+FFFD, which `parse-json()` reads them as, then white space around it: a row's value can't
+hold one, as no XML 1.0 XSLT can; found testing awkward values, 2026-11-18), the first with a value taken; the
 `(no value)` row matches an empty value (`$value = ''`). A reading that isn't one is refused (`groupProblems`). Parity
 with the tools is tested over held JSON (once and twice encoded), XML, key=value, syslog, two and three held values
-deep, plain text and missing or malformed held fields (`TestSourceTypeReadingParity`). Every other record (another
+deep, plain text and missing or malformed held fields, and awkward values (controls, line ends, astral and
+right-to-left text, XML's specials) given to the XSLT as Stroom's jsonParser gives them, XML 1.1
+(`TestSourceTypeReadingParity`, `TestSourceTypeTupleParity`). A held field longer than the jsonParser keeps
+(`stringTruncateLength`, 10,000 by default) reads whole to the tools and cut in processing, so differently: the cut
+is a Warning triaged for review, with the property to raise. Every other record (another
 group's, parked, dropped, or a value no row matches) is passed over, its record's number read so the group's log
 lines name the right records, never logged nor warned of: an INFO line a document of the records passed over
 (`XsltGenerator.PASSED_OVER`, written by group XSLTs generated before 2026-11-15) made Stroom write an Error stream
@@ -4927,8 +5015,9 @@ word). A group XSLT's `uuid` alone regenerates it as the group it is (its kept m
 in a form before anything is saved: the group gets a pipeline of its own (`<feed> <group>`, recorded on its rows
 then, so the group counts as placed), and "Where do the Events of group 'x' go?" ("Into the same feed (<feed>)", the
 default; or "To an output feed of its own (made next)"; the group's index is its own either way, decided
-2026-11-14). Without forms the call is refused,
-nothing saved, until `own_output_feed=true|false` says the user's answer; given for a group already placed, it is
+2026-11-14). Without forms, or where its form couldn't be shown (the refusal says which), the call is refused,
+nothing saved, until `own_output_feed=true|false` says the user's answer, which is then read before any form is
+asked (seen over `/mcp`: a client that couldn't show the form refused every call, the answer read only after it); given for a group already placed, it is
 ignored, said in `group.notes`. Source types added to a group already placed join its pipeline and output feed, said
 in `group.notes`, with no form. A source type another group translates is refused (a source type belongs to one
 group), as is a group whose mode is the common module's. The rows record it (`pipeline`: `name`, and `uuid` once
@@ -4979,7 +5068,8 @@ rows' pipeline), `output_feed`, `registry` (`uuid`, `name`, `translated`) and `g
   `references`.
 * **Returns**: the generator's result (`ok`, `xslt` unless saved, `problems`, `warnings` grouped, `events`),
   `schema_version` (and `schema_version_settled`), `required_imports`, `sample_check` (`records`, `problems`,
-  `warnings`, `fields_seen`, `not_checked`, `kept_unknown`, `note`), `changes_applied`, `changes_applied_to`,
+  `warnings`, `fields_seen`, `not_checked`, `kept_unknown`, `note`; an XML 1.1 sample, as Stroom writes XML, is read as
+  XML 1.1: read as 1.0, one holding `&#xc;` was "not XML a parser could read"), `changes_applied`, `changes_applied_to`,
   `source_notes_check`, `set_properties` and `set_properties_note` (JSON input: the JSON parser's `addRootObject`,
   true for JSON lines, for create_pipeline), `field_mapping` / `field_mapping_sample`, `saved` (`type`, `uuid`,
   `name`, `version`) with `next`, `follow_on` (on a replace: review_coverage reviews the pipelines reading its
@@ -5963,11 +6053,16 @@ value over the example's mapping of the name (`FromExample`).
   otherwise (a field's meaning: its description where both have one, else what it reads), is a clash: all of them
   put to the user in one form of short plain text, each with its two answers (another type: rename this build's
   field to `<name>_<group>`, or a new index version `<index>-v2` with the index's fields; another meaning: one
-  field read from both paths, or renamed). The reply's `feed_index` says the `output_feed`, the `group`, the index's
+  field read from both paths, or renamed); past what a form holds (20 fields), the first 19 one by one and one more
+  question for the others, all the same way (rename each; same meaning where only the meaning differs, the others
+  renamed; or a new index version), the message naming the first five clashes and how many more (all in
+  `index_clashes`). The reply's `feed_index` says the `output_feed`, the `group`, the index's
   `groups`, `shared_with` and `moves_from` (shared at the user's word), the `index`, `inherited_fields`,
   `clashes_resolved`, `new_version_of` (with `new_version_hint` when the user chose a new version in the form) and
-  where it is `kept`; without forms the clashes come back in it as `index_clashes`,
-  with `clash_hint` on how to apply them by `changes=`. Amending (`changes=`) is checked the same way. The
+  where it is `kept`; without forms (or where the form couldn't be shown) the clashes come back in it as
+  `index_clashes`, with `clash_hint` on how to apply them by `changes=` (a rename: remove the field and add it under
+  the new name; one field read from both: the field with both sources), and a new version by drafting again with the
+  next version's `index_name` and `change_shared=true`, which the user confirms in a form. Amending (`changes=`) is checked the same way. The
   `backend` is the feed's shared one (refused otherwise, as `get_field_conventions` refuses it).
 
 ### `create_index_doc`
@@ -6037,7 +6132,11 @@ tool saves no XSLT: `xslt_uuid` is one saved before (`save_xslt index_plan=...`)
 For Lucene, the fields the XSLT writes that the index lacks are added from the plan kept with the XSLT, and are not
 asked about. Stroom drops a value for a field the index lacks with only a warning ("Attempt to index unknown
 field"), so the pipeline would run and index nothing searchable; an XSLT written by hand (no kept plan) that writes
-such fields (its `<data name="...">`) is refused instead.
+such fields (its `<data name="...">`) is refused instead. Fields are added only to the build's own index: one
+outside the build (a production index) lacking the plan's fields is refused before the pipeline is made
+(`WriteGuard.checkInBuild`: make a new version of its pipeline with `copy_pipeline`). Seen in an eval (case 61): the
+pipeline was made, then the fields refused, and the agent's `copy_pipeline` of the production indexing pipeline under
+that name was refused as already in the build, so the build promoted a pipeline that was no new version of it.
 
 An indexing pipeline reads Events: an indexing template needs the build's own events pipeline, or
 `events_stream_ids` that are Events. A pipeline whose XSLT keeps a discovery plan reads raw data, so this isn't
@@ -6253,7 +6352,9 @@ check's lowest-EventId hit is traced back to its record by stepping the pipeline
 (record index EventId - 1), every hit of a stream in one stepping session (each in its own captured the stream
 again: verifying a long stream took over five minutes); the trace passes when the document there holds the value
 searched and is the hit's, matching on the hit's other columns when stepping numbers the record otherwise (stepped
-alone, every record was numbered 1). With `pipeline_uuid`, a field the pipeline's plan writes for these Events that
+alone, every record was numbered 1). The stepped document is read as the XML version it declares (found testing awkward values,
+2026-11-18: an Elasticsearch indexing XSLT's XML 1.1 output holding `&#xc;` was read as XML 1.0, giving "no
+document", so the check failed). With `pipeline_uuid`, a field the pipeline's plan writes for these Events that
 the index lacks fails the run.
 
 Passing records the build's pipelines writing to the index as verified (`BuildRecords.VERIFIED`), with the streams
@@ -6353,7 +6454,23 @@ was declined by the client as too long. A detail given as `Consent.Listed` is sh
 1,500 characters, for what the user must see in full to agree to (a verification dashboard's columns: seen in chat
 177, cut with "…"). A choice form too large to show at all is not shown: `choose` returns empty
 and the agent asks in the chat (seen: a stand-ins form with a question for each of about 150
-values, and a hand-edit question naming every field of a wide mapping). `Consent.reviewId(shown)` and `wasReviewed`
+values, and a hand-edit question naming every field of a wide mapping); so does a form the client answers with an
+error. Either is kept for the session, by tool and question (two hours), so the next call, whatever its other
+arguments, takes the user's answer as the chat gave it: `takesChatAnswer(context, action, question)` is true where
+no form can be shown now or that question's form couldn't be, and `whyInChat` begins the tool's hint ("The form was
+too large to show (...)", "The client couldn't show the form") with the argument that takes the answer (decided by
+the user, 2026-11-18: tools build forms that fit; one that still can't be shown has its chat answer honoured on the
+next call, never a loop or a dead end). Forms are built to fit: `pick` asks many options as one multi-select (the
+scope's source types), `firstLines` gives a list in a message as its first five lines and "And N more (where)" with
+the whole list in the chat, and questions past `MAX_FIELDS` are asked the first 19 one by one and one for the
+others (stand-ins, index clashes). `require` checks its form first: a yes/no field's description is cut to 300
+characters (the message carries the summary); values to edit too many for one form are shown in the chat first (a
+refusal listing them, with a `shown_id`), and the call made again with `shown_id` asks one short confirmation bound
+to what was shown (a value to change is changed by the call's arguments). A confirmation that still can't be shown
+(or that the client couldn't show) is refused, saying why its form wasn't shown: a confirmation is given only in a
+form, never said in the chat, so the agent can't approve for the user (decided by the user, 2026-11-18). `shown_id` is
+taken by every tool
+though none declares them (`UserQuestions.RESERVED_ARGS`, kept by the call guard). `Consent.reviewId(shown)` and `wasReviewed`
 bind a `needs_review` reply to what it showed (promotion layouts, index templates, records kept as Unknown). Every
 ask and answer is audited.
 
@@ -6665,7 +6782,12 @@ pipeline would, in `stroom-ai-impl`:
   value not of that kind), `dataNotHeld`, `requiredLeftEmpty`, `traits`, `valueOf`. A condition's `matches` and an
   extraction's regex run with Java's regex engine, as Stroom's XSLT runs them. A JSON value that isn't text (a
   number) is read as its text. Every record of the sample is read, not the first 200 (seen in production: a VPN
-  rule's keys first appeared at the 557th of 3,933 records, and the check said they matched nothing). It also
+  rule's keys first appeared at the 557th of 3,933 records, and the check said they matched nothing). An
+  extraction reading an xpath (XML input) is first checked against the first 200 record documents
+  (`XPathChecks.MAX_SOURCE_DOCUMENTS`); one whose regex matches none of them is checked against all of them
+  before it is called a problem; if the check's time runs out before the rest, it is a warning (seen in the agent
+  eval, case 36: a SecretServer export's folder and permission keys, first held after the 200th of 1,000
+  records, refused, and the agent then saved with an empty sample to get past them). It also
   reports:
   * a TypeId the same for events of different kinds (`sharedTypeIds`), as a problem, not a warning (seen as a
     warning: two runs left TypeId the category alone, 'User' for logons, logoffs and lockouts, the warning one among

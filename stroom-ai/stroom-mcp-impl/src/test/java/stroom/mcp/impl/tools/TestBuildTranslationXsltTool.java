@@ -35,6 +35,7 @@ import stroom.pipeline.shared.XsltDoc;
 import stroom.util.json.JsonUtil;
 import stroom.xmlschema.shared.XmlSchemaDoc;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -61,6 +62,12 @@ class TestBuildTranslationXsltTool {
             2026-09-28T10:01:00.000Z,status,,,,ws01,0
             2026-09-28T10:02:00.000Z,status,,,,ws02,0
             2026-09-28T10:03:00.000Z,login,bob,fail,s2,ws03,22
+            """;
+    // Logons alone, each translated by TranslationWorld.MAPPING's logon rule.
+    private static final String LOGONS = """
+            time,action,user,result,sid,host
+            2026-09-28T10:00:00.000Z,login,alice,ok,s1,ws01
+            2026-09-28T10:03:00.000Z,login,bob,fail,s2,ws03
             """;
     // A JSON mapping that generates.
     private static final String GOOD = """
@@ -103,6 +110,15 @@ class TestBuildTranslationXsltTool {
 
     private final TranslationWorld world = new TranslationWorld();
     private final BuildTranslationXsltTool tool = world.buildTool();
+
+    @BeforeEach
+    void setUp() {
+        // The build's own sample stream, logons alone: a save given neither sample nor stream_ids is checked against
+        // it (TranslationWorld.MAPPING's logon rule takes every record).
+        world.facts.ownRaw = List.of(1L);
+        Mockito.when(world.sampleStreamTexts.read(List.of(1L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 1", LOGONS), List.of()));
+    }
 
     @Test
     void noFieldMappingWithoutASample() {
@@ -261,6 +277,79 @@ class TestBuildTranslationXsltTool {
     }
 
     @Test
+    void anEmptySampleIsNoSampleSoASaveIsCheckedAgainstTheBuildsOwnSampleStreams() {
+        // Seen in eval case 36: saved with "sample": [] and no stream_ids, the empty list was taken as the sample,
+        // 0 records were checked, the save returned ok, and every form the check drives was skipped.
+        world.facts.ownRaw = List.of(8L, 9L);
+        Mockito.when(world.sampleStreamTexts.read(List.of(9L, 8L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 9", LOGONS), List.of()));
+
+        final Map<String, Object> saved = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "sample", List.of(), "splitter", Map.of("kind", "delimited", "header", true), "build", "acme-v1",
+                "name", "ACME-Events"));
+
+        assertThat(saved).containsKey("saved");
+        assertThat(map(saved.get("sample_check")).get("records")).isEqualTo(2);
+        assertThat(list(saved.get("warnings"))).contains("sample: checked against the build's sample streams "
+                                                         + "[9, 8] (neither sample nor stream_ids was given)");
+        Mockito.verify(world.sampleStreamTexts).read(List.of(9L, 8L));
+    }
+
+    @Test
+    void aSaveGivenNoSampleIsCheckedAgainstTheStreamsTheBuildsSurveyRead() {
+        // A build on an existing feed has no sample stream of its own: its survey read the feed's streams.
+        world.facts.ownRaw = List.of();
+        final String uuid = world.inBuild("acme-v1", DocumentationDoc.TYPE, SurveyDoc.docName("ACME")).getUuid();
+        final Map<String, Object> state = Map.of("feed", "ACME", "format", "csv", "streams_read", List.of(3, 4),
+                "surveys", List.of(), "shapes", Map.of());
+        world.world.docs.put(uuid, ((DocumentationDoc) world.world.docs.get(uuid)).copy()
+                .data(SurveyDoc.render(state)).build());
+        Mockito.when(world.sampleStreamTexts.read(List.of(4L, 3L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 4", LOGONS), List.of()));
+
+        final Map<String, Object> saved = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "splitter", Map.of("kind", "delimited", "header", true), "build", "acme-v1", "name",
+                "ACME-Events"));
+
+        assertThat(saved).containsKey("saved");
+        assertThat(map(saved.get("sample_check")).get("records")).isEqualTo(2);
+        Mockito.verify(world.sampleStreamTexts).read(List.of(4L, 3L));
+    }
+
+    @Test
+    void aSaveGivenNoSampleIsRefusedWhenTheBuildHasNoSampleStreams() {
+        // Saved unchecked, the forms the check drives were skipped without a word.
+        world.facts.ownRaw = List.of();
+        final Map<String, Object> refused = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "sample", List.of(), "build", "acme-v1", "name", "ACME-Events"));
+
+        assertThat(String.valueOf(refused.get("error"))).contains("has no sample streams of its own")
+                .contains("Give stream_ids (the sample streams) or sample");
+        assertThat(refused).doesNotContainKey("saved");
+        Mockito.verifyNoInteractions(world.sampleStreamTexts);
+    }
+
+    @Test
+    void aSaveWhoseCheckReadNoRecordIsNotSaved() {
+        // 0 records checked says nothing of the mapping: a problem, not ok.
+        Mockito.when(world.sampleStreamTexts.read(List.of(7L))).thenReturn(new SampleStreamTexts.Texts(
+                Map.of("stream 7", ""), List.of()));
+
+        final Map<String, Object> result = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "stream_ids", List.of(7), "splitter", Map.of("kind", "delimited", "header", true), "build",
+                "acme-v1", "name", "ACME-Events"));
+
+        assertThat(result.get("ok")).isEqualTo(false);
+        assertThat(result).doesNotContainKey("saved");
+        assertThat((List<?>) result.get("problems")).anySatisfy(p -> assertThat(String.valueOf(p))
+                .contains("no sample record was checked").contains("give stream_ids"));
+        // Not saving, a call made for the code alone still comes back with it.
+        final Map<String, Object> unsaved = world.call(tool, Map.of("mapping", TranslationWorld.mapping(),
+                "stream_ids", List.of(7), "splitter", Map.of("kind", "delimited", "header", true)));
+        assertThat(unsaved.get("ok")).isEqualTo(true);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void fieldsOnlyInRecordsTheSurveyFoundPastTheSamplesCutAreChecked() {
         // Seen in testing: a sample read to its 4,004th record of 25,000; a file upload's name, only in records near
@@ -326,8 +415,10 @@ class TestBuildTranslationXsltTool {
                 "{\"path\": \"EventDetail/Authenticate/User/Id\", \"field\": \"user\"}, "
                 + "{\"path\": \"EventDetail/Authenticate/Data\", \"data_name\": \"fname\", \"field\": \"fname\"}"),
                 Map.class);
+        // Saved first with a sample holding fname, so the change below is checked against the cut stream alone.
         final Map<String, Object> saved = world.call(tool, Map.of("mapping", mapping, "build", "acme-v1", "name",
-                "ACME-Events"));
+                "ACME-Events", "sample", CUT_HEAD + "{\"ts\": \"2026-09-28T23:59:00.000Z\", \"host\": \"ws09\", "
+                                         + "\"user\": \"erin\", \"fname\": \"report.pdf\"}\n"));
         final String xsltUuid = String.valueOf(map(saved.get("saved")).get("uuid"));
         final String surveyUuid = world.inBuild("acme-v1", DocumentationDoc.TYPE, SurveyDoc.docName("ACME"))
                 .getUuid();
@@ -538,9 +629,11 @@ class TestBuildTranslationXsltTool {
     @Test
     void keepingUnknownNeedsTheUsersConfirmationBeforeSaving() {
         final Map<String, Object> kept = keptAsUnknown();
-        // Seen in VS Code: asked with "no sample records checked", the user couldn't see what went to Unknown.
+        // Seen in VS Code: asked with "no sample records checked", the user couldn't see what went to Unknown. A
+        // build with no sample stream of its own: nothing to check against, so refused.
+        world.facts.ownRaw = List.of();
         assertThat(world.call(tool, Map.of("mapping", kept, "build", "acme-v1", "name", "N")).get("error")).asString()
-                .contains("call again with stream_ids");
+                .contains("Give stream_ids (the sample streams) or sample");
         // Seen in VS Code: "Keep rest as Unknown (what happened is not known) in the saved XSLT: rest:" was
         // cryptic, and the detail too much tiny text in a form (asked for by the user): shown in the chat first,
         // the form short.
@@ -894,9 +987,11 @@ class TestBuildTranslationXsltTool {
     }
 
     @Test
-    void aChoiceIsKeptWhenALaterFormFailsTheCallSoTheUserIsNotAskedAgain() {
+    void aLaterFormTheClientCantShowNeitherFailsTheCallNorLosesAnEarlierChoice() {
         // Seen in testing: the domain split answered, then the stand-ins' form couldn't be shown, so the call failed
-        // before saving, and each call after asked about the domain again; the user could never get past it.
+        // before saving, and each call after asked about the domain again; the user could never get past it. Now
+        // (decided 2026-11-18: never a dead end) a form the client can't show is left to the agent to ask in the
+        // chat, and the call goes on with the choice already made.
         final Map<String, Object> mapping = JsonUtil.readValue(GOOD.replace("{\"input\": \"json\",",
                 "{\"input\": \"json\", \"json_layout\": \"lines\","), Map.class);
         final String sample = """
@@ -910,21 +1005,14 @@ class TestBuildTranslationXsltTool {
         world.answers.put("Split the domain off", DomainSplits.SPLIT);
         world.unshowable.add(PlaceholderChoices.INTRO);
 
-        final Map<String, Object> failed = world.call(tool, arguments);
-        assertThat(failed).as(String.valueOf(failed)).containsKey("error").doesNotContainKey("saved");
-        assertThat(world.asked).hasSize(2).last().isEqualTo(PlaceholderChoices.INTRO);
-
-        // Made again, once the form can be shown: only the stand-ins are asked about, and the domain is split as
-        // the user chose before.
-        world.unshowable.clear();
-        // '-' in the only host field: the sender stands in for the Device.
-        world.answers.put("'-' in", PlaceholderChoices.DEVICE_FALLBACK);
         final Map<String, Object> saved = world.call(tool, arguments);
-        assertThat(saved).as(String.valueOf(saved)).containsKey("saved");
-        assertThat(world.asked).hasSize(3).last().isEqualTo(PlaceholderChoices.INTRO);
+
+        assertThat(saved).as(String.valueOf(saved)).containsKey("saved").doesNotContainKey("error");
+        assertThat(world.asked).hasSize(2).last().isEqualTo(PlaceholderChoices.INTRO);
         assertThat(list(saved.get("changes_applied"))).anyMatch(change -> String.valueOf(change)
-                        .startsWith("the domain split off 'user', as the user chose"))
-                .contains("'-' left out where a field holds it (nil_values), as the user chose");
+                .startsWith("the domain split off 'user', as the user chose"));
+        // The stand-in left for the agent to ask about in the chat.
+        assertThat(String.valueOf(saved.get("warnings"))).contains("placeholder '-' in host");
     }
 
     @Test

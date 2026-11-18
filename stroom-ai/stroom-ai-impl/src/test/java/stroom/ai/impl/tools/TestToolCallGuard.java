@@ -66,6 +66,22 @@ class TestToolCallGuard {
     }
 
     @Test
+    void theArgumentsAToolsReplyAsksForBackAreKeptThoughNoToolDeclaresThem() {
+        // Values too many for a confirmation's form are shown in the chat first: the reply asks for shown_id back,
+        // and dropping it as unknown would ask again for ever.
+        final StroomTool tool = tool("copy_pipeline", ObjectSchema.builder()
+                .addStringProperty("name", "The name.")
+                .build(), call -> ToolResult.text("{\"copied\":true}"));
+
+        final String arguments = "{\"name\":\"a\",\"shown_id\":\"def\"}";
+
+        final ToolResult result = call(tool, arguments);
+
+        assertThat(calls).containsExactly(arguments);
+        assertThat(result.text()).doesNotContain("Ignored");
+    }
+
+    @Test
     void argumentsFoldedIntoAnotherArgumentsTextAreUnfolded() {
         // Seen (a small model, the table tool): the rest of the call written inside eval's text, refused for no
         // path five times.

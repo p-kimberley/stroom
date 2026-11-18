@@ -1053,6 +1053,29 @@ class TestClassifyKindsTool {
     }
 
     @Test
+    void anActionTheSchemaDoesNotAllowIsRefusedAndOneMisspeltByCaseCorrected() {
+        // Seen in the agent eval (cases 60 and 65): "Add member to role" and "MFA" accepted as Authorise and
+        // Authenticate Actions, which the schema doesn't allow. The draft then wrote Modify, and the build refused it
+        // as not what the user confirmed. Refused when proposed, naming the Actions allowed.
+        call("{\"build\": \"acme\", \"source\": \"Acme app\", \"stream_ids\": [7]}", BuildToolCalls.context());
+        assertThat(text("{\"build\": \"acme\", \"proposals\": [{\"field\": \"action\", \"value\": \"login\", "
+                        + "\"description\": \"d\", \"event_detail\": \"Authorise\", \"action\": \"Add member to "
+                        + "role\", \"confidence\": \"high\"}, {\"field\": \"action\", \"value\": \"logout\", "
+                        + "\"description\": \"d\", \"event_detail\": \"Authenticate\", \"action\": \"MFA\", "
+                        + "\"confidence\": \"high\"}]}"))
+                .startsWith("Nothing recorded:")
+                .contains("EventDetail/Authorise/Action takes only Request, Modify, not 'Add member to role'",
+                        "EventDetail/Authenticate/Action takes only Logon, Logoff, ChangePassword")
+                .contains("not 'MFA'");
+        // An allowed Action in another case is the schema's spelling.
+        assertThat(String.valueOf(call("{\"build\": \"acme\", \"proposals\": [{\"field\": \"action\", "
+                                       + "\"value\": \"login\", \"description\": \"d\", \"event_detail\": "
+                                       + "\"Authorise\", \"action\": \"modify\", \"confidence\": \"high\"}]}",
+                BuildToolCalls.context()).get("table")))
+                .contains("Authorise: Modify");
+    }
+
+    @Test
     void aCatchAllIsNotProposedAsUnknown() {
         // Seen in chat 160: two catch-all formats proposed as Unknown, the gateway's logons and the hosts' sudo
         // commands in them left for the mapping, never put to the user.
@@ -1305,6 +1328,81 @@ class TestClassifyKindsTool {
                 .containsExactlyInAnyOrder("select", "update");
         assertThat((Map<String, Object>) listed.get("scope")).containsEntry("records_in_scope", 12)
                 .containsEntry("records_left_out", Map.of("web", 12));
+    }
+
+    @Test
+    void aKindFieldInsideAHeldValueIsOfferedWithinTheScopeAndTheDraftTellsKindsApartByIt() {
+        // Seen in testing (2026-11-18): an aggregated feed whose source type was read inside the JSON string
+        // `event`; the kinds within a source type are named inside it too (`component`), and only outer fields
+        // were candidates.
+        final StringBuilder lines = new StringBuilder();
+        for (int i = 0; i < 24; i++) {
+            final String app = "{\"logger_name\": \"com.x.App\", \"component\": \"" + List.of("auth", "billing",
+                    "search").get(i % 3) + "\", \"user\": \"u" + i + "\"}";
+            final String web = "{\"logger_name\": \"com.x.Web\", \"component\": \"cdn\", \"path\": \"/p" + i + "\"}";
+            for (final String event : List.of(app, web)) {
+                lines.append("{\"tier\": \"").append(List.of("gold", "silver").get(i % 2)).append("\", \"time\": ")
+                        .append(1_763_452_800_000L + i % 4).append(", \"event\": ")
+                        .append(JsonUtil.writeValueAsString(event, false)).append("}\n");
+            }
+        }
+        samples(31L, lines.toString());
+        final TranslationBuilds builds = Mockito.mock(TranslationBuilds.class);
+        Mockito.when(builds.scope("acme")).thenReturn(Optional.of(new SourceTypeScope("acme", "event>logger_name",
+                List.of(new SourceTypeRows.Row("App", SourceTypeRows.VALUE, "com.x.App"),
+                        new SourceTypeRows.Row("Web", SourceTypeRows.VALUE, "com.x.Web")), List.of("App"))));
+        final ClassifyKindsTool scoped = new ClassifyKindsTool(notesTool, sampleStreamTexts, consent, plan, builds,
+                now::get);
+
+        // Without forms: asked in the chat, the held value's field among the candidates, the time never.
+        final Map<String, Object> asking = BuildToolCalls.json(scoped.execute(BuildToolCalls.call(
+                ClassifyKindsTool.NAME, "{\"build\": \"acme\", \"source\": \"Acme app\", \"stream_ids\": [31]}"),
+                BuildToolCalls.context()).text());
+        assertThat(asking).as("%s", asking).containsEntry("status", "needs_kind_field");
+        assertThat(list(asking.get("candidates"))).extracting(candidate -> candidate.get("field"))
+                .contains("event.component", "tier").doesNotContain("time");
+
+        // Given as the source type reading writes it: the draft's kinds are its values, the scope's only.
+        final Map<String, Object> listed = BuildToolCalls.json(scoped.execute(BuildToolCalls.call(
+                ClassifyKindsTool.NAME, "{\"build\": \"acme\", \"source\": \"Acme app\", \"stream_ids\": [31], "
+                                        + "\"kind_field\": \"event>component\"}"), BuildToolCalls.context())
+                .text());
+        assertThat(list(listed.get("to_classify"))).as("%s", listed).extracting(kind -> kind.get("value"))
+                .containsExactlyInAnyOrder("auth", "billing", "search");
+        assertThat(list(listed.get("to_classify"))).allSatisfy(kind -> assertThat(kind)
+                .containsEntry("field", "event.component"));
+    }
+
+    @Test
+    void theScopesSourceTypeFieldIsNeverOfferedAsItsKindField() {
+        // Seen in the held kind field e2e (2026-11-18): within a scope of one source type, read inside the JSON
+        // string `event`, the form put `event.logger_name (com.x.App)` to the user as a kind field, one value in
+        // every record of the scope.
+        final StringBuilder lines = new StringBuilder();
+        for (int i = 0; i < 24; i++) {
+            final String app = "{\"logger_name\": \"com.x.App\", \"component\": \"" + List.of("auth", "billing",
+                    "search").get(i % 3) + "\", \"user\": \"u" + i + "\"}";
+            final String web = "{\"logger_name\": \"com.x.Web\", \"component\": \"cdn\", \"path\": \"/p" + i + "\"}";
+            for (final String event : List.of(app, web)) {
+                lines.append("{\"time\": ").append(1_763_452_800_000L + i % 4).append(", \"event\": ")
+                        .append(JsonUtil.writeValueAsString(event, false)).append("}\n");
+            }
+        }
+        samples(32L, lines.toString());
+        final TranslationBuilds builds = Mockito.mock(TranslationBuilds.class);
+        Mockito.when(builds.scope("acme")).thenReturn(Optional.of(new SourceTypeScope("acme", "event>logger_name",
+                List.of(new SourceTypeRows.Row("com.x.App", SourceTypeRows.VALUE, "com.x.App"),
+                        new SourceTypeRows.Row("com.x.Web", SourceTypeRows.VALUE, "com.x.Web")),
+                List.of("com.x.App"))));
+        final ClassifyKindsTool scoped = new ClassifyKindsTool(notesTool, sampleStreamTexts, consent, plan, builds,
+                now::get);
+
+        final Map<String, Object> asking = BuildToolCalls.json(scoped.execute(BuildToolCalls.call(
+                ClassifyKindsTool.NAME, "{\"build\": \"acme\", \"source\": \"Acme app\", \"stream_ids\": [32]}"),
+                BuildToolCalls.context()).text());
+        assertThat(asking).as("%s", asking).containsEntry("status", "needs_kind_field");
+        assertThat(list(asking.get("candidates"))).extracting(candidate -> candidate.get("field"))
+                .contains("event.component").doesNotContain("event.logger_name", "time");
     }
 
     private void samples(final long stream, final String text) {
